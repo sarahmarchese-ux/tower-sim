@@ -22,11 +22,9 @@ const UI = {
     money.textContent = World.formatMoney(World.money);
     money.classList.toggle("in-debt", World.money < 0);
 
-    // What last midnight's tally brought in, net of upkeep.
-    const tally = Economy.lastTally;
-    document.getElementById("ledger").textContent = tally
-      ? `(last night ${tally.rent - tally.upkeep >= 0 ? "+" : ""}${World.formatMoney(tally.rent - tally.upkeep)})`
-      : "";
+    // Rent building up towards Sunday night's payday.
+    const due = Economy.rentDue();
+    document.getElementById("ledger").textContent = due > 0 ? `(rent due Sun night +${World.formatMoney(due)})` : "";
 
     // In the red: count down to bankruptcy.
     const left = Economy.minutesUntilBankrupt();

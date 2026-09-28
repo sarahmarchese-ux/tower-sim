@@ -10,8 +10,8 @@
 // daily schedule they follow (see people.js). `noise` isn't used by anything
 // yet — it's here so milestone 6 (stress & ratings) has somewhere to read it.
 //
-// Money in (milestone 5, see economy.js): studios pay `rentPerDay` at every
-// nightly tally once their makers have moved in; a condo pays `salePrice`
+// Money in (milestone 5, see economy.js): studios pay `rentPerWeek` every
+// Sunday night, for the days their makers were in; a condo pays `salePrice`
 // once, when its residents move in. Jewellery earns the most per tile and
 // woodwork the least, so the roomy, loud studio is the cheap one.
 
@@ -20,10 +20,10 @@ const FLOOR_COST_PER_TILE = 200;
 
 const ROOM_TYPES = {
   lobby: { name: "Lobby", width: 20, cost: 0, color: "#d8c9a3", groundOnly: true, allowsTransit: true, tenants: 0, noise: 0 },
-  sewing: { name: "Sewing Studio", width: 8, cost: 9000, color: "#c9a0dc", tenants: 2, role: "maker", noise: 1, rentPerDay: 1600 },
-  pottery: { name: "Pottery Studio", width: 10, cost: 11000, color: "#d2965a", tenants: 2, role: "maker", noise: 2, rentPerDay: 1800 },
-  woodwork: { name: "Woodwork Studio", width: 12, cost: 10000, color: "#8b5e34", tenants: 3, role: "maker", noise: 3, rentPerDay: 1300 },
-  jewellery: { name: "Jewellery Studio", width: 6, cost: 15000, color: "#f4d35e", tenants: 1, role: "maker", noise: 0, rentPerDay: 2500 },
+  sewing: { name: "Sewing Studio", width: 8, cost: 9000, color: "#c9a0dc", tenants: 2, role: "maker", noise: 1, rentPerWeek: 11200 },
+  pottery: { name: "Pottery Studio", width: 10, cost: 11000, color: "#d2965a", tenants: 2, role: "maker", noise: 2, rentPerWeek: 12600 },
+  woodwork: { name: "Woodwork Studio", width: 12, cost: 10000, color: "#8b5e34", tenants: 3, role: "maker", noise: 3, rentPerWeek: 9100 },
+  jewellery: { name: "Jewellery Studio", width: 6, cost: 15000, color: "#f4d35e", tenants: 1, role: "maker", noise: 0, rentPerWeek: 17500 },
   condo: { name: "Condo", width: 16, cost: 20000, color: "#a3c9d8", tenants: 3, role: "resident", noise: 0, salePrice: 30000 },
 };
 

@@ -4,17 +4,20 @@
 // tenants turn up at the lobby and walk in ("movingIn"; people.js does the
 // walking). The moment the first of them steps through the door, the room
 // is "occupied": a condo's sale price is paid right then, and a studio
-// starts paying rent at the nightly tally. A room nobody can reach from a
-// lobby (the red "!") never fills — its viewing is simply put off until the
-// player connects it.
+// starts owing rent. A room nobody can reach from a lobby (the red "!")
+// never fills — its viewing is simply put off until the player connects it.
 //
-// Every midnight the day's accounts are settled in one go: rent in from
-// every occupied studio, upkeep out for every elevator. Upkeep is the one
-// cost that keeps coming whether or not anyone pays you, so money can dip
-// below zero. Stay in the red for a full game week and the game is over.
+// Every midnight is a tally. Each occupied studio adds a day's worth of its
+// weekly rent to what it owes (so a studio that moved in on Thursday pays
+// for Thursday to Sunday), and each elevator's upkeep is paid. Once a week,
+// at midnight at the end of Sunday, is payday: everything owed comes in at
+// once. Upkeep keeps coming every night whether or not anyone pays you, so
+// money can dip below zero between paydays. Stay in the red for a full game
+// week and the game is over.
 //
-// State lives in two places: each room's `status` / `moveInAt` (so it
-// disappears with the room if it's demolished), and the few totals below.
+// State lives in two places: each room's `status` / `moveInAt` / `rentOwed`
+// (so it disappears with the room if it's demolished), and the few totals
+// below.
 
 const MOVE_IN_DELAY_MINUTES = [60, 240]; // after placing: 1–4 game hours
 const MOVE_IN_RETRY_MINUTES = [30, 90]; // unreachable: look again this soon
@@ -23,10 +26,10 @@ const BANKRUPTCY_GRACE_DAYS = 7;
 
 const Economy = {
   lastTallyDay: Clock.day,
-  lastTally: null, // { rent, upkeep } from the most recent midnight
+  lastPayday: null, // total rent paid at the most recent payday
   debtSince: null, // game minute money went negative, or null
   bankrupt: false,
-  popups: [], // floating "+$1,600" labels; see render.js
+  popups: [], // floating "Rent +$11,200" labels; see render.js
 
   onRoomAdded(room) {
     if (room.status === "vacant") {
@@ -76,6 +79,7 @@ const Economy = {
   onArrived(room) {
     if (room.status !== "movingIn") return;
     room.status = "occupied";
+    room.rentOwed = 0;
     const salePrice = ROOM_TYPES[room.type].salePrice;
     if (salePrice) {
       World.money += salePrice;
@@ -83,26 +87,40 @@ const Economy = {
     }
   },
 
-  // Midnight: settle the day that just ended.
+  // Midnight: settle the day that just ended (`lastTallyDay` is the day now
+  // starting, so day 7, 14, ... means a week has just finished).
   tally() {
-    let rent = 0;
     for (const room of World.rooms) {
-      const rentPerDay = ROOM_TYPES[room.type].rentPerDay;
-      if (!rentPerDay || room.status !== "occupied") continue;
-      rent += rentPerDay;
-      this.popupOverRoom(room, `+${World.formatMoney(rentPerDay)}`, "#7dffa0");
+      const rentPerWeek = ROOM_TYPES[room.type].rentPerWeek;
+      if (rentPerWeek && room.status === "occupied") room.rentOwed += rentPerWeek / 7;
     }
 
-    let upkeep = 0;
     for (const t of World.transit) {
       const upkeepPerDay = TRANSIT_TYPES[t.kind].upkeepPerDay;
       if (!upkeepPerDay) continue;
-      upkeep += upkeepPerDay;
+      World.money -= upkeepPerDay;
       this.popup(t.tileStart + TRANSIT_TYPES[t.kind].width / 2, t.floorBottom, `-${World.formatMoney(upkeepPerDay)}`, "#ff9d9d");
     }
 
-    World.money += rent - upkeep;
-    this.lastTally = { rent, upkeep };
+    if (this.lastTallyDay % 7 === 0) this.payday();
+  },
+
+  payday() {
+    let total = 0;
+    for (const room of World.rooms) {
+      if (!room.rentOwed) continue;
+      const rent = Math.round(room.rentOwed);
+      total += rent;
+      room.rentOwed = 0;
+      this.popupOverRoom(room, `Rent +${World.formatMoney(rent)}`, "#7dffa0");
+    }
+    World.money += total;
+    this.lastPayday = total;
+  },
+
+  // Rent owed so far this week, paid at the end of Sunday.
+  rentDue() {
+    return Math.round(World.rooms.reduce((sum, room) => sum + (room.rentOwed || 0), 0));
   },
 
   // How long until bankruptcy, in game minutes (null if not in debt).

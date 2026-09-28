@@ -26,11 +26,12 @@ Then visit `http://localhost:8000`.
   condo *For sale*. A few game hours later (always in the daytime,
   8:00–20:00) the new tenants turn up at the lobby and walk in.
 - **A condo sells when its residents move in** ($30,000, paid once).
-- **Studios pay rent every night at midnight** once their makers have
-  moved in: Jewellery $2,500/day, Pottery $1,800, Sewing $1,600,
-  Woodwork $1,300.
-- **Elevators cost $1,000/day to run**, taken at the same midnight tally.
-  Stairs are free. The top bar shows what last night's tally came to.
+- **Studios pay rent weekly**, at midnight at the end of Sunday:
+  Jewellery $17,500/week, Pottery $12,600, Sewing $11,200, Woodwork
+  $9,100. A studio that moved in mid-week pays for the days it was
+  occupied. The top bar shows the rent building up towards payday.
+- **Elevators cost $1,000/day to run**, taken every midnight. Stairs are
+  free.
 - **A room with the red !** (unreachable from a lobby) never fills. Connect
   it and it fills within an hour or two.
 - **Bankruptcy.** Upkeep can push you below $0. The top bar then counts
