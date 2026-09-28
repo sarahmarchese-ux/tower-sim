@@ -77,6 +77,10 @@
     #clockbar button:hover {
       background: rgba(255, 255, 255, 0.18);
     }
+    #save-btn.saved {
+      background: #3ea45c;
+      border-color: #3ea45c;
+    }
     #clockbar button.active {
       background: #3ea45c;
       border-color: #3ea45c;
@@ -188,6 +192,8 @@
       <button id="pause-btn">Pause</button>
       <button class="speed-btn active" data-speed="1">1x</button>
       <button class="speed-btn" data-speed="3">3x</button>
+      <button id="save-btn" title="The game also saves itself every morning">Save</button>
+      <button id="new-btn">New game</button>
     </div>
     <span id="hint"></span>
   </div>
@@ -226,6 +232,7 @@
   <script src="economy.js"></script>
   <script src="stress.js"></script>
   <script src="ratings.js"></script>
+  <script src="save.js"></script>
   <script src="input.js"></script>
   <script src="ui.js"></script>
   <script src="render.js"></script>

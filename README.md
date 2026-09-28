@@ -20,34 +20,36 @@ Then visit `http://localhost:8000`.
 
 ## Status
 
-**Milestone 6: stress & ratings.** Layout matters now: unhappy tenants
-leave, and the tower earns its second star.
+**Milestone 7: save/load & polish.** Close the tab and pick up where you
+left off. That completes the first playable version: build a tower, fill
+it, keep it calm, and reach 2★.
 
-- **Everyone has a stress level**, shown by their colour: black when calm,
-  pink when stressed, red when they're thinking of leaving. A pink or red
-  dot on a room means its people are getting fed up.
-- **Long trips stress people.** Door-to-door time counts, with stair
-  climbing and elevator queueing counted double; anything over 30 minutes
-  adds stress. An elevator to the 8th floor is fine; eight flights of
-  stairs, or a jammed elevator at rush hour, is not. Not being able to get
-  home at all is worse.
-- **Noise stresses residents.** Each studio with makers in makes noise
-  (Woodwork 3, Pottery 2, Sewing 1, Jewellery 0). It reaches the rooms
-  touching it on the same floor, and rooms directly above and below. A
-  condo resident at home in noise gets steadily more stressed. Makers
-  don't mind noise. Zone the tower: workshops together, homes up and away.
-- **Stress eases** while people rest, at home in quiet or out of the
-  building.
-- **Weekly review.** At Sunday midnight, any room whose people average
-  red moves out. A condo's owners get their $30,000 back, as in SimTower,
-  and the room goes back on the market. A departing studio still pays the
-  rent it owes.
-- **Hover a room** to see its stress and the noise reaching it.
-- **Stars.** The tower starts at 1★ and reaches **2★ at 100 people**
-  (the top bar shows progress). Stars are never lost.
+- **Your tower is saved** in your browser: automatically at the start of
+  every game day, whenever you close or switch away from the tab, and when
+  you press **Save**. It's one save slot, kept on this browser only (a
+  different browser or device starts fresh).
+- **Coming back** restores everything: the clock, money, stars, every room,
+  stair and elevator, every person (even mid-climb or mid-ride), what
+  each studio owes in rent, and where you'd scrolled to. The game starts
+  paused with a welcome-back note; press Play or space to carry on.
+- **New game** (top bar) throws the save away and starts an empty lot,
+  after asking. Going bankrupt also deletes the save.
+- Saves carry a version number. A save from an incompatible version of the
+  game, or a damaged one, is ignored and you get a new game instead. If
+  your browser blocks storage the game still works; Save just says it
+  can't.
+- Polish: error messages fade after a few seconds instead of sticking.
 
-2★ is the goal of the first playable version. Next is milestone 7 (save/load
-& polish).
+<details>
+<summary>Milestone 6: stress & ratings</summary>
+
+Everyone has a stress level, drawn black (calm), pink or red. Long trips
+(stairs and queueing count double, over 30 minutes) and noise next door
+(Woodwork 3, Pottery 2, Sewing 1; residents only) raise it; resting
+lowers it. At the Sunday-night review, a room averaging red moves out (a
+condo's owners get their $30,000 back). Hover a room to see its stress and
+noise. The tower reaches **2★ at 100 people**, and stars are never lost.
+</details>
 
 <details>
 <summary>Milestone 5: economy & move-in</summary>
@@ -140,6 +142,8 @@ or visiting a GitHub Pages link.
 - `stress.js` — each person's stress: trips, noise, rest, and the weekly
   review that decides who moves out.
 - `ratings.js` — the star rating and its population targets.
+- `save.js` — saving the whole game to the browser and loading it back,
+  turning pointers between objects into ids and back.
 - `input.js` — turns mouse events into grid coordinates and tool actions
   (left-click/drag builds; see camera.js for the right-click pan split).
 - `clock.js` — game time as one number (minutes elapsed), and the pause/speed

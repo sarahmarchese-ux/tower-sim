@@ -422,5 +422,6 @@ UI.attachToolbar();
 UI.attachClockControls();
 UI.attachGameOver();
 UI.attachBanner();
+UI.attachSaveControls();
 UI.showHint(null);
 resize();

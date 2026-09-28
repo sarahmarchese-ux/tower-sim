@@ -82,6 +82,7 @@ const UI = {
   },
 
   showGameOver() {
+    SaveGame.clear(); // a bankrupt tower isn't worth coming back to
     this.setSpeed(0);
     document.getElementById("gameover").classList.add("shown");
   },
@@ -110,10 +111,31 @@ const UI = {
     });
   },
 
+  // A fresh start is a fresh page with the save thrown away.
+  startOver() {
+    SaveGame.discarded = true;
+    SaveGame.clear();
+    location.reload();
+  },
+
   attachGameOver() {
-    // A fresh start is just a fresh page: nothing is saved yet (that's
-    // milestone 7), so reloading gives a brand-new empty lot.
-    document.getElementById("restart-btn").addEventListener("click", () => location.reload());
+    document.getElementById("restart-btn").addEventListener("click", () => this.startOver());
+  },
+
+  attachSaveControls() {
+    const saveBtn = document.getElementById("save-btn");
+    saveBtn.addEventListener("click", () => {
+      const ok = SaveGame.save();
+      saveBtn.textContent = ok ? "Saved" : "Can't save";
+      saveBtn.classList.toggle("saved", ok);
+      setTimeout(() => {
+        saveBtn.textContent = "Save";
+        saveBtn.classList.remove("saved");
+      }, 1500);
+    });
+    document.getElementById("new-btn").addEventListener("click", () => {
+      if (confirm("Start a new game? Your current tower and its save will be lost.")) this.startOver();
+    });
   },
 
   attachClockControls() {
