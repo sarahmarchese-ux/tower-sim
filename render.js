@@ -1,8 +1,9 @@
 // Draws everything: the grid itself (floor lines, tile columns, the ground,
-// a ruler of floor numbers — milestone 1), plus what's been built on it and
-// a live preview of what the selected tool would do next (milestone 2).
-// This file only draws; World (world.js) decides what's true, and input.js
-// decides what the player is doing.
+// a ruler of floor numbers — milestone 1), what's been built on it and a
+// live preview of what the selected tool would do next (milestone 2), and
+// the stairs, elevators and people moving through it (milestone 4).
+// This file only draws; World (world.js), Elevators and People decide what's
+// true, and input.js decides what the player is doing.
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -28,10 +29,13 @@ function draw() {
   drawGroundHighlight(w, h);
   drawBuiltFloors(w, h);
   drawRooms(w, h);
+  drawTransit(w, h);
+  drawPeople(w, h);
   drawHoverPreview(w, h);
   drawFloorLabels(h);
   UI.updateMoney();
   UI.updateClock();
+  UI.updatePopulation();
 }
 
 // Sky color keyframes through the day, keyed by hour. Drawn colors between
@@ -178,11 +182,115 @@ function drawRooms(w, h) {
     ctx.lineWidth = 1;
     ctx.strokeRect(box.left, box.top, box.width, box.height);
 
+    // Label near the top, leaving the lower half of the room for its people.
     ctx.fillStyle = "#2b2b2b";
-    ctx.font = "11px sans-serif";
+    ctx.font = "10px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(type.name, box.left + box.width / 2, box.top + box.height / 2, box.width - 6);
+    ctx.fillText(type.name, box.left + box.width / 2, box.top + 9, box.width - 6);
+
+    // A red "!" on rooms nobody can get to from a lobby.
+    if (type.tenants > 0 && !Routing.isReachable(room)) {
+      ctx.fillStyle = "#c94444";
+      ctx.beginPath();
+      ctx.arc(box.right - 9, box.top + 9, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 10px sans-serif";
+      ctx.fillText("!", box.right - 9, box.top + 9.5);
+    }
+  }
+}
+
+// Screen rectangle covering tiles [tileStart, tileEnd] on every floor from
+// floorBottom to floorTop. Shared by transit, previews and anything else
+// that spans a block of the grid.
+function areaScreenBox(floorBottom, floorTop, tileStart, tileEnd) {
+  const left = Camera.worldToScreenX(Grid.tileToX(tileStart));
+  const right = Camera.worldToScreenX(Grid.tileToX(tileEnd + 1));
+  const top = Camera.worldToScreenY(Grid.floorToY(floorTop + 1));
+  const bottom = Camera.worldToScreenY(Grid.floorToY(floorBottom));
+  return { left, right, top, bottom, width: right - left, height: bottom - top };
+}
+
+function drawTransit(w, h) {
+  for (const t of World.transit) {
+    const width = TRANSIT_TYPES[t.kind].width;
+    const box = areaScreenBox(t.floorBottom, t.floorTop, t.tileStart, t.tileStart + width - 1);
+    if (box.right < 0 || box.left > w || box.bottom < 0 || box.top > h) continue;
+    if (t.kind === "stairs") drawStairs(box);
+    else drawElevator(t, box);
+  }
+}
+
+// A light block with a zigzag of steps running from bottom-left to top-right.
+function drawStairs(box) {
+  ctx.fillStyle = "rgba(235, 235, 235, 0.95)";
+  ctx.fillRect(box.left, box.top, box.width, box.height);
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(box.left, box.top, box.width, box.height);
+
+  const steps = 6;
+  ctx.strokeStyle = "#7a7a7a";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(box.left + 4, box.bottom - 2);
+  for (let i = 0; i < steps; i++) {
+    const x = box.left + 4 + ((box.width - 8) * (i + 1)) / steps;
+    const y = box.bottom - 2 - ((box.height - 4) * (i + 1)) / steps;
+    ctx.lineTo(x, box.bottom - 2 - ((box.height - 4) * i) / steps);
+    ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+// A dark shaft with a mark at each floor, and the car wherever it is now.
+function drawElevator(t, box) {
+  ctx.fillStyle = "#4f555c";
+  ctx.fillRect(box.left, box.top, box.width, box.height);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.lineWidth = 1;
+  for (let floor = t.floorBottom; floor <= t.floorTop + 1; floor++) {
+    const y = Camera.worldToScreenY(Grid.floorToY(floor));
+    ctx.beginPath();
+    ctx.moveTo(box.left, y);
+    ctx.lineTo(box.right, y);
+    ctx.stroke();
+  }
+
+  const car = Elevators.cars.get(t.id);
+  if (!car) return;
+  const carTop = Camera.worldToScreenY(Grid.floorToY(car.floor + 1)) + 3;
+  ctx.fillStyle = car.state === "doors" ? "#fff3c4" : "#d9d9d9";
+  ctx.fillRect(box.left + 3, carTop, box.width - 6, Grid.FLOOR_HEIGHT - 6);
+  ctx.strokeStyle = "#2b2b2b";
+  ctx.strokeRect(box.left + 3, carTop, box.width - 6, Grid.FLOOR_HEIGHT - 6);
+}
+
+const PERSON_COLORS = { maker: "#2f3e4e", resident: "#1f5f5b" };
+
+// Little stick figures: a body and a head, standing on whatever floor
+// they're on (fractional while riding or climbing). Riders are drawn inside
+// their car rather than at their own x, so a full car looks full.
+function drawPeople(w, h) {
+  const riderX = new Map();
+  for (const car of Elevators.cars.values()) {
+    car.riders.forEach((rider, i) => riderX.set(rider.person, car.transit.tileStart + 0.6 + i * 0.4));
+  }
+
+  for (const person of People.list) {
+    if (person.state === "offsite") continue;
+    const tileX = riderX.get(person) ?? person.x;
+    const x = Camera.worldToScreenX(Grid.tileToX(tileX));
+    const feet = Camera.worldToScreenY(Grid.floorToY(person.floor)) - 3;
+    if (x < -10 || x > w + 10 || feet < -20 || feet > h + 20) continue;
+
+    ctx.fillStyle = PERSON_COLORS[person.role];
+    ctx.fillRect(x - 2, feet - 9, 4, 9);
+    ctx.beginPath();
+    ctx.arc(x, feet - 12, 2.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -202,15 +310,34 @@ function drawHoverPreview(w, h) {
   if (Pointer.tile === null || Pointer.floor === null) return;
 
   if (Tool.current === "floor") {
+    const floor = Pointer.dragging ? Pointer.dragStartFloor : Pointer.floor;
     const start = Pointer.dragging ? Math.min(Pointer.dragStartTile, Pointer.tile) : Pointer.tile;
     const end = Pointer.dragging ? Math.max(Pointer.dragStartTile, Pointer.tile) : Pointer.tile;
-    drawFootprintPreview(Pointer.floor, start, end, true);
+    drawAreaPreview(floor, floor, start, end, true);
     return;
   }
 
   if (Tool.current === "demolish") {
-    const hasTarget = World.roomAt(Pointer.floor, Pointer.tile) || World.isFloorBuilt(Pointer.floor, Pointer.tile);
-    drawFootprintPreview(Pointer.floor, Pointer.tile, Pointer.tile, !!hasTarget);
+    const hasTarget =
+      World.transitAt(Pointer.floor, Pointer.tile) ||
+      World.roomAt(Pointer.floor, Pointer.tile) ||
+      World.isFloorBuilt(Pointer.floor, Pointer.tile);
+    drawAreaPreview(Pointer.floor, Pointer.floor, Pointer.tile, Pointer.tile, !!hasTarget);
+    return;
+  }
+
+  if (Tool.current === "stairs") {
+    const width = TRANSIT_TYPES.stairs.width;
+    const check = World.canPlaceTransit("stairs", Pointer.tile, Pointer.floor, Pointer.floor + 1);
+    drawAreaPreview(Pointer.floor, Pointer.floor + 1, Pointer.tile, Pointer.tile + width - 1, check.ok);
+    return;
+  }
+
+  if (Tool.current === "elevator") {
+    const width = TRANSIT_TYPES.elevator.width;
+    const span = elevatorDragSpan();
+    const check = World.canPlaceTransit("elevator", span.tile, span.bottom, span.top);
+    drawAreaPreview(span.bottom, span.top, span.tile, span.tile + width - 1, check.ok);
     return;
   }
 
@@ -218,20 +345,16 @@ function drawHoverPreview(w, h) {
   if (!type) return;
   const check = World.canPlaceRoom(Tool.current, Pointer.floor, Pointer.tile);
   const tileEnd = Pointer.tile + type.width - 1;
-  drawFootprintPreview(Pointer.floor, Pointer.tile, tileEnd, check.ok);
+  drawAreaPreview(Pointer.floor, Pointer.floor, Pointer.tile, tileEnd, check.ok);
 }
 
-function drawFootprintPreview(floor, tileStart, tileEnd, valid) {
-  const left = Camera.worldToScreenX(Grid.tileToX(tileStart));
-  const right = Camera.worldToScreenX(Grid.tileToX(tileEnd + 1));
-  const top = Camera.worldToScreenY(Grid.floorToY(floor + 1));
-  const bottom = Camera.worldToScreenY(Grid.floorToY(floor));
-
+function drawAreaPreview(floorBottom, floorTop, tileStart, tileEnd, valid) {
+  const box = areaScreenBox(floorBottom, floorTop, tileStart, tileEnd);
   ctx.fillStyle = valid ? "rgba(80, 200, 120, 0.35)" : "rgba(220, 70, 70, 0.35)";
-  ctx.fillRect(left, top, right - left, bottom - top);
+  ctx.fillRect(box.left, box.top, box.width, box.height);
   ctx.strokeStyle = valid ? "#3ea45c" : "#c94444";
   ctx.lineWidth = 2;
-  ctx.strokeRect(left, top, right - left, bottom - top);
+  ctx.strokeRect(box.left, box.top, box.width, box.height);
 }
 
 window.addEventListener("resize", resize);

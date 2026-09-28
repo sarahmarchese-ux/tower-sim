@@ -25,6 +25,10 @@ const UI = {
     document.getElementById("clock-label").textContent = Clock.label();
   },
 
+  updatePopulation() {
+    document.getElementById("population").textContent = `Pop ${People.population()}`;
+  },
+
   // Pause/play and speed buttons all need to agree on which one is
   // "active", so every path that changes the speed goes through this one
   // function to update both the clock and the buttons together.

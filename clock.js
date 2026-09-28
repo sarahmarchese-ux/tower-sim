@@ -12,9 +12,15 @@ const Clock = {
   speed: 1, // 0 = paused, 1 = normal, 3 = fast
   _speedBeforePause: 1,
 
-  update(deltaMs) {
-    if (this.speed === 0) return;
-    this.totalMinutes += (deltaMs / 1000) * GAME_MINUTES_PER_REAL_SECOND * this.speed;
+  // How many game minutes `deltaMs` of real time is worth at the current
+  // speed. The main loop hands those minutes out in small steps (see
+  // main.js), calling advance() for each one.
+  gameMinutesFor(deltaMs) {
+    return (deltaMs / 1000) * GAME_MINUTES_PER_REAL_SECOND * this.speed;
+  },
+
+  advance(minutes) {
+    this.totalMinutes += minutes;
   },
 
   get day() {

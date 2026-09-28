@@ -20,12 +20,31 @@ Then visit `http://localhost:8000`.
 
 ## Status
 
-**Milestone 3: the game clock.** The sky now cycles through a full day —
-dawn, daylight, dusk, night — as the clock (shown top-center) ticks forward.
-Pause/play and speed (1x / 3x) controls sit next to it; spacebar toggles
-pause, and 1 / 3 switch speed. Nothing reacts to the time of day yet
-(that's milestone 4, when people start commuting on a schedule) — for now
-it's just the clock and the sky.
+**Milestone 4: people & transit.** The tower has people in it now.
+
+- **Makers** commute to their studios on weekday mornings (8:00–9:30) and
+  head home in the evening (16:30–18:00).
+- **Residents** leave their condos on weekday mornings and come back in the
+  evening. On weekends about half go out around midday.
+- Everyone enters and leaves through a **lobby**, walks along built floor,
+  and takes the **stairs** (click to join a floor to the one above) or an
+  **elevator** (drag up or down to place a shaft). Elevators run
+  themselves: no scheduling, just a car that serves every call in turn.
+- A room nobody can reach from a lobby gets a red **!**, and its people
+  stay away until you connect it.
+- The top bar shows the population.
+
+People don't get stressed yet. Each trip's waiting time is recorded, ready
+for milestone 6 (stress & ratings). Money still only goes down; rent
+arrives at milestone 5 (economy).
+
+<details>
+<summary>Milestone 3: the game clock</summary>
+
+The sky cycled through a full day as the clock ticked forward, with
+pause/play and 1x / 3x speed controls (spacebar toggles pause; 1 / 3 set
+speed).
+</details>
 
 <details>
 <summary>Milestone 2: placement</summary>
@@ -75,10 +94,16 @@ or visiting a GitHub Pages link.
   conversions between grid units and pixels.
 - `camera.js` — what part of the grid is on screen, and the right-click-drag
   / keyboard controls that scroll it.
-- `rooms.js` — the room catalogue: widths, costs, colors (placeholder
-  numbers, tuned for real once the game is playable).
-- `world.js` — the building's actual state (floors, rooms, money) and the
-  placement rules. Knows nothing about pixels or the mouse.
+- `rooms.js` — the room and transit catalogue: widths, costs, colors, tenant
+  counts (placeholder numbers, tuned for real once the game is playable).
+- `world.js` — the building's actual state (floors, rooms, stairs,
+  elevators, money) and the placement rules. Announces every change so
+  people and elevators can react. Knows nothing about pixels or the mouse.
+- `routing.js` — plans a route through the building (walk / stairs /
+  elevator legs) and works out which rooms can be reached from a lobby.
+- `elevators.js` — self-running elevator cars ("collective control").
+- `people.js` — every tenant: their daily schedule and how they work
+  through a route.
 - `input.js` — turns mouse events into grid coordinates and tool actions
   (left-click/drag builds; see camera.js for the right-click pan split).
 - `clock.js` — game time as one number (minutes elapsed), and the pause/speed
@@ -87,4 +112,5 @@ or visiting a GitHub Pages link.
 - `render.js` — draws everything each frame: the sky (colored by time of
   day), the grid, built floors, rooms, and a live green/red placement preview.
 - `main.js` — the game loop: once per animation frame, poll held keys for
-  panning, advance the clock, and redraw.
+  panning, advance the simulation in small fixed steps (clock, elevators,
+  people), and redraw.
