@@ -121,6 +121,30 @@
       color: #eaffea;
     }
 
+    #stars {
+      color: #ffd54a;
+      font-weight: bold;
+    }
+
+    #banner {
+      position: fixed;
+      top: 56px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      background: rgba(20, 20, 20, 0.85);
+      border: 1px solid #ffd54a;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      z-index: 15;
+    }
+    #banner.shown {
+      display: block;
+    }
+
     #gameover {
       position: fixed;
       inset: 0;
@@ -157,7 +181,7 @@
   <div id="topbar">
     <span>
       <span id="money"></span> <span id="ledger"></span> <span id="debt"></span>
-      &nbsp; <span id="population"></span>
+      &nbsp; <span id="stars"></span> <span id="population"></span>
     </span>
     <div id="clockbar">
       <span id="clock-label"></span>
@@ -169,6 +193,8 @@
   </div>
 
   <canvas id="game"></canvas>
+
+  <div id="banner" title="Click to dismiss"></div>
 
   <div id="gameover">
     <h1>Bankrupt</h1>
@@ -198,6 +224,8 @@
   <script src="elevators.js"></script>
   <script src="people.js"></script>
   <script src="economy.js"></script>
+  <script src="stress.js"></script>
+  <script src="ratings.js"></script>
   <script src="input.js"></script>
   <script src="ui.js"></script>
   <script src="render.js"></script>

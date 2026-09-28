@@ -1,14 +1,14 @@
 // The room catalogue. Every number here is a starting point for tuning —
-// what matters is that each room differs in width, cost, income and (once
-// milestone 6 adds stress) noise, the way the design doc's "Maker studios"
+// what matters is that each room differs in width, cost, income and
+// noise, the way the design doc's "Maker studios"
 // table describes.
 //
 // `width` is in tiles. `groundOnly` enforces the design doc's rule that the
 // lobby sits on the ground floor. `allowsTransit` marks rooms that stairs and
 // elevators may pass through — only the lobby, an open hall, as in SimTower.
 // `tenants` is how many people live or work there, and `role` says which
-// daily schedule they follow (see people.js). `noise` isn't used by anything
-// yet — it's here so milestone 6 (stress & ratings) has somewhere to read it.
+// daily schedule they follow (see people.js). `noise` is how loud a studio
+// is once its makers are in; it stresses residents next door (stress.js).
 //
 // Money in (milestone 5, see economy.js): studios pay `rentPerWeek` every
 // Sunday night, for the days their makers were in; a condo pays `salePrice`

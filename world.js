@@ -114,6 +114,13 @@ const World = {
     return { ok: true, tileEnd };
   },
 
+  // Occupancy changes go through here so they're announced like any other
+  // change: noise, for one, depends on which studios have makers in.
+  setRoomStatus(room, status) {
+    room.status = status;
+    this.emit("roomStatusChanged", room);
+  },
+
   placeRoom(typeKey, floor, tileStart) {
     const check = this.canPlaceRoom(typeKey, floor, tileStart);
     if (!check.ok) return check;

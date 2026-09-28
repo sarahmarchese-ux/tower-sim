@@ -3,7 +3,7 @@
 // live preview of what the selected tool would do next (milestone 2), and
 // the stairs, elevators and people moving through it (milestone 4), and
 // which rooms are still empty plus the money floating up from rent, sales
-// and upkeep (milestone 5).
+// and upkeep (milestone 5), and how stressed everyone is (milestone 6).
 // This file only draws; World (world.js), Elevators and People decide what's
 // true, and input.js decides what the player is doing.
 
@@ -39,6 +39,7 @@ function draw() {
   UI.updateMoney();
   UI.updateClock();
   UI.updatePopulation();
+  UI.updateInspect();
 }
 
 // Sky color keyframes through the day, keyed by hour. Drawn colors between
@@ -204,6 +205,19 @@ function drawRooms(w, h) {
       ctx.fillText(sign, box.left + box.width / 2, box.top + 21, box.width - 6);
     }
 
+    // A pink or red dot on rooms whose people are getting stressed, so
+    // trouble spots stand out before the weekly review.
+    const average = room.status === "occupied" ? Stress.roomAverage(room) : null;
+    const band = average === null ? "calm" : Stress.band(average);
+    if (band !== "calm") {
+      ctx.fillStyle = STRESS_COLORS[band];
+      ctx.beginPath();
+      ctx.arc(box.left + 8, box.top + 9, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.stroke();
+    }
+
     // A red "!" on rooms nobody can get to from a lobby.
     if (type.tenants > 0 && !Routing.isReachable(room)) {
       ctx.fillStyle = "#c94444";
@@ -283,7 +297,9 @@ function drawElevator(t, box) {
   ctx.strokeRect(box.left + 3, carTop, box.width - 6, Grid.FLOOR_HEIGHT - 6);
 }
 
-const PERSON_COLORS = { maker: "#2f3e4e", resident: "#1f5f5b" };
+// Stress colours, as in SimTower: black when calm, pink when stressed,
+// red when they're thinking of leaving.
+const STRESS_COLORS = { calm: "#1e1e1e", pink: "#e8609e", red: "#d62828" };
 
 // Little stick figures: a body and a head, standing on whatever floor
 // they're on (fractional while riding or climbing). Riders are drawn inside
@@ -301,7 +317,7 @@ function drawPeople(w, h) {
     const feet = Camera.worldToScreenY(Grid.floorToY(person.floor)) - 3;
     if (x < -10 || x > w + 10 || feet < -20 || feet > h + 20) continue;
 
-    ctx.fillStyle = PERSON_COLORS[person.role];
+    ctx.fillStyle = STRESS_COLORS[Stress.band(person.stress)];
     ctx.fillRect(x - 2, feet - 9, 4, 9);
     ctx.beginPath();
     ctx.arc(x, feet - 12, 2.5, 0, Math.PI * 2);
@@ -405,5 +421,6 @@ attachBuildControls(canvas);
 UI.attachToolbar();
 UI.attachClockControls();
 UI.attachGameOver();
+UI.attachBanner();
 UI.showHint(null);
 resize();

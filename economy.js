@@ -7,6 +7,11 @@
 // starts owing rent. A room nobody can reach from a lobby (the red "!")
 // never fills — its viewing is simply put off until the player connects it.
 //
+// If a room's people are too stressed at the weekly review (stress.js),
+// they move out and the room goes back on the market. A condo's owners get
+// their money back, as in SimTower, so a condo that empties costs you its
+// sale price.
+//
 // Every midnight is a tally. Each occupied studio adds a day's worth of its
 // weekly rent to what it owes (so a studio that moved in on Thursday pays
 // for Thursday to Sunday), and each elevator's upkeep is paid. Once a week,
@@ -71,15 +76,15 @@ const Economy = {
       room.moveInAt = Clock.totalMinutes + randomBetween(MOVE_IN_RETRY_MINUTES);
       return;
     }
-    room.status = "movingIn";
+    World.setRoomStatus(room, "movingIn");
     People.moveIn(room);
   },
 
   // Called by people.js when a mover reaches their new room.
   onArrived(room) {
     if (room.status !== "movingIn") return;
-    room.status = "occupied";
-    room.rentOwed = 0;
+    World.setRoomStatus(room, "occupied");
+    room.rentOwed = room.rentOwed || 0;
     const salePrice = ROOM_TYPES[room.type].salePrice;
     if (salePrice) {
       World.money += salePrice;
@@ -102,7 +107,25 @@ const Economy = {
       this.popup(t.tileStart + TRANSIT_TYPES[t.kind].width / 2, t.floorBottom, `-${World.formatMoney(upkeepPerDay)}`, "#ff9d9d");
     }
 
-    if (this.lastTallyDay % 7 === 0) this.payday();
+    if (this.lastTallyDay % 7 === 0) {
+      Stress.weeklyReview();
+      this.payday();
+    }
+  },
+
+  // Too stressed: the tenants leave and the room is back on the market.
+  // A departing studio still pays the rent it owes at payday.
+  moveOut(room) {
+    World.setRoomStatus(room, "vacant");
+    room.moveInAt = Clock.totalMinutes + randomBetween(MOVE_IN_DELAY_MINUTES);
+    People.moveOut(room);
+    const salePrice = ROOM_TYPES[room.type].salePrice;
+    if (salePrice) {
+      World.money -= salePrice;
+      this.popupOverRoom(room, `Moved out: refund -${World.formatMoney(salePrice)}`, "#ff9d9d");
+    } else {
+      this.popupOverRoom(room, "Moved out", "#ff9d9d");
+    }
   },
 
   payday() {

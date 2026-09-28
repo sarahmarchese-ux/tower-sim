@@ -24,7 +24,9 @@ function advanceSimulation(minutes) {
     Clock.advance(step);
     Elevators.update(step);
     People.update(step);
+    Stress.update(step);
     Economy.update();
+    Ratings.update();
     if (Economy.bankrupt) {
       UI.showGameOver();
       return;
