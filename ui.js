@@ -6,10 +6,54 @@
 const UI = {
   defaultHint: "Left-click, or drag, to build. Right-click/drag or WASD/arrows to scroll.",
 
+  // An error (e.g. "Build the floor here first") shows for a few seconds,
+  // then the hint goes back to the default or to the room being hovered.
   showHint(message) {
     const el = document.getElementById("hint");
     el.textContent = message || this.defaultHint;
     el.classList.toggle("hint-error", !!message);
+    clearTimeout(this._hintTimer);
+    if (message) this._hintTimer = setTimeout(() => this.showHint(null), 4000);
+  },
+
+  // Hovering a room with tenants shows who's there, how stressed they are,
+  // and (for condos) how much noise reaches it; unless an error is showing.
+  updateInspect() {
+    const el = document.getElementById("hint");
+    if (el.classList.contains("hint-error")) return;
+    const room = Pointer.floor !== null && World.roomAt(Pointer.floor, Pointer.tile);
+    el.textContent = room && ROOM_TYPES[room.type].tenants > 0 ? this.describeRoom(room) : this.defaultHint;
+  },
+
+  describeRoom(room) {
+    const type = ROOM_TYPES[room.type];
+    const parts = [type.name];
+    if (room.status === "vacant") parts.push(type.salePrice ? "for sale" : "for rent");
+    else if (room.status === "movingIn") parts.push("moving in");
+    else {
+      const average = Stress.roomAverage(room);
+      if (average !== null) parts.push(`stress ${Math.round(average)} (${Stress.band(average)})`);
+    }
+    if (type.role === "resident") parts.push(`noise here: ${Stress.noiseAt(room)}`);
+    else if (type.noise > 0) parts.push(`makes noise ${type.noise}`);
+    else parts.push("quiet");
+    if (!Routing.isReachable(room)) parts.push("can't be reached from a lobby");
+    return parts.join(" · ");
+  },
+
+  // A message across the top of the screen (a new star, say) that fades
+  // after a while or when clicked.
+  announce(message) {
+    const el = document.getElementById("banner");
+    el.textContent = message;
+    el.classList.add("shown");
+    clearTimeout(this._bannerTimer);
+    this._bannerTimer = setTimeout(() => el.classList.remove("shown"), 8000);
+  },
+
+  attachBanner() {
+    const el = document.getElementById("banner");
+    el.addEventListener("click", () => el.classList.remove("shown"));
   },
 
   reportResult(result) {
@@ -47,7 +91,12 @@ const UI = {
   },
 
   updatePopulation() {
-    document.getElementById("population").textContent = `Pop ${People.population()}`;
+    document.getElementById("stars").textContent = "★".repeat(Ratings.stars);
+    const next = Ratings.nextTarget();
+    const population = People.population();
+    document.getElementById("population").textContent = next
+      ? `Pop ${population} / ${next.population} for ${next.stars}★`
+      : `Pop ${population}`;
   },
 
   // Pause/play and speed buttons all need to agree on which one is

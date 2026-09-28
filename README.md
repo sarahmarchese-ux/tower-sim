@@ -20,29 +20,44 @@ Then visit `http://localhost:8000`.
 
 ## Status
 
-**Milestone 5: economy & move-in.** Money comes in now, and it can run out.
+**Milestone 6: stress & ratings.** Layout matters now: unhappy tenants
+leave, and the tower earns its second star.
 
-- **New rooms start empty.** A fresh studio says *For rent* and a fresh
-  condo *For sale*. A few game hours later (always in the daytime,
-  8:00–20:00) the new tenants turn up at the lobby and walk in.
-- **A condo sells when its residents move in** ($30,000, paid once).
-- **Studios pay rent weekly**, at midnight at the end of Sunday:
-  Jewellery $17,500/week, Pottery $12,600, Sewing $11,200, Woodwork
-  $9,100. A studio that moved in mid-week pays for the days it was
-  occupied. The top bar shows the rent building up towards payday.
-- **Elevators cost $1,000/day to run**, taken every midnight. Stairs are
-  free.
-- **A room with the red !** (unreachable from a lobby) never fills. Connect
-  it and it fills within an hour or two.
-- **Bankruptcy.** Upkeep can push you below $0. The top bar then counts
-  down; stay in the red for a full game week and the game is over.
-  Demolishing things (for their refund) is one way back out.
-- Demolishing refunds half the build cost, except a sold condo, which
-  refunds nothing: it belongs to its owners now.
-- Population only counts people who've moved in.
+- **Everyone has a stress level**, shown by their colour: black when calm,
+  pink when stressed, red when they're thinking of leaving. A pink or red
+  dot on a room means its people are getting fed up.
+- **Long trips stress people.** Door-to-door time counts, with stair
+  climbing and elevator queueing counted double; anything over 30 minutes
+  adds stress. An elevator to the 8th floor is fine; eight flights of
+  stairs, or a jammed elevator at rush hour, is not. Not being able to get
+  home at all is worse.
+- **Noise stresses residents.** Each studio with makers in makes noise
+  (Woodwork 3, Pottery 2, Sewing 1, Jewellery 0). It reaches the rooms
+  touching it on the same floor, and rooms directly above and below. A
+  condo resident at home in noise gets steadily more stressed. Makers
+  don't mind noise. Zone the tower: workshops together, homes up and away.
+- **Stress eases** while people rest, at home in quiet or out of the
+  building.
+- **Weekly review.** At Sunday midnight, any room whose people average
+  red moves out. A condo's owners get their $30,000 back, as in SimTower,
+  and the room goes back on the market. A departing studio still pays the
+  rent it owes.
+- **Hover a room** to see its stress and the noise reaching it.
+- **Stars.** The tower starts at 1★ and reaches **2★ at 100 people**
+  (the top bar shows progress). Stars are never lost.
 
-People still don't get stressed. That, move-outs and the 2★ rating come in
-milestone 6 (stress & ratings).
+2★ is the goal of the first playable version. Next is milestone 7 (save/load
+& polish).
+
+<details>
+<summary>Milestone 5: economy & move-in</summary>
+
+New rooms started empty and filled after a delay, with tenants walking in
+from the lobby (never into a room nobody could reach). Condos sold for
+$30,000 on move-in; studios paid rent weekly on Sunday night (pro-rated for
+a mid-week move-in); elevators cost $1,000/day upkeep. A full game week
+below $0 meant bankruptcy.
+</details>
 
 <details>
 <summary>Milestone 4: people & transit</summary>
@@ -120,8 +135,11 @@ or visiting a GitHub Pages link.
 - `elevators.js` — self-running elevator cars ("collective control").
 - `people.js` — every tenant: moving in, their daily schedule, and how
   they work through a route.
-- `economy.js` — who moves in when, condo sales, the nightly rent and
-  upkeep tally, and bankruptcy.
+- `economy.js` — who moves in (and out) when, condo sales and refunds,
+  weekly rent, nightly upkeep, and bankruptcy.
+- `stress.js` — each person's stress: trips, noise, rest, and the weekly
+  review that decides who moves out.
+- `ratings.js` — the star rating and its population targets.
 - `input.js` — turns mouse events into grid coordinates and tool actions
   (left-click/drag builds; see camera.js for the right-click pan split).
 - `clock.js` — game time as one number (minutes elapsed), and the pause/speed
@@ -131,4 +149,4 @@ or visiting a GitHub Pages link.
   day), the grid, built floors, rooms, and a live green/red placement preview.
 - `main.js` — the game loop: once per animation frame, poll held keys for
   panning, advance the simulation in small fixed steps (clock, elevators,
-  people, economy), and redraw.
+  people, stress, economy, ratings), and redraw.

@@ -3,7 +3,12 @@
 // Nobody is born inside a room. When a room's new tenants arrive (see
 // economy.js), they appear at a lobby as movers and walk in; once there,
 // they settle into their daily rhythm. A person's `movingIn` flag is true
-// until they've reached their room for the first time.
+// until they've reached their room for the first time. Moving out is the
+// reverse: `movingOut` people head for the lobby and are gone once they
+// reach it.
+//
+// Every person carries a `stress` value (see stress.js), shown as their
+// colour. Each trip's length and elevator wait feed into it.
 //
 // Each person belongs to one room and follows a simple daily rhythm:
 //   - Makers come to their studio on weekdays and go home in the evening.
@@ -25,9 +30,9 @@
 //   waitingForElevator — queueing at a shaft (elevators.js takes over)
 //   riding             — inside an elevator car
 //
-// `tripWaitMinutes` adds up time spent queueing on the current trip, and is
-// kept as `lastTripWaitMinutes` when they arrive. Nothing uses it yet —
-// milestone 6 will turn long waits into stress.
+// `tripWaitMinutes` and `tripStairsMinutes` add up time spent queueing and
+// climbing on the current trip, and `tripStartedAt` is when they set off;
+// on arrival all three go to stress.js.
 
 const WALK_TILES_PER_MINUTE = 3;
 const STAIRS_MINUTES_PER_FLOOR = 2;
@@ -54,6 +59,8 @@ const People = {
         slot,
         state: "offsite",
         movingIn: true,
+        movingOut: false,
+        stress: 0,
         floor: room.floor,
         x: this.slotX(room, slot),
         route: null,
@@ -61,7 +68,9 @@ const People = {
         legProgress: 0,
         target: null,
         idleUntil: showUpAt,
+        tripStartedAt: 0,
         tripWaitMinutes: 0,
+        tripStairsMinutes: 0,
         lastTripWaitMinutes: 0,
         // Minutes after midnight.
         arriveAt: 8 * 60 + Math.random() * 90, // makers: 8:00–9:30
@@ -83,6 +92,22 @@ const People = {
     this.list = this.list.filter((p) => p.room !== room);
   },
 
+  // A room's tenants are leaving for good. Anyone already out of the
+  // building is simply gone; everyone else heads for the lobby (after a
+  // few minutes to pack) and is gone when they get there.
+  moveOut(room) {
+    for (const person of this.list.filter((p) => p.room === room)) {
+      person.movingOut = true;
+      if (person.state === "offsite") this.remove(person);
+      else if (person.state === "inRoom") person.idleUntil = Clock.totalMinutes + randomBetween(MOVER_GAP_MINUTES);
+    }
+  },
+
+  remove(person) {
+    Elevators.forget(person);
+    this.list = this.list.filter((p) => p !== person);
+  },
+
   // Where each tenant stands inside their room, spread evenly across it.
   slotX(room, slot) {
     const type = ROOM_TYPES[room.type];
@@ -91,6 +116,7 @@ const People = {
 
   // The one question: where should this person be at game time `t`?
   desiredLocation(person, t) {
+    if (person.movingOut) return "offsite";
     if (person.movingIn) return "room";
     const day = Math.floor(t / MINUTES_PER_DAY);
     const minute = t - day * MINUTES_PER_DAY;
@@ -129,13 +155,22 @@ const People = {
     if (!route) {
       // No way through (no lobby, a missing elevator, a gap in the floor...).
       // Anyone already inside the building gives up and leaves; everyone
-      // tries again in a little while in case the player fixes it.
+      // tries again in a little while in case the player fixes it. Being
+      // stuck is stressful. Someone moving out finds their own way out.
+      if (person.movingOut) {
+        this.remove(person);
+        return;
+      }
       if (from) person.state = "offsite";
+      if (!person.movingIn) Stress.onNoRoute(person);
       person.route = null;
       person.idleUntil = Clock.totalMinutes + RETRY_MINUTES;
       return;
     }
 
+    // A re-route (`from`) is the same trip carrying on, so the clock keeps
+    // running from when they first set off.
+    if (!from) person.tripStartedAt = Clock.totalMinutes;
     person.route = route;
     person.target = target;
     person.legIndex = 0;
@@ -173,6 +208,7 @@ const People = {
         const total = STAIRS_MINUTES_PER_FLOOR * Math.abs(leg.toFloor - leg.fromFloor);
         const used = Math.min(remaining, (1 - person.legProgress) * total);
         person.legProgress += used / total;
+        person.tripStairsMinutes += used;
         remaining -= used;
         // Move diagonally between the stairs' two stops as you climb.
         const fromX = Routing.stopX(transit, leg.fromFloor);
@@ -202,7 +238,16 @@ const People = {
     person.state = person.target === "room" ? "inRoom" : "offsite";
     person.route = null;
     person.lastTripWaitMinutes = person.tripWaitMinutes;
+    if (!person.movingIn && !person.movingOut) {
+      const tripMinutes = Clock.totalMinutes - person.tripStartedAt;
+      Stress.onTripFinished(person, tripMinutes, person.tripStairsMinutes, person.tripWaitMinutes);
+    }
     person.tripWaitMinutes = 0;
+    person.tripStairsMinutes = 0;
+    if (person.movingOut && person.target === "offsite") {
+      this.remove(person);
+      return;
+    }
     if (person.target === "room") {
       person.floor = person.room.floor;
       person.x = this.slotX(person.room, person.slot);
@@ -242,9 +287,10 @@ const People = {
     }
   },
 
-  // Everyone who has moved in. Movers still on their way don't count yet.
+  // Everyone who lives or works here: not movers still on their way in,
+  // nor those on their way out.
   population() {
-    return this.list.filter((p) => !p.movingIn).length;
+    return this.list.filter((p) => !p.movingIn && !p.movingOut).length;
   },
 };
 
