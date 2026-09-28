@@ -20,23 +20,38 @@ Then visit `http://localhost:8000`.
 
 ## Status
 
-**Milestone 4: people & transit.** The tower has people in it now.
+**Milestone 5: economy & move-in.** Money comes in now, and it can run out.
 
-- **Makers** commute to their studios on weekday mornings (8:00–9:30) and
-  head home in the evening (16:30–18:00).
-- **Residents** leave their condos on weekday mornings and come back in the
-  evening. On weekends about half go out around midday.
-- Everyone enters and leaves through a **lobby**, walks along built floor,
-  and takes the **stairs** (click to join a floor to the one above) or an
-  **elevator** (drag up or down to place a shaft). Elevators run
-  themselves: no scheduling, just a car that serves every call in turn.
-- A room nobody can reach from a lobby gets a red **!**, and its people
-  stay away until you connect it.
-- The top bar shows the population.
+- **New rooms start empty.** A fresh studio says *For rent* and a fresh
+  condo *For sale*. A few game hours later (always in the daytime,
+  8:00–20:00) the new tenants turn up at the lobby and walk in.
+- **A condo sells when its residents move in** ($30,000, paid once).
+- **Studios pay rent every night at midnight** once their makers have
+  moved in: Jewellery $2,500/day, Pottery $1,800, Sewing $1,600,
+  Woodwork $1,300.
+- **Elevators cost $1,000/day to run**, taken at the same midnight tally.
+  Stairs are free. The top bar shows what last night's tally came to.
+- **A room with the red !** (unreachable from a lobby) never fills. Connect
+  it and it fills within an hour or two.
+- **Bankruptcy.** Upkeep can push you below $0. The top bar then counts
+  down; stay in the red for a full game week and the game is over.
+  Demolishing things (for their refund) is one way back out.
+- Demolishing refunds half the build cost, except a sold condo, which
+  refunds nothing: it belongs to its owners now.
+- Population only counts people who've moved in.
 
-People don't get stressed yet. Each trip's waiting time is recorded, ready
-for milestone 6 (stress & ratings). Money still only goes down; rent
-arrives at milestone 5 (economy).
+People still don't get stressed. That, move-outs and the 2★ rating come in
+milestone 6 (stress & ratings).
+
+<details>
+<summary>Milestone 4: people & transit</summary>
+
+Makers commuted to their studios on weekdays (8:00–9:30 in, 16:30–18:00
+out) and residents left their condos in the morning and came back in the
+evening, with about half going out around midday on weekends. Everyone
+entered and left through a lobby, walked along built floor, and took the
+stairs or a self-running elevator. Unreachable rooms got a red **!**.
+</details>
 
 <details>
 <summary>Milestone 3: the game clock</summary>
@@ -95,15 +110,17 @@ or visiting a GitHub Pages link.
 - `camera.js` — what part of the grid is on screen, and the right-click-drag
   / keyboard controls that scroll it.
 - `rooms.js` — the room and transit catalogue: widths, costs, colors, tenant
-  counts (placeholder numbers, tuned for real once the game is playable).
+  counts, rent, sale prices and upkeep (starting numbers, for tuning).
 - `world.js` — the building's actual state (floors, rooms, stairs,
   elevators, money) and the placement rules. Announces every change so
   people and elevators can react. Knows nothing about pixels or the mouse.
 - `routing.js` — plans a route through the building (walk / stairs /
   elevator legs) and works out which rooms can be reached from a lobby.
 - `elevators.js` — self-running elevator cars ("collective control").
-- `people.js` — every tenant: their daily schedule and how they work
-  through a route.
+- `people.js` — every tenant: moving in, their daily schedule, and how
+  they work through a route.
+- `economy.js` — who moves in when, condo sales, the nightly rent and
+  upkeep tally, and bankruptcy.
 - `input.js` — turns mouse events into grid coordinates and tool actions
   (left-click/drag builds; see camera.js for the right-click pan split).
 - `clock.js` — game time as one number (minutes elapsed), and the pause/speed
@@ -113,4 +130,4 @@ or visiting a GitHub Pages link.
   day), the grid, built floors, rooms, and a live green/red placement preview.
 - `main.js` — the game loop: once per animation frame, poll held keys for
   panning, advance the simulation in small fixed steps (clock, elevators,
-  people), and redraw.
+  people, economy), and redraw.

@@ -18,7 +18,30 @@ const UI = {
   },
 
   updateMoney() {
-    document.getElementById("money").textContent = World.formatMoney(World.money);
+    const money = document.getElementById("money");
+    money.textContent = World.formatMoney(World.money);
+    money.classList.toggle("in-debt", World.money < 0);
+
+    // What last midnight's tally brought in, net of upkeep.
+    const tally = Economy.lastTally;
+    document.getElementById("ledger").textContent = tally
+      ? `(last night ${tally.rent - tally.upkeep >= 0 ? "+" : ""}${World.formatMoney(tally.rent - tally.upkeep)})`
+      : "";
+
+    // In the red: count down to bankruptcy.
+    const left = Economy.minutesUntilBankrupt();
+    let warning = "";
+    if (left !== null) {
+      const days = Math.floor(left / MINUTES_PER_DAY);
+      const hours = Math.floor((left % MINUTES_PER_DAY) / 60);
+      warning = `· bankrupt in ${days}d ${hours}h`;
+    }
+    document.getElementById("debt").textContent = warning;
+  },
+
+  showGameOver() {
+    this.setSpeed(0);
+    document.getElementById("gameover").classList.add("shown");
   },
 
   updateClock() {
@@ -40,6 +63,12 @@ const UI = {
     });
   },
 
+  attachGameOver() {
+    // A fresh start is just a fresh page: nothing is saved yet (that's
+    // milestone 7), so reloading gives a brand-new empty lot.
+    document.getElementById("restart-btn").addEventListener("click", () => location.reload());
+  },
+
   attachClockControls() {
     const pauseBtn = document.getElementById("pause-btn");
     pauseBtn.addEventListener("click", () => {
@@ -52,7 +81,7 @@ const UI = {
     });
 
     window.addEventListener("keydown", (e) => {
-      if (e.target.tagName === "INPUT") return;
+      if (e.target.tagName === "INPUT" || Economy.bankrupt) return;
       if (e.key === " ") {
         e.preventDefault();
         Clock.togglePause();

@@ -35,6 +35,18 @@
       font-weight: bold;
       font-variant-numeric: tabular-nums;
     }
+    #money.in-debt,
+    #debt {
+      color: #ff9d9d;
+    }
+    #ledger {
+      color: #ccc;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    #debt {
+      font-weight: bold;
+    }
     #hint {
       color: #eee;
     }
@@ -108,11 +120,45 @@
     #toolbar button.active small {
       color: #eaffea;
     }
+
+    #gameover {
+      position: fixed;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      text-align: center;
+      z-index: 20;
+    }
+    #gameover.shown {
+      display: flex;
+    }
+    #gameover h1 {
+      margin: 0;
+      font-size: 40px;
+      color: #ff9d9d;
+    }
+    #gameover button {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 6px;
+      background: #3ea45c;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div id="topbar">
-    <span><span id="money"></span> &nbsp; <span id="population"></span></span>
+    <span>
+      <span id="money"></span> <span id="ledger"></span> <span id="debt"></span>
+      &nbsp; <span id="population"></span>
+    </span>
     <div id="clockbar">
       <span id="clock-label"></span>
       <button id="pause-btn">Pause</button>
@@ -124,16 +170,22 @@
 
   <canvas id="game"></canvas>
 
+  <div id="gameover">
+    <h1>Bankrupt</h1>
+    <p>The tower spent a whole week in the red, and the bank has taken it back.</p>
+    <button id="restart-btn">Start over</button>
+  </div>
+
   <div id="toolbar">
     <button data-tool="floor">Floor<small>$200/tile</small></button>
     <button data-tool="lobby">Lobby<small>Free</small></button>
-    <button data-tool="sewing">Sewing<small>$9,000</small></button>
-    <button data-tool="pottery">Pottery<small>$11,000</small></button>
-    <button data-tool="woodwork">Woodwork<small>$10,000</small></button>
-    <button data-tool="jewellery">Jewellery<small>$15,000</small></button>
-    <button data-tool="condo">Condo<small>$20,000</small></button>
+    <button data-tool="sewing">Sewing<small>$9,000 · rent $1.6k/day</small></button>
+    <button data-tool="pottery">Pottery<small>$11,000 · rent $1.8k/day</small></button>
+    <button data-tool="woodwork">Woodwork<small>$10,000 · rent $1.3k/day</small></button>
+    <button data-tool="jewellery">Jewellery<small>$15,000 · rent $2.5k/day</small></button>
+    <button data-tool="condo">Condo<small>$20,000 · sells $30k</small></button>
     <button data-tool="stairs">Stairs<small>$5,000</small></button>
-    <button data-tool="elevator">Elevator<small>drag · $20k + $1k/floor</small></button>
+    <button data-tool="elevator">Elevator<small>drag · $20k + $1k/floor · $1k/day</small></button>
     <button data-tool="demolish">Demolish<small>refund 50%</small></button>
   </div>
 
@@ -145,6 +197,7 @@
   <script src="routing.js"></script>
   <script src="elevators.js"></script>
   <script src="people.js"></script>
+  <script src="economy.js"></script>
   <script src="input.js"></script>
   <script src="ui.js"></script>
   <script src="render.js"></script>

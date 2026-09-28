@@ -1,7 +1,9 @@
 // Draws everything: the grid itself (floor lines, tile columns, the ground,
 // a ruler of floor numbers — milestone 1), what's been built on it and a
 // live preview of what the selected tool would do next (milestone 2), and
-// the stairs, elevators and people moving through it (milestone 4).
+// the stairs, elevators and people moving through it (milestone 4), and
+// which rooms are still empty plus the money floating up from rent, sales
+// and upkeep (milestone 5).
 // This file only draws; World (world.js), Elevators and People decide what's
 // true, and input.js decides what the player is doing.
 
@@ -31,6 +33,7 @@ function draw() {
   drawRooms(w, h);
   drawTransit(w, h);
   drawPeople(w, h);
+  drawMoneyPopups(w, h);
   drawHoverPreview(w, h);
   drawFloorLabels(h);
   UI.updateMoney();
@@ -176,11 +179,18 @@ function drawRooms(w, h) {
     const box = roomScreenBox(room, type);
     if (box.right < 0 || box.left > w || box.bottom < 0 || box.top > h) continue;
 
+    // A room nobody has moved into yet is drawn faded, with a dashed
+    // outline and a sign saying it's on the market.
+    const empty = room.status === "vacant" || room.status === "movingIn";
+    ctx.globalAlpha = empty ? 0.4 : 1;
     ctx.fillStyle = type.color;
     ctx.fillRect(box.left, box.top, box.width, box.height);
+    ctx.globalAlpha = 1;
     ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
     ctx.lineWidth = 1;
+    if (empty) ctx.setLineDash([4, 3]);
     ctx.strokeRect(box.left, box.top, box.width, box.height);
+    ctx.setLineDash([]);
 
     // Label near the top, leaving the lower half of the room for its people.
     ctx.fillStyle = "#2b2b2b";
@@ -188,6 +198,11 @@ function drawRooms(w, h) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(type.name, box.left + box.width / 2, box.top + 9, box.width - 6);
+    if (empty) {
+      const sign = room.status === "movingIn" ? "Moving in" : type.salePrice ? "For sale" : "For rent";
+      ctx.font = "italic 10px sans-serif";
+      ctx.fillText(sign, box.left + box.width / 2, box.top + 21, box.width - 6);
+    }
 
     // A red "!" on rooms nobody can get to from a lobby.
     if (type.tenants > 0 && !Routing.isReachable(room)) {
@@ -294,6 +309,32 @@ function drawPeople(w, h) {
   }
 }
 
+// Money labels ("+$1,600", "Sold +$30,000", "-$1,000") drift up from where
+// the money came from, and fade out.
+const POPUP_MS = 2500;
+const POPUP_RISE_PX = 24;
+
+function drawMoneyPopups(w, h) {
+  const now = performance.now();
+  Economy.popups = Economy.popups.filter((p) => now - p.bornAt < POPUP_MS);
+
+  ctx.font = "bold 11px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const p of Economy.popups) {
+    const age = (now - p.bornAt) / POPUP_MS;
+    const x = Camera.worldToScreenX(Grid.tileToX(p.x));
+    const y = Camera.worldToScreenY(Grid.floorToY(p.floor + 1)) - 6 - age * POPUP_RISE_PX;
+    if (x < -60 || x > w + 60 || y < -20 || y > h + 20) continue;
+    ctx.globalAlpha = 1 - age;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.fillText(p.text, x + 1, y + 1);
+    ctx.fillStyle = p.color;
+    ctx.fillText(p.text, x, y);
+  }
+  ctx.globalAlpha = 1;
+}
+
 function roomScreenBox(room, type) {
   const tileEnd = room.tileStart + type.width - 1;
   const left = Camera.worldToScreenX(Grid.tileToX(room.tileStart));
@@ -363,5 +404,6 @@ attachCameraControls(canvas);
 attachBuildControls(canvas);
 UI.attachToolbar();
 UI.attachClockControls();
+UI.attachGameOver();
 UI.showHint(null);
 resize();
