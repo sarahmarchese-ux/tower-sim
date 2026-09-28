@@ -1,5 +1,10 @@
 // Everyone who lives or works in the tower.
 //
+// Nobody is born inside a room. When a room's new tenants arrive (see
+// economy.js), they appear at a lobby as movers and walk in; once there,
+// they settle into their daily rhythm. A person's `movingIn` flag is true
+// until they've reached their room for the first time.
+//
 // Each person belongs to one room and follows a simple daily rhythm:
 //   - Makers come to their studio on weekdays and go home in the evening.
 //   - Residents leave their condo on weekday mornings and come back in the
@@ -27,13 +32,18 @@
 const WALK_TILES_PER_MINUTE = 3;
 const STAIRS_MINUTES_PER_FLOOR = 2;
 const RETRY_MINUTES = 30; // how long to wait before trying again if there's no route
+const MOVER_GAP_MINUTES = [3, 8]; // movers arrive a few minutes apart
+const UNPACK_MINUTES = [20, 40]; // a new arrival stays put this long
 
 const People = {
   list: [],
   nextId: 1,
 
-  spawnForRoom(room) {
+  // A room's tenants arrive: they start out of the building and head in
+  // one after another, from the lobby.
+  moveIn(room) {
     const type = ROOM_TYPES[room.type];
+    let showUpAt = Clock.totalMinutes;
     for (let slot = 0; slot < type.tenants; slot++) {
       // Everyone gets their own times, so the morning rush is a stream of
       // people rather than a whole building teleporting at 8:00 sharp.
@@ -42,14 +52,15 @@ const People = {
         role: type.role,
         room,
         slot,
-        state: type.role === "maker" ? "offsite" : "inRoom",
+        state: "offsite",
+        movingIn: true,
         floor: room.floor,
         x: this.slotX(room, slot),
         route: null,
         legIndex: 0,
         legProgress: 0,
         target: null,
-        idleUntil: Clock.totalMinutes + Math.random() * 30,
+        idleUntil: showUpAt,
         tripWaitMinutes: 0,
         lastTripWaitMinutes: 0,
         // Minutes after midnight.
@@ -63,6 +74,7 @@ const People = {
         outingEnd: 15 * 60 + Math.random() * 180,
       };
       this.list.push(person);
+      showUpAt += randomBetween(MOVER_GAP_MINUTES);
     }
   },
 
@@ -79,6 +91,7 @@ const People = {
 
   // The one question: where should this person be at game time `t`?
   desiredLocation(person, t) {
+    if (person.movingIn) return "room";
     const day = Math.floor(t / MINUTES_PER_DAY);
     const minute = t - day * MINUTES_PER_DAY;
     const weekend = day % 7 >= 5;
@@ -193,6 +206,11 @@ const People = {
     if (person.target === "room") {
       person.floor = person.room.floor;
       person.x = this.slotX(person.room, person.slot);
+      if (person.movingIn) {
+        person.movingIn = false;
+        person.idleUntil = Clock.totalMinutes + randomBetween(UNPACK_MINUTES);
+        Economy.onArrived(person.room);
+      }
     }
   },
 
@@ -224,13 +242,13 @@ const People = {
     }
   },
 
+  // Everyone who has moved in. Movers still on their way don't count yet.
   population() {
-    return this.list.length;
+    return this.list.filter((p) => !p.movingIn).length;
   },
 };
 
 World.subscribe((event, payload) => {
-  if (event === "roomAdded") People.spawnForRoom(payload);
   if (event === "roomRemoved") People.removeForRoom(payload);
   if (event === "transitRemoved") People.onTransitRemoved(payload);
 });

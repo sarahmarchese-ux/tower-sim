@@ -17,12 +17,18 @@ const MAX_FRAME_MS = 250;
 const SIM_STEP_MINUTES = 0.25;
 
 function advanceSimulation(minutes) {
+  if (Economy.bankrupt) return; // the game is over; time stops
   let remaining = minutes;
   while (remaining > 1e-9) {
     const step = Math.min(remaining, SIM_STEP_MINUTES);
     Clock.advance(step);
     Elevators.update(step);
     People.update(step);
+    Economy.update();
+    if (Economy.bankrupt) {
+      UI.showGameOver();
+      return;
+    }
     remaining -= step;
   }
 }

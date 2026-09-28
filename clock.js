@@ -7,6 +7,12 @@
 const MINUTES_PER_DAY = 24 * 60;
 const GAME_MINUTES_PER_REAL_SECOND = 5; // the design doc's 1x baseline
 
+// A random amount between low and high — used all over for "some time in
+// this window", so that not everything happens on the same minute.
+function randomBetween([low, high]) {
+  return low + Math.random() * (high - low);
+}
+
 const Clock = {
   totalMinutes: 6 * 60,
   speed: 1, // 0 = paused, 1 = normal, 3 = fast

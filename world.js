@@ -15,7 +15,7 @@
 const World = {
   money: STARTING_MONEY,
   floors: new Map(), // floor number -> Set of built tile indices
-  rooms: [], // { id, type: "sewing", floor: 0, tileStart: 3 }
+  rooms: [], // { id, type: "sewing", floor: 0, tileStart: 3, status: "vacant" }
   transit: [], // { id, kind: "stairs" | "elevator", tileStart, floorBottom, floorTop }
   version: 0,
   nextId: 1,
@@ -117,7 +117,11 @@ const World = {
   placeRoom(typeKey, floor, tileStart) {
     const check = this.canPlaceRoom(typeKey, floor, tileStart);
     if (!check.ok) return check;
-    const room = { id: this.nextId++, type: typeKey, floor, tileStart };
+    // Rooms with tenants start empty; economy.js moves people in later and
+    // updates `status` ("vacant" -> "movingIn" -> "occupied"). The lobby has
+    // no tenants, so it has no status.
+    const hasTenants = ROOM_TYPES[typeKey].tenants > 0;
+    const room = { id: this.nextId++, type: typeKey, floor, tileStart, status: hasTenants ? "vacant" : null };
     this.rooms.push(room);
     this.money -= ROOM_TYPES[typeKey].cost;
     this.emit("roomAdded", room);
@@ -175,9 +179,8 @@ const World = {
 
   // Demolishing refunds half the build cost. Free would make floor tiles a
   // way to launder money (build, demolish, rebuild for no reason); charging
-  // the full cost again would make misclicks too punishing. Half is a
-  // starting compromise — like everything else here, worth revisiting once
-  // the economy milestone is tuning real numbers.
+  // the full cost again would make misclicks too punishing. A sold condo
+  // refunds nothing (see roomRefund in rooms.js).
   //
   // Whatever is drawn on top goes first: transit (drawn over the lobby),
   // then a room, then the bare floor tile.
@@ -192,7 +195,7 @@ const World = {
     const room = this.roomAt(floor, tile);
     if (room) {
       this.rooms = this.rooms.filter((r) => r !== room);
-      this.money += ROOM_TYPES[room.type].cost / 2;
+      this.money += roomRefund(room);
       this.emit("roomRemoved", room);
       return { ok: true };
     }
