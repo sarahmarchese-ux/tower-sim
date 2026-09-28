@@ -1,11 +1,16 @@
-// Step 0: "hello tower". This just proves the page loads and draws something —
-// no game logic yet. Milestone 1 replaces this with the real grid and camera.
+// Milestone 1: draws the grid itself — floor lines, tile columns, the
+// ground, and a ruler of floor numbers — instead of a fixed placeholder
+// scene. This is the surface everything else (rooms, people, elevators)
+// will be drawn on top of, so it needs to be right before we build on it.
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-// The canvas has its own pixel grid separate from the CSS size of the page.
-// Whenever the window resizes, we tell the canvas to match it and redraw.
+// How many floors/tiles to draw above and below/around whatever's on
+// screen. A little slack means fast scrolling never shows a blank edge.
+const DRAW_MARGIN_FLOORS = 2;
+const DRAW_MARGIN_TILES = 2;
+
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -15,38 +20,104 @@ function resize() {
 function draw() {
   const w = canvas.width;
   const h = canvas.height;
-  const groundY = h * 0.75;
 
-  // Sky: a vertical gradient from a lunchtime blue to a paler horizon.
-  const sky = ctx.createLinearGradient(0, 0, 0, groundY);
+  drawSky(w, h);
+  drawFloorLines(w, h);
+  drawTileLines(w, h);
+  drawGroundHighlight(w, h);
+  drawFloorLabels(h);
+  drawHud();
+}
+
+function drawSky(w, h) {
+  const sky = ctx.createLinearGradient(0, 0, 0, h);
   sky.addColorStop(0, "#4a90d9");
   sky.addColorStop(1, "#bfe3f7");
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, w, groundY);
+  ctx.fillRect(0, 0, w, h);
+}
 
-  // Ground, below the horizon line.
-  ctx.fillStyle = "#6b5b4a";
+// Horizontal lines, one per floor boundary, across the whole visible height.
+function drawFloorLines(w, h) {
+  const topFloor = Grid.yToFloor(Camera.y) + DRAW_MARGIN_FLOORS;
+  const bottomFloor = Grid.yToFloor(Camera.y + h) - DRAW_MARGIN_FLOORS;
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+  ctx.lineWidth = 1;
+  for (let floor = bottomFloor; floor <= topFloor; floor++) {
+    const y = Camera.worldToScreenY(Grid.floorToY(floor));
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+}
+
+// Vertical lines, one per tile boundary. Drawn faint so they read as a grid,
+// not as walls — actual room walls come later.
+function drawTileLines(w, h) {
+  const leftTile = Grid.xToTile(Camera.x) - DRAW_MARGIN_TILES;
+  const rightTile = Grid.xToTile(Camera.x + w) + DRAW_MARGIN_TILES;
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+  ctx.lineWidth = 1;
+  for (let tile = leftTile; tile <= rightTile; tile++) {
+    const x = Camera.worldToScreenX(Grid.tileToX(tile));
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+}
+
+// Ground level (the boundary between floor 0 and basement floor -1) gets a
+// solid line and a tinted fill below it, so "underground" reads at a glance.
+function drawGroundHighlight(w, h) {
+  const groundY = Camera.worldToScreenY(Grid.floorToY(0));
+  ctx.fillStyle = "rgba(107, 91, 74, 0.5)";
   ctx.fillRect(0, groundY, w, h - groundY);
-
-  // A single placeholder building block, standing on the ground, centered.
-  const towerWidth = 120;
-  const towerHeight = 220;
-  const towerX = w / 2 - towerWidth / 2;
-  const towerY = groundY - towerHeight;
-  ctx.fillStyle = "#e8dcc8";
-  ctx.fillRect(towerX, towerY, towerWidth, towerHeight);
-  ctx.strokeStyle = "#8a7a63";
+  ctx.strokeStyle = "#6b5b4a";
   ctx.lineWidth = 2;
-  ctx.strokeRect(towerX, towerY, towerWidth, towerHeight);
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(w, groundY);
+  ctx.stroke();
+}
 
-  // Title text.
+// A ruler of floor numbers down the left edge, like the original game's
+// floor indicator. Makes it obvious which floor you're looking at while
+// scrolling.
+function drawFloorLabels(h) {
+  const topFloor = Grid.yToFloor(Camera.y) + DRAW_MARGIN_FLOORS;
+  const bottomFloor = Grid.yToFloor(Camera.y + h) - DRAW_MARGIN_FLOORS;
+
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 28px sans-serif";
+  ctx.font = "12px sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  for (let floor = bottomFloor; floor <= topFloor; floor++) {
+    const yTop = Camera.worldToScreenY(Grid.floorToY(floor));
+    const yBottom = Camera.worldToScreenY(Grid.floorToY(floor + 1));
+    const label = floor >= 0 ? `${floor + 1}F` : `B${-floor}`;
+    ctx.fillText(label, 6, (yTop + yBottom) / 2);
+  }
+}
+
+function drawHud() {
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 20px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("Tower Sim", w / 2, 60);
-  ctx.font = "14px sans-serif";
-  ctx.fillText("milestone 0 — the page loads", w / 2, 84);
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("Tower Sim", canvas.width / 2, 32);
+  ctx.font = "13px sans-serif";
+  ctx.fillText(
+    "milestone 1 — grid & camera. Drag, or use arrow keys / WASD, to scroll.",
+    canvas.width / 2,
+    52
+  );
 }
 
 window.addEventListener("resize", resize);
+Camera.reset(window.innerWidth, window.innerHeight);
+attachCameraControls(canvas);
 resize();

@@ -20,9 +20,17 @@ Then visit `http://localhost:8000`.
 
 ## Status
 
-**Milestone 0: repo + "hello tower" page.** The page loads and draws a
-placeholder scene (sky, ground, one block for the building). No game logic
-yet — that starts at milestone 1 (grid & rendering).
+**Milestone 1: grid & camera.** The screen shows a scrollable floor/tile
+grid, with floor numbers down the left edge and ground/basement shaded
+differently. Drag with the mouse, or use arrow keys / WASD, to scroll.
+Nothing can be built yet — that starts at milestone 2 (placement).
+
+<details>
+<summary>Milestone 0: repo + "hello tower" page</summary>
+
+The page loaded and drew a placeholder scene (sky, ground, one block for
+the building), to prove the setup worked end to end before any real code.
+</details>
 
 ## Stack
 
@@ -34,5 +42,8 @@ or visiting a GitHub Pages link.
 ## Files
 
 - `index.html` — the page shell and canvas element.
-- `render.js` — drawing code. Currently just the placeholder scene; will grow
-  into the camera and grid renderer.
+- `grid.js` — the tower's coordinate system (tiles and floors) and the
+  conversions between grid units and pixels.
+- `camera.js` — what part of the grid is on screen, and the drag / keyboard
+  controls that scroll it.
+- `render.js` — draws the grid, ground, floor labels and HUD each frame.
