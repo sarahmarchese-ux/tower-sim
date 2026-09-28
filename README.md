@@ -20,7 +20,17 @@ Then visit `http://localhost:8000`.
 
 ## Status
 
-**Milestone 2: placement.** Pick a tool from the bottom toolbar:
+**Milestone 3: the game clock.** The sky now cycles through a full day —
+dawn, daylight, dusk, night — as the clock (shown top-center) ticks forward.
+Pause/play and speed (1x / 3x) controls sit next to it; spacebar toggles
+pause, and 1 / 3 switch speed. Nothing reacts to the time of day yet
+(that's milestone 4, when people start commuting on a schedule) — for now
+it's just the clock and the sky.
+
+<details>
+<summary>Milestone 2: placement</summary>
+
+Pick a tool from the bottom toolbar:
 
 - **Floor** — drag across tiles on one level to build floor there ($200/tile,
   only charged for tiles not already built).
@@ -35,6 +45,7 @@ Left-click (or drag) builds. Right-click drag, or arrow keys / WASD, still
 scrolls the camera. Nothing walks around the building yet — that starts at
 milestone 4 (people & transit). Money only ever goes down for now; income
 arrives at milestone 5 (economy).
+</details>
 
 <details>
 <summary>Milestone 1: grid & camera</summary>
@@ -70,6 +81,10 @@ or visiting a GitHub Pages link.
   placement rules. Knows nothing about pixels or the mouse.
 - `input.js` — turns mouse events into grid coordinates and tool actions
   (left-click/drag builds; see camera.js for the right-click pan split).
-- `ui.js` — the HTML toolbar, money display and status hint.
-- `render.js` — draws everything each frame: the grid, built floors, rooms,
-  and a live green/red preview of what the selected tool would do next.
+- `clock.js` — game time as one number (minutes elapsed), and the pause/speed
+  controls on top of it.
+- `ui.js` — the HTML toolbar, money display, clock controls and status hint.
+- `render.js` — draws everything each frame: the sky (colored by time of
+  day), the grid, built floors, rooms, and a live green/red placement preview.
+- `main.js` — the game loop: once per animation frame, poll held keys for
+  panning, advance the clock, and redraw.

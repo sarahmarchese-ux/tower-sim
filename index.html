@@ -43,6 +43,33 @@
       font-weight: bold;
     }
 
+    #clockbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #clock-label {
+      font-variant-numeric: tabular-nums;
+      min-width: 9em;
+      text-align: center;
+    }
+    #clockbar button {
+      padding: 3px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    #clockbar button:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+    #clockbar button.active {
+      background: #3ea45c;
+      border-color: #3ea45c;
+    }
+
     #toolbar {
       position: fixed;
       bottom: 0;
@@ -86,6 +113,12 @@
 <body>
   <div id="topbar">
     <span id="money"></span>
+    <div id="clockbar">
+      <span id="clock-label"></span>
+      <button id="pause-btn">Pause</button>
+      <button class="speed-btn active" data-speed="1">1x</button>
+      <button class="speed-btn" data-speed="3">3x</button>
+    </div>
     <span id="hint"></span>
   </div>
 
@@ -104,10 +137,12 @@
 
   <script src="grid.js"></script>
   <script src="camera.js"></script>
+  <script src="clock.js"></script>
   <script src="rooms.js"></script>
   <script src="world.js"></script>
   <script src="input.js"></script>
   <script src="ui.js"></script>
   <script src="render.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>

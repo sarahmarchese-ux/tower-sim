@@ -42,6 +42,24 @@ const Camera = {
 // way means a drag never has to guess whether you meant to pan or build.
 // Camera itself knows nothing about input devices, which keeps it easy to
 // test or swap out later (e.g. touch drag).
+//
+// Held keys are just recorded here; Camera.pollKeys() is called once per
+// frame by the main loop (main.js), alongside the clock tick and the redraw
+// — one heartbeat driving everything that changes over time, rather than
+// this module running its own separate animation loop.
+
+const heldKeys = new Set();
+const PAN_SPEED = 8; // pixels per animation frame
+
+Camera.pollKeys = function pollKeys() {
+  let dx = 0;
+  let dy = 0;
+  if (heldKeys.has("ArrowLeft") || heldKeys.has("a")) dx -= PAN_SPEED;
+  if (heldKeys.has("ArrowRight") || heldKeys.has("d")) dx += PAN_SPEED;
+  if (heldKeys.has("ArrowUp") || heldKeys.has("w")) dy -= PAN_SPEED;
+  if (heldKeys.has("ArrowDown") || heldKeys.has("s")) dy += PAN_SPEED;
+  if (dx !== 0 || dy !== 0) this.pan(dx, dy);
+};
 
 function attachCameraControls(canvas) {
   let dragging = false;
@@ -67,26 +85,8 @@ function attachCameraControls(canvas) {
     Camera.pan(-(e.clientX - lastX), -(e.clientY - lastY));
     lastX = e.clientX;
     lastY = e.clientY;
-    draw();
   });
 
-  const heldKeys = new Set();
   window.addEventListener("keydown", (e) => heldKeys.add(e.key));
   window.addEventListener("keyup", (e) => heldKeys.delete(e.key));
-
-  const PAN_SPEED = 8; // pixels per animation frame
-  function tick() {
-    let dx = 0;
-    let dy = 0;
-    if (heldKeys.has("ArrowLeft") || heldKeys.has("a")) dx -= PAN_SPEED;
-    if (heldKeys.has("ArrowRight") || heldKeys.has("d")) dx += PAN_SPEED;
-    if (heldKeys.has("ArrowUp") || heldKeys.has("w")) dy -= PAN_SPEED;
-    if (heldKeys.has("ArrowDown") || heldKeys.has("s")) dy += PAN_SPEED;
-    if (dx !== 0 || dy !== 0) {
-      Camera.pan(dx, dy);
-      draw();
-    }
-    requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
 }

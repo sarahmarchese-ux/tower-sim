@@ -31,12 +31,55 @@ function draw() {
   drawHoverPreview(w, h);
   drawFloorLabels(h);
   UI.updateMoney();
+  UI.updateClock();
+}
+
+// Sky color keyframes through the day, keyed by hour. Drawn colors between
+// two keyframes are interpolated, so the sky shifts continuously rather
+// than snapping. The first and last keyframe (0 and 24) share the same
+// colors, so the cycle wraps around midnight without a visible seam.
+const SKY_KEYFRAMES = [
+  { hour: 0, top: "#0b1026", bottom: "#1b2550" }, // midnight
+  { hour: 5, top: "#2b3a67", bottom: "#e8935f" }, // dawn
+  { hour: 7, top: "#4a90d9", bottom: "#bfe3f7" }, // morning
+  { hour: 12, top: "#4a90d9", bottom: "#bfe3f7" }, // midday
+  { hour: 17, top: "#4a80c9", bottom: "#e8935f" }, // dusk begins
+  { hour: 19, top: "#2b3a67", bottom: "#5b4b8a" }, // dusk ends
+  { hour: 21, top: "#0b1026", bottom: "#1b2550" }, // night
+  { hour: 24, top: "#0b1026", bottom: "#1b2550" }, // wraps to midnight
+];
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function lerpColor(hexA, hexB, t) {
+  const [r1, g1, b1] = hexToRgb(hexA);
+  const [r2, g2, b2] = hexToRgb(hexB);
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function skyColorsAt(hour) {
+  for (let i = 0; i < SKY_KEYFRAMES.length - 1; i++) {
+    const a = SKY_KEYFRAMES[i];
+    const b = SKY_KEYFRAMES[i + 1];
+    if (hour >= a.hour && hour <= b.hour) {
+      const t = (hour - a.hour) / (b.hour - a.hour);
+      return { top: lerpColor(a.top, b.top, t), bottom: lerpColor(a.bottom, b.bottom, t) };
+    }
+  }
+  return SKY_KEYFRAMES[0];
 }
 
 function drawSky(w, h) {
+  const { top, bottom } = skyColorsAt(Clock.hour);
   const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, "#4a90d9");
-  sky.addColorStop(1, "#bfe3f7");
+  sky.addColorStop(0, top);
+  sky.addColorStop(1, bottom);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, w, h);
 }
@@ -196,5 +239,6 @@ Camera.reset(window.innerWidth, window.innerHeight);
 attachCameraControls(canvas);
 attachBuildControls(canvas);
 UI.attachToolbar();
+UI.attachClockControls();
 UI.showHint(null);
 resize();

@@ -21,6 +21,46 @@ const UI = {
     document.getElementById("money").textContent = World.formatMoney(World.money);
   },
 
+  updateClock() {
+    document.getElementById("clock-label").textContent = Clock.label();
+  },
+
+  // Pause/play and speed buttons all need to agree on which one is
+  // "active", so every path that changes the speed goes through this one
+  // function to update both the clock and the buttons together.
+  setSpeed(speed) {
+    Clock.setSpeed(speed);
+    document.getElementById("pause-btn").textContent = speed === 0 ? "Play" : "Pause";
+    document.querySelectorAll(".speed-btn").forEach((btn) => {
+      btn.classList.toggle("active", Number(btn.dataset.speed) === speed && speed !== 0);
+    });
+  },
+
+  attachClockControls() {
+    const pauseBtn = document.getElementById("pause-btn");
+    pauseBtn.addEventListener("click", () => {
+      Clock.togglePause();
+      this.setSpeed(Clock.speed);
+    });
+
+    document.querySelectorAll(".speed-btn").forEach((btn) => {
+      btn.addEventListener("click", () => this.setSpeed(Number(btn.dataset.speed)));
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.target.tagName === "INPUT") return;
+      if (e.key === " ") {
+        e.preventDefault();
+        Clock.togglePause();
+        this.setSpeed(Clock.speed);
+      } else if (e.key === "1") {
+        this.setSpeed(1);
+      } else if (e.key === "3") {
+        this.setSpeed(3);
+      }
+    });
+  },
+
   attachToolbar() {
     const buttons = document.querySelectorAll("#toolbar button[data-tool]");
     buttons.forEach((button) => {
