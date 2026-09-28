@@ -37,21 +37,27 @@ const Camera = {
 };
 
 // --- Input handling -------------------------------------------------------
-// Two ways to scroll: drag with the mouse, or hold an arrow key / WASD.
-// Both just call Camera.pan(); Camera itself knows nothing about input
-// devices, which keeps it easy to test or swap out later (e.g. touch drag).
+// Two ways to scroll: right-click drag, or hold an arrow key / WASD. The
+// left button is reserved for building (see input.js) — splitting them this
+// way means a drag never has to guess whether you meant to pan or build.
+// Camera itself knows nothing about input devices, which keeps it easy to
+// test or swap out later (e.g. touch drag).
 
 function attachCameraControls(canvas) {
   let dragging = false;
   let lastX = 0;
   let lastY = 0;
 
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
   canvas.addEventListener("mousedown", (e) => {
+    if (e.button !== 2) return; // right button only; left button builds
     dragging = true;
     lastX = e.clientX;
     lastY = e.clientY;
   });
-  window.addEventListener("mouseup", () => {
+  window.addEventListener("mouseup", (e) => {
+    if (e.button !== 2) return;
     dragging = false;
   });
   window.addEventListener("mousemove", (e) => {

@@ -11,16 +11,103 @@
       height: 100%;
       overflow: hidden;
       background: #000;
+      font-family: sans-serif;
     }
     canvas {
       display: block;
     }
+
+    #topbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      background: rgba(20, 20, 20, 0.55);
+      color: #fff;
+      font-size: 14px;
+      z-index: 10;
+    }
+    #money {
+      font-weight: bold;
+      font-variant-numeric: tabular-nums;
+    }
+    #hint {
+      color: #eee;
+    }
+    #hint.hint-error {
+      color: #ff9d9d;
+      font-weight: bold;
+    }
+
+    #toolbar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px;
+      background: rgba(20, 20, 20, 0.55);
+      z-index: 10;
+    }
+    #toolbar button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 6px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    #toolbar button:hover {
+      background: rgba(255, 255, 255, 0.18);
+    }
+    #toolbar button.active {
+      background: #3ea45c;
+      border-color: #3ea45c;
+    }
+    #toolbar button small {
+      color: #ccc;
+      font-size: 10px;
+    }
+    #toolbar button.active small {
+      color: #eaffea;
+    }
   </style>
 </head>
 <body>
+  <div id="topbar">
+    <span id="money"></span>
+    <span id="hint"></span>
+  </div>
+
   <canvas id="game"></canvas>
+
+  <div id="toolbar">
+    <button data-tool="floor">Floor<small>$200/tile</small></button>
+    <button data-tool="lobby">Lobby<small>Free</small></button>
+    <button data-tool="sewing">Sewing<small>$9,000</small></button>
+    <button data-tool="pottery">Pottery<small>$11,000</small></button>
+    <button data-tool="woodwork">Woodwork<small>$10,000</small></button>
+    <button data-tool="jewellery">Jewellery<small>$15,000</small></button>
+    <button data-tool="condo">Condo<small>$20,000</small></button>
+    <button data-tool="demolish">Demolish<small>refund 50%</small></button>
+  </div>
+
   <script src="grid.js"></script>
   <script src="camera.js"></script>
+  <script src="rooms.js"></script>
+  <script src="world.js"></script>
+  <script src="input.js"></script>
+  <script src="ui.js"></script>
   <script src="render.js"></script>
 </body>
 </html>

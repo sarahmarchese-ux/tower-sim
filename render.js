@@ -1,7 +1,8 @@
-// Milestone 1: draws the grid itself — floor lines, tile columns, the
-// ground, and a ruler of floor numbers — instead of a fixed placeholder
-// scene. This is the surface everything else (rooms, people, elevators)
-// will be drawn on top of, so it needs to be right before we build on it.
+// Draws everything: the grid itself (floor lines, tile columns, the ground,
+// a ruler of floor numbers — milestone 1), plus what's been built on it and
+// a live preview of what the selected tool would do next (milestone 2).
+// This file only draws; World (world.js) decides what's true, and input.js
+// decides what the player is doing.
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -25,8 +26,11 @@ function draw() {
   drawFloorLines(w, h);
   drawTileLines(w, h);
   drawGroundHighlight(w, h);
+  drawBuiltFloors(w, h);
+  drawRooms(w, h);
+  drawHoverPreview(w, h);
   drawFloorLabels(h);
-  drawHud();
+  UI.updateMoney();
 }
 
 function drawSky(w, h) {
@@ -103,21 +107,94 @@ function drawFloorLabels(h) {
   }
 }
 
-function drawHud() {
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 20px sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText("Tower Sim", canvas.width / 2, 32);
-  ctx.font = "13px sans-serif";
-  ctx.fillText(
-    "milestone 1 — grid & camera. Drag, or use arrow keys / WASD, to scroll.",
-    canvas.width / 2,
-    52
-  );
+// Built floor tiles get a light fill, so an empty-but-built tile reads
+// differently from bare sky/grid before anything is placed on it.
+function drawBuiltFloors(w, h) {
+  ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+  for (const [floor, tiles] of World.floors) {
+    const yTop = Camera.worldToScreenY(Grid.floorToY(floor + 1));
+    const yBottom = Camera.worldToScreenY(Grid.floorToY(floor));
+    if (yBottom < 0 || yTop > h) continue; // whole floor off-screen
+    for (const tile of tiles) {
+      const x = Camera.worldToScreenX(Grid.tileToX(tile));
+      if (x + Grid.TILE_SIZE < 0 || x > w) continue; // tile off-screen
+      ctx.fillRect(x, yTop, Grid.TILE_SIZE, yBottom - yTop);
+    }
+  }
+}
+
+function drawRooms(w, h) {
+  for (const room of World.rooms) {
+    const type = ROOM_TYPES[room.type];
+    const box = roomScreenBox(room, type);
+    if (box.right < 0 || box.left > w || box.bottom < 0 || box.top > h) continue;
+
+    ctx.fillStyle = type.color;
+    ctx.fillRect(box.left, box.top, box.width, box.height);
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(box.left, box.top, box.width, box.height);
+
+    ctx.fillStyle = "#2b2b2b";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(type.name, box.left + box.width / 2, box.top + box.height / 2, box.width - 6);
+  }
+}
+
+function roomScreenBox(room, type) {
+  const tileEnd = room.tileStart + type.width - 1;
+  const left = Camera.worldToScreenX(Grid.tileToX(room.tileStart));
+  const right = Camera.worldToScreenX(Grid.tileToX(tileEnd + 1));
+  const top = Camera.worldToScreenY(Grid.floorToY(room.floor + 1));
+  const bottom = Camera.worldToScreenY(Grid.floorToY(room.floor));
+  return { left, right, top, bottom, width: right - left, height: bottom - top };
+}
+
+// What the currently selected tool would do at the mouse's current
+// position, colored green if it's a legal move and red if it isn't — so you
+// find out a placement is invalid before you click, not after.
+function drawHoverPreview(w, h) {
+  if (Pointer.tile === null || Pointer.floor === null) return;
+
+  if (Tool.current === "floor") {
+    const start = Pointer.dragging ? Math.min(Pointer.dragStartTile, Pointer.tile) : Pointer.tile;
+    const end = Pointer.dragging ? Math.max(Pointer.dragStartTile, Pointer.tile) : Pointer.tile;
+    drawFootprintPreview(Pointer.floor, start, end, true);
+    return;
+  }
+
+  if (Tool.current === "demolish") {
+    const hasTarget = World.roomAt(Pointer.floor, Pointer.tile) || World.isFloorBuilt(Pointer.floor, Pointer.tile);
+    drawFootprintPreview(Pointer.floor, Pointer.tile, Pointer.tile, !!hasTarget);
+    return;
+  }
+
+  const type = ROOM_TYPES[Tool.current];
+  if (!type) return;
+  const check = World.canPlaceRoom(Tool.current, Pointer.floor, Pointer.tile);
+  const tileEnd = Pointer.tile + type.width - 1;
+  drawFootprintPreview(Pointer.floor, Pointer.tile, tileEnd, check.ok);
+}
+
+function drawFootprintPreview(floor, tileStart, tileEnd, valid) {
+  const left = Camera.worldToScreenX(Grid.tileToX(tileStart));
+  const right = Camera.worldToScreenX(Grid.tileToX(tileEnd + 1));
+  const top = Camera.worldToScreenY(Grid.floorToY(floor + 1));
+  const bottom = Camera.worldToScreenY(Grid.floorToY(floor));
+
+  ctx.fillStyle = valid ? "rgba(80, 200, 120, 0.35)" : "rgba(220, 70, 70, 0.35)";
+  ctx.fillRect(left, top, right - left, bottom - top);
+  ctx.strokeStyle = valid ? "#3ea45c" : "#c94444";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(left, top, right - left, bottom - top);
 }
 
 window.addEventListener("resize", resize);
 Camera.reset(window.innerWidth, window.innerHeight);
 attachCameraControls(canvas);
+attachBuildControls(canvas);
+UI.attachToolbar();
+UI.showHint(null);
 resize();
