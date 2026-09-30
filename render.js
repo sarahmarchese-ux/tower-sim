@@ -247,19 +247,30 @@ function drawTransit(w, h) {
     const width = TRANSIT_TYPES[t.kind].width;
     const box = areaScreenBox(t.floorBottom, t.floorTop, t.tileStart, t.tileStart + width - 1);
     if (box.right < 0 || box.left > w || box.bottom < 0 || box.top > h) continue;
-    if (t.kind === "stairs") drawStairs(box);
+    if (t.kind === "stairs") drawStairsBlock(box);
     else drawElevator(t, box);
+  }
+  // Steps go on top of every stairs block, in a second pass, so where
+  // stacked stairs share a floor neither hides the other's flight.
+  for (const t of World.transit) {
+    if (t.kind !== "stairs") continue;
+    const box = areaScreenBox(t.floorBottom, t.floorTop, t.tileStart, t.tileStart + TRANSIT_TYPES.stairs.width - 1);
+    if (box.right < 0 || box.left > w || box.bottom < 0 || box.top > h) continue;
+    drawStairsSteps(box);
   }
 }
 
-// A light block with a zigzag of steps running from bottom-left to top-right.
-function drawStairs(box) {
+// A light block...
+function drawStairsBlock(box) {
   ctx.fillStyle = "rgba(235, 235, 235, 0.95)";
   ctx.fillRect(box.left, box.top, box.width, box.height);
   ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
   ctx.lineWidth = 1;
   ctx.strokeRect(box.left, box.top, box.width, box.height);
+}
 
+// ...with a zigzag of steps running from bottom-left to top-right.
+function drawStairsSteps(box) {
   const steps = 6;
   ctx.strokeStyle = "#7a7a7a";
   ctx.lineWidth = 2;

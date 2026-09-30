@@ -88,8 +88,8 @@ const UI = {
       const lower = below.length ? Math.max(...below) : Math.min(...reached) - 1;
       const upper = lower + 1;
       return `Can't be reached: nothing connects ${floorLabel(lower)} and ${floorLabel(upper)}. ` +
-        `Stairs join the floor you click on to the one above, so click Stairs on ${floorLabel(lower)} ` +
-        "(beside, not on top of, other stairs), or drag an Elevator across both.";
+        `Stairs join the floor you click on to the one above, so click Stairs on ${floorLabel(lower)}, ` +
+        "or drag an Elevator across both.";
     }
     return "Can't be reached from a Lobby: check for gaps in the Floor along the way, between the lobby, stairs or elevators, and this room.";
   },

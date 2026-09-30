@@ -47,9 +47,12 @@ const World = {
     });
   },
 
-  // The stairs or elevator shaft (if any) covering this tile on this floor.
-  transitAt(floor, tile) {
-    return this.transit.find((t) => {
+  // Every stairs or elevator shaft covering this tile on this floor.
+  // Usually zero or one; two when stairs are stacked in one column (see
+  // canPlaceTransit), where the lower set's top floor is the upper set's
+  // bottom floor.
+  transitsAt(floor, tile) {
+    return this.transit.filter((t) => {
       const width = TRANSIT_TYPES[t.kind].width;
       return (
         floor >= t.floorBottom &&
@@ -58,6 +61,14 @@ const World = {
         tile < t.tileStart + width
       );
     });
+  },
+
+  // The stairs or elevator shaft (if any) covering this tile on this floor.
+  // Where two stacked stairs meet, it's the set that starts on this floor —
+  // the same one clicking Stairs here would have built.
+  transitAt(floor, tile) {
+    const here = this.transitsAt(floor, tile);
+    return here.find((t) => t.floorBottom === floor) || here[0];
   },
 
   // Only tiles that aren't already built cost money — re-dragging over
@@ -161,7 +172,12 @@ const World = {
         if (room && !ROOM_TYPES[room.type].allowsTransit) {
           return { ok: false, reason: "Overlaps a room (only the lobby can share space)" };
         }
-        if (this.transitAt(floor, tile)) {
+        // Stairs may stack in one column, sharing the floor where one set
+        // ends and the next begins, so a staircase can climb straight up.
+        const blocking = this.transitsAt(floor, tile).filter(
+          (t) => !(kind === "stairs" && stairsStack(t, tileStart, floorBottom, floorTop)),
+        );
+        if (blocking.length > 0) {
           return { ok: false, reason: "Overlaps other stairs or an elevator" };
         }
       }
@@ -220,3 +236,13 @@ const World = {
     return `${sign}$${Math.abs(Math.round(amount)).toLocaleString()}`;
   },
 };
+
+// Would new stairs (tileStart, floorBottom..floorTop) sit directly above or
+// below existing transit `t`, meeting it on exactly one floor?
+function stairsStack(t, tileStart, floorBottom, floorTop) {
+  return (
+    t.kind === "stairs" &&
+    t.tileStart === tileStart &&
+    (t.floorTop === floorBottom || t.floorBottom === floorTop)
+  );
+}
