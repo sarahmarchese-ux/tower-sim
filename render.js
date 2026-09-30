@@ -375,15 +375,17 @@ function drawHoverPreview(w, h) {
     const floor = Pointer.dragging ? Pointer.dragStartFloor : Pointer.floor;
     const start = Pointer.dragging ? Math.min(Pointer.dragStartTile, Pointer.tile) : Pointer.tile;
     const end = Pointer.dragging ? Math.max(Pointer.dragStartTile, Pointer.tile) : Pointer.tile;
-    drawAreaPreview(floor, floor, start, end, true);
+    const affordable = World.floorRunCost(floor, start, end) <= World.money;
+    if (!affordable) Pointer.buildCheck = { ok: false, reason: "Not enough money to build that floor" };
+    drawAreaPreview(floor, floor, start, end, affordable);
     return;
   }
 
   if (Tool.current === "demolish") {
-    const hasTarget =
-      World.transitAt(Pointer.floor, Pointer.tile) ||
-      World.roomAt(Pointer.floor, Pointer.tile) ||
-      World.isFloorBuilt(Pointer.floor, Pointer.tile);
+    const onTop = World.transitAt(Pointer.floor, Pointer.tile) || World.roomAt(Pointer.floor, Pointer.tile);
+    const landing = !onTop && World.stairsLandingAt(Pointer.floor, Pointer.tile);
+    if (landing) Pointer.buildCheck = { ok: false, reason: "Stairs land here: demolish the stairs first" };
+    const hasTarget = onTop || (!landing && World.isFloorBuilt(Pointer.floor, Pointer.tile));
     drawAreaPreview(Pointer.floor, Pointer.floor, Pointer.tile, Pointer.tile, !!hasTarget);
     return;
   }

@@ -54,10 +54,10 @@ const PAN_SPEED = 8; // pixels per animation frame
 Camera.pollKeys = function pollKeys() {
   let dx = 0;
   let dy = 0;
-  if (heldKeys.has("ArrowLeft") || heldKeys.has("a")) dx -= PAN_SPEED;
-  if (heldKeys.has("ArrowRight") || heldKeys.has("d")) dx += PAN_SPEED;
-  if (heldKeys.has("ArrowUp") || heldKeys.has("w")) dy -= PAN_SPEED;
-  if (heldKeys.has("ArrowDown") || heldKeys.has("s")) dy += PAN_SPEED;
+  if (heldKeys.has("arrowleft") || heldKeys.has("a")) dx -= PAN_SPEED;
+  if (heldKeys.has("arrowright") || heldKeys.has("d")) dx += PAN_SPEED;
+  if (heldKeys.has("arrowup") || heldKeys.has("w")) dy -= PAN_SPEED;
+  if (heldKeys.has("arrowdown") || heldKeys.has("s")) dy += PAN_SPEED;
   if (dx !== 0 || dy !== 0) this.pan(dx, dy);
 };
 
@@ -87,6 +87,14 @@ function attachCameraControls(canvas) {
     lastY = e.clientY;
   });
 
-  window.addEventListener("keydown", (e) => heldKeys.add(e.key));
-  window.addEventListener("keyup", (e) => heldKeys.delete(e.key));
+  // Keys are stored lower-case: with Shift or Caps Lock, "w" can go down
+  // and come back up as "W", which would leave it held forever. Keys let go
+  // while another window had focus never report a keyup, so losing focus
+  // lets go of everything.
+  window.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return; // a browser shortcut, not a scroll
+    heldKeys.add(e.key.toLowerCase());
+  });
+  window.addEventListener("keyup", (e) => heldKeys.delete(e.key.toLowerCase()));
+  window.addEventListener("blur", () => heldKeys.clear());
 }

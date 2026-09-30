@@ -42,6 +42,7 @@ function frame(now) {
   lastFrameTime = now;
 
   Camera.pollKeys();
+  updatePointer(canvas); // the camera may have moved under a still mouse
   advanceSimulation(Clock.gameMinutesFor(deltaMs));
   SaveGame.autosave();
   draw();

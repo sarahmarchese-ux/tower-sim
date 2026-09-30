@@ -94,14 +94,21 @@ const SaveGame = {
     // A finished game, or one the player just threw away, has nothing to
     // come back to.
     if (Economy.bankrupt || this.discarded) return false;
-    const ok = this._write(JSON.stringify(this.snapshot()));
-    if (ok) this.lastSavedDay = Clock.day;
-    return ok;
+    try {
+      return this._write(JSON.stringify(this.snapshot()));
+    } catch (e) {
+      console.error("Couldn't save the game:", e);
+      return false;
+    }
   },
 
-  // Once per game day, at the first moment of the day.
+  // Once per game day, at the first moment of the day. A save that fails
+  // (storage blocked or full) isn't retried until the next day: trying
+  // again every frame would turn the whole game into JSON 60 times a second.
   autosave() {
-    if (this.lastSavedDay !== null && Clock.day !== this.lastSavedDay) this.save();
+    if (this.lastSavedDay === null || Clock.day === this.lastSavedDay) return;
+    this.lastSavedDay = Clock.day;
+    this.save();
   },
 
   // Read the save and rebuild the game from it. Everything is built into
@@ -115,6 +122,18 @@ const SaveGame = {
     try {
       data = JSON.parse(text);
       if (data.version !== SAVE_VERSION) return false;
+
+      // A number that isn't one (missing, or damaged) would spread NaN
+      // through the clock or the money, so it rejects the whole save.
+      const number = (value) => {
+        if (!Number.isFinite(value)) throw new Error("a saved number is missing");
+        return value;
+      };
+      const personById = (id) => {
+        const found = peopleById.get(id);
+        if (!found) throw new Error("an elevator rider is missing");
+        return found;
+      };
 
       const rooms = data.world.rooms;
       const roomsById = new Map(rooms.map((room) => [room.id, room]));
@@ -137,30 +156,49 @@ const SaveGame = {
           direction: saved.direction,
           state: saved.state,
           doorTimer: saved.doorTimer,
-          riders: saved.riders.map((r) => ({ person: peopleById.get(r.personId), dest: r.dest })),
-          waiting: saved.waiting.map((w) => ({ person: peopleById.get(w.personId), floor: w.floor, dest: w.dest, direction: w.direction })),
+          riders: saved.riders.map((r) => ({ person: personById(r.personId), dest: r.dest })),
+          waiting: saved.waiting.map((w) => ({ person: personById(w.personId), floor: w.floor, dest: w.dest, direction: w.direction })),
         });
       }
+      for (const transit of data.world.transit) {
+        if (transit.kind === "elevator" && !cars.has(transit.id)) throw new Error("an elevator's car is missing");
+      }
+
+      // Everything else is read here too, before anything is swapped in, so
+      // a damaged save can't leave the game half old and half new.
+      const totalMinutes = number(data.clock.totalMinutes);
+      const money = number(data.world.money);
+      const floors = new Map(data.world.floors.map(([floor, tiles]) => [floor, new Set(tiles)]));
+      const economy = {
+        lastTallyDay: number(data.economy.lastTallyDay),
+        lastPayday: data.economy.lastPayday,
+        debtSince: data.economy.debtSince === null ? null : number(data.economy.debtSince),
+      };
+      const stars = number(data.ratings.stars);
+      const camera = { x: number(data.camera.x), y: number(data.camera.y) };
+      const worldNextId = number(data.world.nextId);
+      const peopleNextId = number(data.people.nextId);
 
       // Everything parsed; now swap it in.
-      Clock.totalMinutes = data.clock.totalMinutes;
-      World.money = data.world.money;
-      World.nextId = data.world.nextId;
-      World.floors = new Map(data.world.floors.map(([floor, tiles]) => [floor, new Set(tiles)]));
+      Clock.totalMinutes = totalMinutes;
+      World.money = money;
+      World.nextId = worldNextId;
+      World.floors = floors;
       World.rooms = rooms;
       World.transit = data.world.transit;
       World.version++; // anything cached about the old building is now stale
       People.list = people;
-      People.nextId = data.people.nextId;
+      People.nextId = peopleNextId;
       Elevators.cars = cars;
-      Economy.lastTallyDay = data.economy.lastTallyDay;
-      Economy.lastPayday = data.economy.lastPayday;
-      Economy.debtSince = data.economy.debtSince;
+      Economy.lastTallyDay = economy.lastTallyDay;
+      Economy.lastPayday = economy.lastPayday;
+      Economy.debtSince = economy.debtSince;
       Economy.bankrupt = false;
       Economy.popups = [];
-      Ratings.stars = data.ratings.stars;
-      Camera.x = data.camera.x;
-      Camera.y = data.camera.y;
+      Ratings.stars = stars;
+      Camera.x = camera.x;
+      Camera.y = camera.y;
+      Stress.refreshWorking(); // the game starts paused, so the noise readout needs this now
       this.lastSavedDay = Clock.day;
       return true;
     } catch (e) {

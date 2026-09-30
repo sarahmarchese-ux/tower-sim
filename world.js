@@ -8,9 +8,9 @@
 // World also announces every change it makes ("a room was added", "an
 // elevator was removed", ...) to anyone who subscribed. People and elevators
 // listen for those announcements and react — World itself never has to know
-// they exist. Every change also bumps `version`, a counter other modules can
-// compare against to know when something they cached (like a route) might
-// be out of date.
+// they exist. Every change to the building's layout also bumps `version`, a
+// counter other modules can compare against to know when something they
+// cached (like a route) might be out of date.
 
 const World = {
   money: STARTING_MONEY,
@@ -25,8 +25,8 @@ const World = {
     this.listeners.push(listener);
   },
 
-  emit(event, payload) {
-    this.version++;
+  emit(event, payload, { layout = true } = {}) {
+    if (layout) this.version++;
     for (const listener of this.listeners) listener(event, payload);
   },
 
@@ -62,6 +62,17 @@ const World = {
         tile < t.tileStart + width
       );
     });
+  },
+
+  // Stairs whose top landing is this tile, on the floor above the flight.
+  stairsLandingAt(floor, tile) {
+    return this.transit.find(
+      (t) =>
+        t.kind === "stairs" &&
+        t.floorTop === floor &&
+        tile >= t.tileStart &&
+        tile < t.tileStart + TRANSIT_TYPES.stairs.width,
+    );
   },
 
   // The stairs or elevator shaft (if any) taking up this tile on this floor.
@@ -124,10 +135,12 @@ const World = {
   },
 
   // Occupancy changes go through here so they're announced like any other
-  // change: noise, for one, depends on which studios have makers in.
+  // change. They don't move any walls, so they leave `version` alone: that
+  // would throw away every cached route each time someone moved in, which
+  // stutters a big tower while it fills.
   setRoomStatus(room, status) {
     room.status = status;
-    this.emit("roomStatusChanged", room);
+    this.emit("roomStatusChanged", room, { layout: false });
   },
 
   placeRoom(typeKey, floor, tileStart) {
@@ -273,6 +286,11 @@ const World = {
       return { ok: true };
     }
     if (this.isFloorBuilt(floor, tile)) {
+      // Stairs take up only their bottom floor, but people step off onto
+      // the floor above, so that landing has to stay.
+      if (this.stairsLandingAt(floor, tile)) {
+        return { ok: false, reason: "Stairs land here: demolish the stairs first" };
+      }
       this.floors.get(floor).delete(tile);
       this.money += FLOOR_COST_PER_TILE / 2;
       this.emit("floorsChanged", { floor });

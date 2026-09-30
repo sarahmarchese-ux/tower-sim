@@ -169,8 +169,13 @@ const People = {
     }
 
     // A re-route (`from`) is the same trip carrying on, so the clock keeps
-    // running from when they first set off.
-    if (!from) person.tripStartedAt = Clock.totalMinutes;
+    // running from when they first set off. A new trip starts from zero,
+    // even if the last one was abandoned partway.
+    if (!from) {
+      person.tripStartedAt = Clock.totalMinutes;
+      person.tripWaitMinutes = 0;
+      person.tripStairsMinutes = 0;
+    }
     person.route = route;
     person.target = target;
     person.legIndex = 0;
@@ -273,18 +278,60 @@ const People = {
   },
 
   // Stairs or an elevator were demolished. Anyone whose remaining route used
-  // them steps off where they are (rounded to the nearest floor, if they
-  // were mid-ride or mid-climb) and works out a new way.
+  // them steps off where they are and works out a new way.
   onTransitRemoved(transit) {
     for (const person of this.list) {
       if (!person.route) continue;
       const usesIt = person.route.legs
         .slice(person.legIndex)
         .some((leg) => leg.transitId === transit.id);
-      if (!usesIt) continue;
-      const from = { floor: Math.round(person.floor), x: person.x };
-      this.startTrip(person, person.target, from);
+      if (usesIt) this.reroute(person, transit);
     }
+  },
+
+  // Floor was demolished. Anyone whose way ahead now crosses a gap (or
+  // who's standing on one) works out a new way.
+  onFloorsChanged() {
+    for (const person of this.list) {
+      if (person.route && !this.routeStillWalkable(person)) this.reroute(person);
+    }
+  },
+
+  // Does every walk left on this person's route, from where they are now,
+  // still run along built floor?
+  routeStillWalkable(person) {
+    let x = person.x;
+    for (let i = person.legIndex; i < person.route.legs.length; i++) {
+      const leg = person.route.legs[i];
+      if (leg.type === "walk") {
+        if (!Routing.canWalk(leg.floor, x, leg.toX)) return false;
+        x = leg.toX;
+      } else {
+        const transit = World.transit.find((t) => t.id === leg.transitId);
+        if (!transit) return false;
+        x = Routing.stopX(transit, leg.toFloor);
+        if (Routing.segmentOf(leg.toFloor, x) === undefined) return false;
+      }
+    }
+    return true;
+  },
+
+  // Plan a new way to the same place from where this person is now: the
+  // nearest whole floor if mid-ride or mid-climb, and the shaft's own door
+  // if they were in (or queueing for) an elevator, since the queue can
+  // stretch past the built floor. They leave any car or queue they were in:
+  // the new route starts from scratch. `removed` is the transit just
+  // demolished, if that's why, since it's no longer in World.transit.
+  reroute(person, removed) {
+    const floor = Math.round(person.floor);
+    let x = person.x;
+    if (person.state === "waitingForElevator" || person.state === "riding") {
+      const leg = person.route.legs[person.legIndex];
+      const transit = removed && removed.id === leg.transitId ? removed : World.transit.find((t) => t.id === leg.transitId);
+      if (transit) x = Routing.stopX(transit, floor);
+    }
+    Elevators.forget(person);
+    this.startTrip(person, person.target, { floor, x });
   },
 
   // Everyone who lives or works here: not movers still on their way in,
@@ -297,4 +344,5 @@ const People = {
 World.subscribe((event, payload) => {
   if (event === "roomRemoved") People.removeForRoom(payload);
   if (event === "transitRemoved") People.onTransitRemoved(payload);
+  if (event === "floorsChanged") People.onFloorsChanged();
 });

@@ -226,6 +226,7 @@ const UI = {
       if (e.target.tagName === "INPUT" || Economy.bankrupt) return;
       if (e.key === " ") {
         e.preventDefault();
+        if (e.repeat) return; // holding Space would flick pause on and off
         Clock.togglePause();
         this.setSpeed(Clock.speed);
       } else if (e.key === "1") {

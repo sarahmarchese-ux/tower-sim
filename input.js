@@ -26,6 +26,7 @@ const Pointer = {
   floor: null,
   screenX: 0, // where the mouse is on screen, for placing the tooltip
   screenY: 0,
+  overCanvas: false,
   dragStartTile: null,
   dragStartFloor: null,
   dragging: false,
@@ -81,28 +82,35 @@ function elevatorPlanCheck(plan) {
 // directly above existing stairs snaps to their column, so stacking a
 // staircase straight up doesn't need pixel-perfect aim.
 function stairsTileAt(floor, tile) {
-  const below = World.transit.find(
-    (t) =>
-      t.kind === "stairs" &&
-      t.floorTop === floor &&
-      tile >= t.tileStart &&
-      tile < t.tileStart + TRANSIT_TYPES.stairs.width,
-  );
+  const below = World.stairsLandingAt(floor, tile);
   return below ? below.tileStart : tile;
+}
+
+// Which tile and floor are under the mouse. Called on every mouse move, and
+// every frame (main.js) so scrolling with the keys, which moves the tower
+// under a still mouse, keeps aiming at what's under the cursor now.
+function updatePointer(canvas) {
+  if (!Pointer.overCanvas) return;
+  const { tile, floor } = screenToWorld(canvas, Pointer.screenX, Pointer.screenY);
+  Pointer.tile = tile;
+  Pointer.floor = floor;
 }
 
 function attachBuildControls(canvas) {
   canvas.addEventListener("mousemove", (e) => {
-    const { tile, floor } = screenToWorld(canvas, e.clientX, e.clientY);
-    Pointer.tile = tile;
-    Pointer.floor = floor;
+    Pointer.overCanvas = true;
     Pointer.screenX = e.clientX;
     Pointer.screenY = e.clientY;
+    updatePointer(canvas);
   });
 
   // Off the canvas (over the toolbar, or out of the window) nothing is
-  // hovered, so the tooltip goes away.
+  // hovered, so the tooltip goes away. Mid-drag, the drag keeps the last
+  // spot it was over, so letting go over the toolbar builds up to the edge
+  // rather than from tile 0.
   canvas.addEventListener("mouseleave", () => {
+    Pointer.overCanvas = false;
+    if (Pointer.dragging) return;
     Pointer.tile = null;
     Pointer.floor = null;
   });
@@ -121,6 +129,10 @@ function attachBuildControls(canvas) {
 
   canvas.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return; // right button pans; see camera.js
+    Pointer.overCanvas = true;
+    Pointer.screenX = e.clientX;
+    Pointer.screenY = e.clientY;
+    updatePointer(canvas);
     if (Tool.current === "floor" || Tool.current === "elevator") {
       Pointer.dragging = true;
       Pointer.dragStartTile = Pointer.tile;
@@ -149,6 +161,10 @@ function attachBuildControls(canvas) {
     Pointer.dragging = false;
     Pointer.dragStartTile = null;
     Pointer.dragStartFloor = null;
+    if (!Pointer.overCanvas) {
+      Pointer.tile = null;
+      Pointer.floor = null;
+    }
   });
 
   // A plain click (no drag) handles everything except the two drag tools,

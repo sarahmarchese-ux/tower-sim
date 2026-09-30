@@ -73,11 +73,16 @@ const Stress = {
 
   // Noise and rest, for everyone who isn't mid-trip. Movers aren't settled
   // in yet (or are on their way out), so they're left alone.
-  update(minutes) {
-    const hours = minutes / 60;
+  // Which studios have a maker at work right now.
+  refreshWorking() {
     this._working = new Set(
       People.list.filter((p) => p.role === "maker" && p.state === "inRoom").map((p) => p.room),
     );
+  },
+
+  update(minutes) {
+    const hours = minutes / 60;
+    this.refreshWorking();
     for (const person of People.list) {
       if (person.movingIn || person.movingOut) continue;
       if (person.state === "inRoom" && person.role === "resident") {
