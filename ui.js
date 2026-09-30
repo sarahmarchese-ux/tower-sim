@@ -68,7 +68,12 @@ const UI = {
       const average = Stress.roomAverage(room);
       if (average !== null) parts.push(`stress ${Math.round(average)} (${Stress.band(average)})`);
     }
-    if (type.role === "resident") parts.push(`noise here: ${Stress.noiseAt(room)}`);
+    if (type.role === "resident") {
+      // Studios are only noisy while their makers work, so show both.
+      const now = Stress.noiseAt(room);
+      const working = Stress.noiseAt(room, true);
+      parts.push(now === working ? `noise here: ${now}` : `noise here: ${now} now, ${working} in working hours`);
+    }
     else if (type.noise > 0) parts.push(`makes noise ${type.noise}`);
     else parts.push("quiet");
     return parts.join(" · ");

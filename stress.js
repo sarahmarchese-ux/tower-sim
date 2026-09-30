@@ -9,10 +9,11 @@
 //     are fine, but eight flights, or a 15-minute queue, are not.
 //   - Not being able to get there at all (no route, e.g. a demolished
 //     elevator).
-//   - Noise, for residents only. Each studio with makers in gives off noise
-//     (rooms.js: Woodwork 3, Pottery 2, Sewing 1, Jewellery 0) to the rooms
-//     beside it and on the floors directly above and below. A resident at
-//     home in a noisy condo gains stress every hour. Makers don't mind noise.
+//   - Noise, for residents only. A studio gives off noise while its makers
+//     are at work in it (rooms.js: Woodwork 3, Pottery 2, Sewing 1,
+//     Jewellery 0) to the rooms beside it and on the floors directly above
+//     and below. After hours and at weekends it's quiet. A resident at home
+//     in a noisy condo gains stress every hour. Makers don't mind noise.
 // What takes it away: resting, i.e. being at home in peace, or out of the
 // building.
 //
@@ -28,26 +29,36 @@ const NOISE_STRESS_PER_HOUR = 0.4; // per point of noise, while at home
 const REST_PER_HOUR = 0.5;
 
 const Stress = {
-  _noiseVersion: -1,
-  _noise: new Map(), // room id -> noise level reaching it
+  _neighboursVersion: -1,
+  _neighbours: new Map(), // room id -> the noisy studios next to it
+  _working: new Set(), // studios with a maker at work right now; see update()
 
-  // Total noise reaching a room from occupied studios around it. Cached
-  // until the building changes (rooms added/removed, people moving in/out).
-  noiseAt(room) {
-    if (this._noiseVersion !== World.version) {
-      this._noise = new Map();
-      this._noiseVersion = World.version;
+  // The studios whose noise can reach a room. Cached until the building
+  // changes (rooms added or removed).
+  noisyNeighbours(room) {
+    if (this._neighboursVersion !== World.version) {
+      this._neighbours = new Map();
+      this._neighboursVersion = World.version;
     }
-    if (!this._noise.has(room.id)) {
-      let level = 0;
-      for (const studio of World.rooms) {
-        const noise = ROOM_TYPES[studio.type].noise;
-        if (studio === room || !noise || studio.status !== "occupied") continue;
-        if (this.areNeighbours(studio, room)) level += noise;
-      }
-      this._noise.set(room.id, level);
+    if (!this._neighbours.has(room.id)) {
+      this._neighbours.set(
+        room.id,
+        World.rooms.filter((studio) => studio !== room && ROOM_TYPES[studio.type].noise > 0 && this.areNeighbours(studio, room)),
+      );
     }
-    return this._noise.get(room.id);
+    return this._neighbours.get(room.id);
+  },
+
+  // Noise reaching a room right now: from the studios next to it that have
+  // a maker at work. With `whenWorking`, what it would be with every
+  // occupied studio at work, i.e. on a weekday afternoon.
+  noiseAt(room, whenWorking = false) {
+    let level = 0;
+    for (const studio of this.noisyNeighbours(room)) {
+      const noisy = whenWorking ? studio.status === "occupied" : this._working.has(studio);
+      if (noisy) level += ROOM_TYPES[studio.type].noise;
+    }
+    return level;
   },
 
   // Beside each other on the same floor (touching), or on floors directly
@@ -64,6 +75,9 @@ const Stress = {
   // in yet (or are on their way out), so they're left alone.
   update(minutes) {
     const hours = minutes / 60;
+    this._working = new Set(
+      People.list.filter((p) => p.role === "maker" && p.state === "inRoom").map((p) => p.room),
+    );
     for (const person of People.list) {
       if (person.movingIn || person.movingOut) continue;
       if (person.state === "inRoom" && person.role === "resident") {
