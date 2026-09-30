@@ -47,28 +47,26 @@ const World = {
     });
   },
 
-  // Every stairs or elevator shaft covering this tile on this floor.
-  // Usually zero or one; two when stairs are stacked in one column (see
-  // canPlaceTransit), where the lower set's top floor is the upper set's
-  // bottom floor.
+  // Every stairs or elevator shaft taking up this tile on this floor.
+  // Stairs take up only the floor they start on: the flight climbs within
+  // that floor's height and lets you off on the floor above, so that floor
+  // stays free (for a room, or the next set of stairs stacked on top).
   transitsAt(floor, tile) {
     return this.transit.filter((t) => {
       const width = TRANSIT_TYPES[t.kind].width;
+      const top = t.kind === "stairs" ? t.floorBottom : t.floorTop;
       return (
         floor >= t.floorBottom &&
-        floor <= t.floorTop &&
+        floor <= top &&
         tile >= t.tileStart &&
         tile < t.tileStart + width
       );
     });
   },
 
-  // The stairs or elevator shaft (if any) covering this tile on this floor.
-  // Where two stacked stairs meet, it's the set that starts on this floor —
-  // the same one clicking Stairs here would have built.
+  // The stairs or elevator shaft (if any) taking up this tile on this floor.
   transitAt(floor, tile) {
-    const here = this.transitsAt(floor, tile);
-    return here.find((t) => t.floorBottom === floor) || here[0];
+    return this.transitsAt(floor, tile)[0];
   },
 
   // Only tiles that aren't already built cost money — re-dragging over
@@ -168,16 +166,15 @@ const World = {
         if (!this.isFloorBuilt(floor, tile)) {
           return { ok: false, reason: "Build floor on every level it passes through first" };
         }
+        // Stairs only take up their bottom floor (see transitsAt); the
+        // floor above just needs to be built for people to step off onto.
+        const occupies = kind !== "stairs" || floor === floorBottom;
+        if (!occupies) continue;
         const room = this.roomAt(floor, tile);
         if (room && !ROOM_TYPES[room.type].allowsTransit) {
           return { ok: false, reason: "Overlaps a room (only the lobby can share space)" };
         }
-        // Stairs may stack in one column, sharing the floor where one set
-        // ends and the next begins, so a staircase can climb straight up.
-        const blocking = this.transitsAt(floor, tile).filter(
-          (t) => !(kind === "stairs" && stairsStack(t, tileStart, floorBottom, floorTop)),
-        );
-        if (blocking.length > 0) {
+        if (this.transitAt(floor, tile)) {
           return { ok: false, reason: "Overlaps other stairs or an elevator" };
         }
       }
@@ -237,12 +234,3 @@ const World = {
   },
 };
 
-// Would new stairs (tileStart, floorBottom..floorTop) sit directly above or
-// below existing transit `t`, meeting it on exactly one floor?
-function stairsStack(t, tileStart, floorBottom, floorTop) {
-  return (
-    t.kind === "stairs" &&
-    t.tileStart === tileStart &&
-    (t.floorTop === floorBottom || t.floorBottom === floorTop)
-  );
-}

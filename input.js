@@ -21,6 +21,7 @@ const Pointer = {
   dragStartTile: null,
   dragStartFloor: null,
   dragging: false,
+  buildCheck: null, // why the hovered build would be refused, if it would (see render.js)
 };
 
 function screenToWorld(canvas, clientX, clientY) {
@@ -45,6 +46,20 @@ function elevatorDragSpan() {
     bottom: Math.min(Pointer.dragStartFloor, Pointer.floor),
     top: Math.max(Pointer.dragStartFloor, Pointer.floor),
   };
+}
+
+// Where new stairs clicked at (floor, tile) go. Hovering over the floor
+// directly above existing stairs snaps to their column, so stacking a
+// staircase straight up doesn't need pixel-perfect aim.
+function stairsTileAt(floor, tile) {
+  const below = World.transit.find(
+    (t) =>
+      t.kind === "stairs" &&
+      t.floorTop === floor &&
+      tile >= t.tileStart &&
+      tile < t.tileStart + TRANSIT_TYPES.stairs.width,
+  );
+  return below ? below.tileStart : tile;
 }
 
 function attachBuildControls(canvas) {
@@ -101,7 +116,7 @@ function attachBuildControls(canvas) {
     if (Tool.current === "demolish") {
       result = World.demolishAt(Pointer.floor, Pointer.tile);
     } else if (Tool.current === "stairs") {
-      result = World.placeTransit("stairs", Pointer.tile, Pointer.floor, Pointer.floor + 1);
+      result = World.placeTransit("stairs", stairsTileAt(Pointer.floor, Pointer.tile), Pointer.floor, Pointer.floor + 1);
     } else {
       result = World.placeRoom(Tool.current, Pointer.floor, Pointer.tile);
     }

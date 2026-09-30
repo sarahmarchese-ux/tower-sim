@@ -22,19 +22,32 @@ const UI = {
   updateInspect() {
     const tip = document.getElementById("tooltip");
     const room = Pointer.floor !== null && World.roomAt(Pointer.floor, Pointer.tile);
-    if (!room || ROOM_TYPES[room.type].tenants === 0 || Pointer.dragging) {
+    const tenanted = room && ROOM_TYPES[room.type].tenants > 0;
+    tip.textContent = "";
+
+    if (tenanted && !Pointer.dragging) {
+      tip.textContent = this.describeRoom(room);
+      if (!Routing.isReachable(room)) this.addWarning(tip, "! " + this.unreachableAdvice(room));
+    } else if (Pointer.buildCheck && !Pointer.buildCheck.ok) {
+      // A build that would be refused says why, right where you're aiming,
+      // before you click.
+      this.addWarning(tip, Pointer.buildCheck.reason);
+    } else {
       tip.classList.remove("shown");
       return;
     }
-    tip.textContent = this.describeRoom(room);
-    if (!Routing.isReachable(room)) {
-      const warn = document.createElement("div");
-      warn.className = "warn";
-      warn.textContent = "! " + this.unreachableAdvice(room);
-      tip.appendChild(warn);
-    }
     tip.classList.add("shown");
+    this.placeTooltip(tip);
+  },
 
+  addWarning(tip, text) {
+    const warn = document.createElement("div");
+    warn.className = "warn";
+    warn.textContent = text;
+    tip.appendChild(warn);
+  },
+
+  placeTooltip(tip) {
     // Just below and right of the cursor, flipped to the other side near
     // the window's right or bottom edge so it never goes off-screen.
     const gap = 14;
