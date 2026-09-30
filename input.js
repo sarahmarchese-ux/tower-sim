@@ -8,10 +8,17 @@
 //
 // Two tools use a drag: Floor drags sideways along one level, and Elevator
 // drags up or down along one column. Everything else is a single click.
+//
+// No tool is picked at the start. A right-click that doesn't drag (or Esc,
+// or clicking the picked tool's button again; see ui.js) puts the tool
+// down, so the mouse is back to just looking.
 
 const Tool = {
-  current: "floor",
+  current: null, // "floor", "sewing", "stairs", ... or null for none
 };
+
+// A right-click that moves less than this many pixels is a click, not a pan.
+const RIGHT_CLICK_SLOP = 4;
 
 const Pointer = {
   tile: null,
@@ -78,6 +85,18 @@ function attachBuildControls(canvas) {
     Pointer.floor = null;
   });
 
+  // Right button: dragging pans (camera.js); a plain click puts the tool down.
+  let rightDownAt = null;
+  canvas.addEventListener("mousedown", (e) => {
+    if (e.button === 2) rightDownAt = { x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener("mouseup", (e) => {
+    if (e.button !== 2 || !rightDownAt) return;
+    const moved = Math.hypot(e.clientX - rightDownAt.x, e.clientY - rightDownAt.y);
+    rightDownAt = null;
+    if (moved < RIGHT_CLICK_SLOP) UI.selectTool(null);
+  });
+
   canvas.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return; // right button pans; see camera.js
     if (Tool.current === "floor" || Tool.current === "elevator") {
@@ -109,7 +128,7 @@ function attachBuildControls(canvas) {
   // A plain click (no drag) handles everything except the two drag tools,
   // which were already handled on mouseup above.
   canvas.addEventListener("click", () => {
-    if (Tool.current === "floor" || Tool.current === "elevator") return;
+    if (!Tool.current || Tool.current === "floor" || Tool.current === "elevator") return;
     if (Pointer.tile === null || Pointer.floor === null) return;
 
     let result;

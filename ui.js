@@ -4,7 +4,7 @@
 // reason to reinvent them in canvas drawing code.
 
 const UI = {
-  defaultHint: "Left-click, or drag, to build. Right-click/drag or WASD/arrows to scroll. Hover a room for details.",
+  defaultHint: "Pick something to build below (Esc or right-click puts it down). Right-drag or WASD/arrows to scroll. Hover a room for details.",
 
   // An error (e.g. "Build the floor here first") shows for a few seconds,
   // then the hint goes back to the default or to the room being hovered.
@@ -230,33 +230,28 @@ const UI = {
         this.setSpeed(1);
       } else if (e.key === "3") {
         this.setSpeed(3);
+      } else if (e.key === "Escape") {
+        this.selectTool(null);
       }
     });
   },
 
   attachToolbar() {
-    const buttons = document.querySelectorAll("#toolbar button[data-tool]");
-    buttons.forEach((button) => {
+    document.querySelectorAll("#toolbar button[data-tool]").forEach((button) => {
+      // Clicking the picked tool again puts it down.
       button.addEventListener("click", () => {
-        Tool.current = button.dataset.tool;
-        buttons.forEach((b) => b.classList.toggle("active", b === button));
-        this.showHint(null);
+        const tool = button.dataset.tool;
+        this.selectTool(Tool.current === tool ? null : tool);
       });
     });
-    // "floor" is the default tool, so its button should look selected
-    // before the player has clicked anything.
-    document.querySelector('#toolbar button[data-tool="floor"]').classList.add("active");
+  },
+
+  // Pick a tool (or put it down, with null) and light up its button.
+  selectTool(tool) {
+    Tool.current = tool;
+    document.querySelectorAll("#toolbar button[data-tool]").forEach((b) => {
+      b.classList.toggle("active", b.dataset.tool === tool);
+    });
+    this.showHint(null);
   },
 };
-
-function range(from, to) {
-  const out = [];
-  for (let i = from; i <= to; i++) out.push(i);
-  return out;
-}
-
-// "1F" for the ground floor, "B1" for the first basement, as drawn beside
-// the tower.
-function floorLabel(floor) {
-  return floor >= 0 ? `${floor + 1}F` : `B${-floor}`;
-}
