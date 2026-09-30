@@ -7,7 +7,8 @@
 // scrolls the tower when you meant to lay a floor, or vice versa.
 //
 // Two tools use a drag: Floor drags sideways along one level, and Elevator
-// drags up or down along one column. Everything else is a single click.
+// drags up or down along one column (from an existing shaft's end, that
+// extends it). Everything else is a single click.
 //
 // No tool is picked at the start. A right-click that doesn't drag (or Esc,
 // or clicking the picked tool's button again; see ui.js) puts the tool
@@ -29,6 +30,7 @@ const Pointer = {
   dragStartFloor: null,
   dragging: false,
   buildCheck: null, // why the hovered build would be refused, if it would (see render.js)
+  buildNote: null, // what the hovered build would do, when that's not obvious
 };
 
 function screenToWorld(canvas, clientX, clientY) {
@@ -41,18 +43,38 @@ function screenToWorld(canvas, clientX, clientY) {
   };
 }
 
-// The floors an elevator drag currently covers. A click without dragging
-// counts as the smallest possible elevator: this floor and the one above.
-function elevatorDragSpan() {
-  if (!Pointer.dragging || Pointer.floor === Pointer.dragStartFloor) {
-    const floor = Pointer.dragging ? Pointer.dragStartFloor : Pointer.floor;
-    return { tile: Pointer.dragging ? Pointer.dragStartTile : Pointer.tile, bottom: floor, top: floor + 1 };
+// What an elevator drag (or click) would do right now: build a new shaft,
+// or extend an existing one.
+//
+// A drag that starts on a shaft, or just above or below it, in the same
+// column extends it to cover every floor dragged over; a click just above
+// or below adds that one floor. Anywhere else, the drag's floors are a new
+// shaft, and a click without dragging is the smallest one: this floor and
+// the one above.
+function elevatorPlan() {
+  const tile = Pointer.dragging ? Pointer.dragStartTile : Pointer.tile;
+  const from = Pointer.dragging ? Pointer.dragStartFloor : Pointer.floor;
+  const to = Pointer.floor;
+  const lo = Math.min(from, to);
+  const hi = Math.max(from, to);
+
+  const shaft = World.elevatorToExtend(tile, from, from);
+  if (shaft) {
+    return {
+      extend: shaft,
+      tile: shaft.tileStart,
+      bottom: Math.min(shaft.floorBottom, lo),
+      top: Math.max(shaft.floorTop, hi),
+    };
   }
-  return {
-    tile: Pointer.dragStartTile,
-    bottom: Math.min(Pointer.dragStartFloor, Pointer.floor),
-    top: Math.max(Pointer.dragStartFloor, Pointer.floor),
-  };
+  if (lo === hi) return { tile, bottom: lo, top: lo + 1 };
+  return { tile, bottom: lo, top: hi };
+}
+
+function elevatorPlanCheck(plan) {
+  return plan.extend
+    ? World.canExtendElevator(plan.extend, plan.bottom, plan.top)
+    : World.canPlaceTransit("elevator", plan.tile, plan.bottom, plan.top);
 }
 
 // Where new stairs clicked at (floor, tile) go. Hovering over the floor
@@ -116,8 +138,12 @@ function attachBuildControls(canvas) {
     }
 
     if (Tool.current === "elevator" && Pointer.dragging) {
-      const span = elevatorDragSpan();
-      UI.reportResult(World.placeTransit("elevator", span.tile, span.bottom, span.top));
+      const plan = elevatorPlan();
+      UI.reportResult(
+        plan.extend
+          ? World.extendElevator(plan.extend, plan.bottom, plan.top)
+          : World.placeTransit("elevator", plan.tile, plan.bottom, plan.top),
+      );
     }
 
     Pointer.dragging = false;

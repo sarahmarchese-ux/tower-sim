@@ -197,6 +197,59 @@ const World = {
     return { ok: true };
   },
 
+  // The elevator shaft (if any) in this tile's column that a drag over
+  // floors floorLo..floorHi would extend: one it overlaps or touches end to
+  // end.
+  elevatorToExtend(tile, floorLo, floorHi) {
+    return this.transit.find(
+      (t) =>
+        t.kind === "elevator" &&
+        tile >= t.tileStart &&
+        tile < t.tileStart + TRANSIT_TYPES.elevator.width &&
+        floorLo <= t.floorTop + 1 &&
+        floorHi >= t.floorBottom - 1,
+    );
+  },
+
+  // Growing a shaft up or down to floorBottom..floorTop. Only the new
+  // floors are checked and paid for ($1k each); the car and anyone riding
+  // or waiting carry on as before.
+  canExtendElevator(t, floorBottom, floorTop) {
+    const type = TRANSIT_TYPES.elevator;
+    const added = t.floorBottom - floorBottom + (floorTop - t.floorTop);
+    if (added <= 0) return { ok: false, reason: "Drag up or down from the shaft's end to extend it" };
+    if (floorTop - floorBottom + 1 > type.maxFloors) {
+      return { ok: false, reason: `An elevator can span at most ${type.maxFloors} floors` };
+    }
+    for (let floor = floorBottom; floor <= floorTop; floor++) {
+      if (floor >= t.floorBottom && floor <= t.floorTop) continue; // already shaft
+      for (let tile = t.tileStart; tile < t.tileStart + type.width; tile++) {
+        if (!this.isFloorBuilt(floor, tile)) {
+          return { ok: false, reason: "Build floor on every level it passes through first" };
+        }
+        const room = this.roomAt(floor, tile);
+        if (room && !ROOM_TYPES[room.type].allowsTransit) {
+          return { ok: false, reason: "Overlaps a room (only the lobby can share space)" };
+        }
+        if (this.transitAt(floor, tile)) {
+          return { ok: false, reason: "Overlaps other stairs or an elevator" };
+        }
+      }
+    }
+    if (added * type.costPerFloor > this.money) return { ok: false, reason: "Not enough money" };
+    return { ok: true, cost: added * type.costPerFloor };
+  },
+
+  extendElevator(t, floorBottom, floorTop) {
+    const check = this.canExtendElevator(t, floorBottom, floorTop);
+    if (!check.ok) return check;
+    t.floorBottom = floorBottom;
+    t.floorTop = floorTop;
+    this.money -= check.cost;
+    this.emit("transitChanged", t);
+    return { ok: true };
+  },
+
   // Demolishing refunds half the build cost. Free would make floor tiles a
   // way to launder money (build, demolish, rebuild for no reason); charging
   // the full cost again would make misclicks too punishing. A sold condo
