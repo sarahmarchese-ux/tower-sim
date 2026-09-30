@@ -23,8 +23,10 @@
       left: 0;
       right: 0;
       display: flex;
+      flex-wrap: wrap; /* in a narrow window (a sidebar, a phone), wrap rather than run off-screen */
       justify-content: space-between;
       align-items: center;
+      gap: 4px 12px;
       padding: 8px 16px;
       background: rgba(20, 20, 20, 0.55);
       color: #fff;
@@ -57,12 +59,13 @@
 
     #clockbar {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 8px;
     }
     #clock-label {
       font-variant-numeric: tabular-nums;
-      min-width: 9em;
+      min-width: 8em;
       text-align: center;
     }
     #clockbar button {

@@ -67,12 +67,31 @@ const UI = {
     if (!World.rooms.some((r) => r.type === "lobby")) {
       return "Can't be reached: there's no Lobby yet. Build one on the ground floor so people can enter the tower.";
     }
-    const onLobbyFloor = World.rooms.some((r) => r.type === "lobby" && r.floor === room.floor);
-    const transitHere = World.transit.some((t) => room.floor >= t.floorBottom && room.floor <= t.floorTop);
-    if (!onLobbyFloor && !transitHere) {
-      return "Can't be reached from a Lobby: add Stairs or an Elevator that connects this floor to the lobby floor.";
+    // Which floors can be climbed to from a lobby floor, ignoring walking?
+    // Stairs join just their two floors; an elevator joins every floor it
+    // spans.
+    const reached = new Set(World.rooms.filter((r) => r.type === "lobby").map((r) => r.floor));
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const t of World.transit) {
+        const floors = t.kind === "stairs" ? [t.floorBottom, t.floorTop] : range(t.floorBottom, t.floorTop);
+        if (floors.some((f) => reached.has(f)) && floors.some((f) => !reached.has(f))) {
+          floors.forEach((f) => reached.add(f));
+          grew = true;
+        }
+      }
     }
-    return "Can't be reached from a Lobby: check for gaps in the Floor along the way, and that the Stairs or Elevator reach the lobby floor.";
+    if (!reached.has(room.floor)) {
+      // Name the first missing step on the way from the lobby to this room.
+      const below = [...reached].filter((f) => f < room.floor);
+      const lower = below.length ? Math.max(...below) : Math.min(...reached) - 1;
+      const upper = lower + 1;
+      return `Can't be reached: nothing connects ${floorLabel(lower)} and ${floorLabel(upper)}. ` +
+        `Stairs join the floor you click on to the one above, so click Stairs on ${floorLabel(lower)} ` +
+        "(beside, not on top of, other stairs), or drag an Elevator across both.";
+    }
+    return "Can't be reached from a Lobby: check for gaps in the Floor along the way, between the lobby, stairs or elevators, and this room.";
   },
 
   // A message across the top of the screen (a new star, say) that fades
@@ -211,3 +230,15 @@ const UI = {
     document.querySelector('#toolbar button[data-tool="floor"]').classList.add("active");
   },
 };
+
+function range(from, to) {
+  const out = [];
+  for (let i = from; i <= to; i++) out.push(i);
+  return out;
+}
+
+// "1F" for the ground floor, "B1" for the first basement, as drawn beside
+// the tower.
+function floorLabel(floor) {
+  return floor >= 0 ? `${floor + 1}F` : `B${-floor}`;
+}
