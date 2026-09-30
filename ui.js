@@ -32,6 +32,8 @@ const UI = {
       // A build that would be refused says why, right where you're aiming,
       // before you click.
       this.addWarning(tip, Pointer.buildCheck.reason);
+    } else if (Pointer.buildNote) {
+      tip.textContent = Pointer.buildNote;
     } else {
       tip.classList.remove("shown");
       return;
@@ -255,3 +257,15 @@ const UI = {
     this.showHint(null);
   },
 };
+
+function range(from, to) {
+  const out = [];
+  for (let i = from; i <= to; i++) out.push(i);
+  return out;
+}
+
+// "1F" for the ground floor, "B1" for the first basement, as drawn beside
+// the tower.
+function floorLabel(floor) {
+  return floor >= 0 ? `${floor + 1}F` : `B${-floor}`;
+}

@@ -368,6 +368,7 @@ function roomScreenBox(room, type) {
 // find out a placement is invalid before you click, not after.
 function drawHoverPreview(w, h) {
   Pointer.buildCheck = null; // set below by the tools that can be refused
+  Pointer.buildNote = null; // a line about what the click would do, if worth saying
   if (Pointer.tile === null || Pointer.floor === null) return;
 
   if (Tool.current === "floor") {
@@ -398,10 +399,13 @@ function drawHoverPreview(w, h) {
 
   if (Tool.current === "elevator") {
     const width = TRANSIT_TYPES.elevator.width;
-    const span = elevatorDragSpan();
-    const check = World.canPlaceTransit("elevator", span.tile, span.bottom, span.top);
+    const plan = elevatorPlan();
+    const check = elevatorPlanCheck(plan);
     Pointer.buildCheck = check;
-    drawAreaPreview(span.bottom, span.top, span.tile, span.tile + width - 1, check.ok);
+    if (plan.extend && check.ok) {
+      Pointer.buildNote = `Extend elevator to ${floorLabel(plan.bottom)}–${floorLabel(plan.top)}: ${World.formatMoney(check.cost)}`;
+    }
+    drawAreaPreview(plan.bottom, plan.top, plan.tile, plan.tile + width - 1, check.ok);
     return;
   }
 
