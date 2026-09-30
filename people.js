@@ -169,8 +169,13 @@ const People = {
     }
 
     // A re-route (`from`) is the same trip carrying on, so the clock keeps
-    // running from when they first set off.
-    if (!from) person.tripStartedAt = Clock.totalMinutes;
+    // running from when they first set off. A new trip starts from zero,
+    // even if the last one was abandoned partway.
+    if (!from) {
+      person.tripStartedAt = Clock.totalMinutes;
+      person.tripWaitMinutes = 0;
+      person.tripStairsMinutes = 0;
+    }
     person.route = route;
     person.target = target;
     person.legIndex = 0;
