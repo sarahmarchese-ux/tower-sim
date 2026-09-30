@@ -4,7 +4,7 @@
 // reason to reinvent them in canvas drawing code.
 
 const UI = {
-  defaultHint: "Left-click, or drag, to build. Right-click/drag or WASD/arrows to scroll.",
+  defaultHint: "Left-click, or drag, to build. Right-click/drag or WASD/arrows to scroll. Hover a room for details.",
 
   // An error (e.g. "Build the floor here first") shows for a few seconds,
   // then the hint goes back to the default or to the room being hovered.
@@ -16,13 +16,34 @@ const UI = {
     if (message) this._hintTimer = setTimeout(() => this.showHint(null), 4000);
   },
 
-  // Hovering a room with tenants shows who's there, how stressed they are,
-  // and (for condos) how much noise reaches it; unless an error is showing.
+  // Hovering a room with tenants shows a tooltip beside the mouse: who's
+  // there, how stressed they are, and (for condos) how much noise reaches
+  // it. A room nobody can reach (the red "!") also says how to fix that.
   updateInspect() {
-    const el = document.getElementById("hint");
-    if (el.classList.contains("hint-error")) return;
+    const tip = document.getElementById("tooltip");
     const room = Pointer.floor !== null && World.roomAt(Pointer.floor, Pointer.tile);
-    el.textContent = room && ROOM_TYPES[room.type].tenants > 0 ? this.describeRoom(room) : this.defaultHint;
+    if (!room || ROOM_TYPES[room.type].tenants === 0 || Pointer.dragging) {
+      tip.classList.remove("shown");
+      return;
+    }
+    tip.textContent = this.describeRoom(room);
+    if (!Routing.isReachable(room)) {
+      const warn = document.createElement("div");
+      warn.className = "warn";
+      warn.textContent = "! " + this.unreachableAdvice(room);
+      tip.appendChild(warn);
+    }
+    tip.classList.add("shown");
+
+    // Just below and right of the cursor, flipped to the other side near
+    // the window's right or bottom edge so it never goes off-screen.
+    const gap = 14;
+    let x = Pointer.screenX + gap;
+    let y = Pointer.screenY + gap;
+    if (x + tip.offsetWidth > window.innerWidth - 4) x = Pointer.screenX - gap - tip.offsetWidth;
+    if (y + tip.offsetHeight > window.innerHeight - 4) y = Pointer.screenY - gap - tip.offsetHeight;
+    tip.style.left = `${Math.max(4, x)}px`;
+    tip.style.top = `${Math.max(4, y)}px`;
   },
 
   describeRoom(room) {
@@ -37,8 +58,21 @@ const UI = {
     if (type.role === "resident") parts.push(`noise here: ${Stress.noiseAt(room)}`);
     else if (type.noise > 0) parts.push(`makes noise ${type.noise}`);
     else parts.push("quiet");
-    if (!Routing.isReachable(room)) parts.push("can't be reached from a lobby");
     return parts.join(" · ");
+  },
+
+  // Nobody moves into a room they can't walk to from a lobby. The usual
+  // reasons, most basic first.
+  unreachableAdvice(room) {
+    if (!World.rooms.some((r) => r.type === "lobby")) {
+      return "Can't be reached: there's no Lobby yet. Build one on the ground floor so people can enter the tower.";
+    }
+    const onLobbyFloor = World.rooms.some((r) => r.type === "lobby" && r.floor === room.floor);
+    const transitHere = World.transit.some((t) => room.floor >= t.floorBottom && room.floor <= t.floorTop);
+    if (!onLobbyFloor && !transitHere) {
+      return "Can't be reached from a Lobby: add Stairs or an Elevator that connects this floor to the lobby floor.";
+    }
+    return "Can't be reached from a Lobby: check for gaps in the Floor along the way, and that the Stairs or Elevator reach the lobby floor.";
   },
 
   // A message across the top of the screen (a new star, say) that fades

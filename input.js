@@ -16,6 +16,8 @@ const Tool = {
 const Pointer = {
   tile: null,
   floor: null,
+  screenX: 0, // where the mouse is on screen, for placing the tooltip
+  screenY: 0,
   dragStartTile: null,
   dragStartFloor: null,
   dragging: false,
@@ -50,6 +52,15 @@ function attachBuildControls(canvas) {
     const { tile, floor } = screenToWorld(canvas, e.clientX, e.clientY);
     Pointer.tile = tile;
     Pointer.floor = floor;
+    Pointer.screenX = e.clientX;
+    Pointer.screenY = e.clientY;
+  });
+
+  // Off the canvas (over the toolbar, or out of the window) nothing is
+  // hovered, so the tooltip goes away.
+  canvas.addEventListener("mouseleave", () => {
+    Pointer.tile = null;
+    Pointer.floor = null;
   });
 
   canvas.addEventListener("mousedown", (e) => {
