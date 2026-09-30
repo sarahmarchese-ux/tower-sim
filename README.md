@@ -45,7 +45,8 @@ it, keep it calm, and reach 2★.
 
 Everyone has a stress level, drawn black (calm), pink or red. Long trips
 (stairs and queueing count double, over 30 minutes) and noise next door
-(Woodwork 3, Pottery 2, Sewing 1; residents only) raise it; resting
+(Woodwork 3, Pottery 2, Sewing 1, only while makers are at work;
+residents only) raise it; resting
 lowers it. At the Sunday-night review, a room averaging red moves out (a
 condo's owners get their $30,000 back). Hover a room to see its stress and
 noise. The tower reaches **2★ at 100 people**, and stars are never lost.
