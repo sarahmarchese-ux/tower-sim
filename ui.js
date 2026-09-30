@@ -4,7 +4,7 @@
 // reason to reinvent them in canvas drawing code.
 
 const UI = {
-  defaultHint: "Left-click, or drag, to build. Right-click/drag or WASD/arrows to scroll.",
+  defaultHint: "Left-click, or drag, to build. Right-click/drag or WASD/arrows to scroll. Hover a room for details.",
 
   // An error (e.g. "Build the floor here first") shows for a few seconds,
   // then the hint goes back to the default or to the room being hovered.
@@ -16,13 +16,34 @@ const UI = {
     if (message) this._hintTimer = setTimeout(() => this.showHint(null), 4000);
   },
 
-  // Hovering a room with tenants shows who's there, how stressed they are,
-  // and (for condos) how much noise reaches it; unless an error is showing.
+  // Hovering a room with tenants shows a tooltip beside the mouse: who's
+  // there, how stressed they are, and (for condos) how much noise reaches
+  // it. A room nobody can reach (the red "!") also says how to fix that.
   updateInspect() {
-    const el = document.getElementById("hint");
-    if (el.classList.contains("hint-error")) return;
+    const tip = document.getElementById("tooltip");
     const room = Pointer.floor !== null && World.roomAt(Pointer.floor, Pointer.tile);
-    el.textContent = room && ROOM_TYPES[room.type].tenants > 0 ? this.describeRoom(room) : this.defaultHint;
+    if (!room || ROOM_TYPES[room.type].tenants === 0 || Pointer.dragging) {
+      tip.classList.remove("shown");
+      return;
+    }
+    tip.textContent = this.describeRoom(room);
+    if (!Routing.isReachable(room)) {
+      const warn = document.createElement("div");
+      warn.className = "warn";
+      warn.textContent = "! " + this.unreachableAdvice(room);
+      tip.appendChild(warn);
+    }
+    tip.classList.add("shown");
+
+    // Just below and right of the cursor, flipped to the other side near
+    // the window's right or bottom edge so it never goes off-screen.
+    const gap = 14;
+    let x = Pointer.screenX + gap;
+    let y = Pointer.screenY + gap;
+    if (x + tip.offsetWidth > window.innerWidth - 4) x = Pointer.screenX - gap - tip.offsetWidth;
+    if (y + tip.offsetHeight > window.innerHeight - 4) y = Pointer.screenY - gap - tip.offsetHeight;
+    tip.style.left = `${Math.max(4, x)}px`;
+    tip.style.top = `${Math.max(4, y)}px`;
   },
 
   describeRoom(room) {
@@ -37,8 +58,40 @@ const UI = {
     if (type.role === "resident") parts.push(`noise here: ${Stress.noiseAt(room)}`);
     else if (type.noise > 0) parts.push(`makes noise ${type.noise}`);
     else parts.push("quiet");
-    if (!Routing.isReachable(room)) parts.push("can't be reached from a lobby");
     return parts.join(" · ");
+  },
+
+  // Nobody moves into a room they can't walk to from a lobby. The usual
+  // reasons, most basic first.
+  unreachableAdvice(room) {
+    if (!World.rooms.some((r) => r.type === "lobby")) {
+      return "Can't be reached: there's no Lobby yet. Build one on the ground floor so people can enter the tower.";
+    }
+    // Which floors can be climbed to from a lobby floor, ignoring walking?
+    // Stairs join just their two floors; an elevator joins every floor it
+    // spans.
+    const reached = new Set(World.rooms.filter((r) => r.type === "lobby").map((r) => r.floor));
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const t of World.transit) {
+        const floors = t.kind === "stairs" ? [t.floorBottom, t.floorTop] : range(t.floorBottom, t.floorTop);
+        if (floors.some((f) => reached.has(f)) && floors.some((f) => !reached.has(f))) {
+          floors.forEach((f) => reached.add(f));
+          grew = true;
+        }
+      }
+    }
+    if (!reached.has(room.floor)) {
+      // Name the first missing step on the way from the lobby to this room.
+      const below = [...reached].filter((f) => f < room.floor);
+      const lower = below.length ? Math.max(...below) : Math.min(...reached) - 1;
+      const upper = lower + 1;
+      return `Can't be reached: nothing connects ${floorLabel(lower)} and ${floorLabel(upper)}. ` +
+        `Stairs join the floor you click on to the one above, so click Stairs on ${floorLabel(lower)}, ` +
+        "or drag an Elevator across both.";
+    }
+    return "Can't be reached from a Lobby: check for gaps in the Floor along the way, between the lobby, stairs or elevators, and this room.";
   },
 
   // A message across the top of the screen (a new star, say) that fades
@@ -177,3 +230,15 @@ const UI = {
     document.querySelector('#toolbar button[data-tool="floor"]').classList.add("active");
   },
 };
+
+function range(from, to) {
+  const out = [];
+  for (let i = from; i <= to; i++) out.push(i);
+  return out;
+}
+
+// "1F" for the ground floor, "B1" for the first basement, as drawn beside
+// the tower.
+function floorLabel(floor) {
+  return floor >= 0 ? `${floor + 1}F` : `B${-floor}`;
+}

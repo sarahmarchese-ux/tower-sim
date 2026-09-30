@@ -46,24 +46,7 @@ function frame(now) {
   SaveGame.autosave();
   draw();
 
-  // Pick up where the last session left off. A restored game starts paused,
-// so nothing happens before you're ready.
-if (SaveGame.load()) {
-  UI.setSpeed(0);
-  UI.announce("Welcome back! Your tower is as you left it. Press Play (or space) to carry on.");
-} else {
-  SaveGame.lastSavedDay = Clock.day;
-}
-
-// Closing or switching away from the tab saves too, so you never lose more
-// than you'd expect. (Not after "New game" or bankruptcy: SaveGame.save
-// checks for both.)
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") SaveGame.save();
-});
-window.addEventListener("pagehide", () => SaveGame.save());
-
-requestAnimationFrame(frame);
+  requestAnimationFrame(frame);
 }
 
 // Pick up where the last session left off. A restored game starts paused,
