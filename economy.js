@@ -26,7 +26,10 @@
 
 const MOVE_IN_DELAY_MINUTES = [60, 240]; // after placing: 1–4 game hours
 const MOVE_IN_RETRY_MINUTES = [30, 90]; // unreachable: look again this soon
-const MOVE_IN_HOURS = [8, 20]; // movers only turn up during the day
+// When movers turn up. Makers come to see a studio during working hours
+// (weekdays, 8am–4pm); condo buyers can come any day until the evening.
+const MOVE_IN_HOURS = { maker: [8, 16], resident: [8, 20] };
+const MOVE_IN_WEEKDAYS_ONLY = { maker: true, resident: false };
 const BANKRUPTCY_GRACE_DAYS = 7;
 
 const Economy = {
@@ -63,13 +66,13 @@ const Economy = {
     }
   },
 
-  // The viewing is due. Movers only come in daytime, and only if they can
-  // actually get to the room; otherwise the viewing is put off.
+  // The viewing is due. Movers only come in their hours (see
+  // MOVE_IN_HOURS), and only if they can actually get to the room;
+  // otherwise the viewing is put off.
   tryMoveIn(room) {
-    const [openHour, closeHour] = MOVE_IN_HOURS;
-    if (Clock.hour < openHour || Clock.hour >= closeHour) {
-      const day = Clock.day + (Clock.hour >= closeHour ? 1 : 0);
-      room.moveInAt = day * MINUTES_PER_DAY + openHour * 60 + randomBetween([0, 120]);
+    const opensAt = this.nextMoveInOpening(ROOM_TYPES[room.type].role);
+    if (opensAt > Clock.totalMinutes) {
+      room.moveInAt = opensAt + randomBetween([0, 120]);
       return;
     }
     if (!Routing.isReachable(room)) {
@@ -78,6 +81,19 @@ const Economy = {
     }
     World.setRoomStatus(room, "movingIn");
     People.moveIn(room);
+  },
+
+  // The game minute movers for this role can next turn up: now, if it's
+  // within their hours, else the next day their hours open.
+  nextMoveInOpening(role) {
+    const [openHour, closeHour] = MOVE_IN_HOURS[role];
+    const weekdaysOnly = MOVE_IN_WEEKDAYS_ONLY[role];
+    for (let day = Clock.day; ; day++) {
+      if (weekdaysOnly && day % 7 >= 5) continue; // Sat and Sun
+      const opens = day * MINUTES_PER_DAY + openHour * 60;
+      const closes = day * MINUTES_PER_DAY + closeHour * 60;
+      if (Clock.totalMinutes < closes) return Math.max(opens, Clock.totalMinutes);
+    }
   },
 
   // Called by people.js when a mover reaches their new room.
