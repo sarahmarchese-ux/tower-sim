@@ -245,32 +245,24 @@ function areaScreenBox(floorBottom, floorTop, tileStart, tileEnd) {
 function drawTransit(w, h) {
   for (const t of World.transit) {
     const width = TRANSIT_TYPES[t.kind].width;
-    const box = areaScreenBox(t.floorBottom, t.floorTop, t.tileStart, t.tileStart + width - 1);
+    // Stairs are one floor tall: the flight climbs within the floor it
+    // starts on and lets people off on the floor above.
+    const top = t.kind === "stairs" ? t.floorBottom : t.floorTop;
+    const box = areaScreenBox(t.floorBottom, top, t.tileStart, t.tileStart + width - 1);
     if (box.right < 0 || box.left > w || box.bottom < 0 || box.top > h) continue;
-    if (t.kind === "stairs") drawStairsBlock(box);
+    if (t.kind === "stairs") drawStairs(box);
     else drawElevator(t, box);
-  }
-  // Steps go on top of every stairs block, in a second pass, so where
-  // stacked stairs share a floor neither hides the other's flight.
-  for (const t of World.transit) {
-    if (t.kind !== "stairs") continue;
-    const box = areaScreenBox(t.floorBottom, t.floorTop, t.tileStart, t.tileStart + TRANSIT_TYPES.stairs.width - 1);
-    if (box.right < 0 || box.left > w || box.bottom < 0 || box.top > h) continue;
-    drawStairsSteps(box);
   }
 }
 
-// A light block...
-function drawStairsBlock(box) {
+// A light block with a zigzag of steps running from bottom-left to top-right.
+function drawStairs(box) {
   ctx.fillStyle = "rgba(235, 235, 235, 0.95)";
   ctx.fillRect(box.left, box.top, box.width, box.height);
   ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
   ctx.lineWidth = 1;
   ctx.strokeRect(box.left, box.top, box.width, box.height);
-}
 
-// ...with a zigzag of steps running from bottom-left to top-right.
-function drawStairsSteps(box) {
   const steps = 6;
   ctx.strokeStyle = "#7a7a7a";
   ctx.lineWidth = 2;
@@ -375,6 +367,7 @@ function roomScreenBox(room, type) {
 // position, colored green if it's a legal move and red if it isn't — so you
 // find out a placement is invalid before you click, not after.
 function drawHoverPreview(w, h) {
+  Pointer.buildCheck = null; // set below by the tools that can be refused
   if (Pointer.tile === null || Pointer.floor === null) return;
 
   if (Tool.current === "floor") {
@@ -396,8 +389,10 @@ function drawHoverPreview(w, h) {
 
   if (Tool.current === "stairs") {
     const width = TRANSIT_TYPES.stairs.width;
-    const check = World.canPlaceTransit("stairs", Pointer.tile, Pointer.floor, Pointer.floor + 1);
-    drawAreaPreview(Pointer.floor, Pointer.floor + 1, Pointer.tile, Pointer.tile + width - 1, check.ok);
+    const tile = stairsTileAt(Pointer.floor, Pointer.tile);
+    const check = World.canPlaceTransit("stairs", tile, Pointer.floor, Pointer.floor + 1);
+    Pointer.buildCheck = check;
+    drawAreaPreview(Pointer.floor, Pointer.floor, tile, tile + width - 1, check.ok);
     return;
   }
 
@@ -405,6 +400,7 @@ function drawHoverPreview(w, h) {
     const width = TRANSIT_TYPES.elevator.width;
     const span = elevatorDragSpan();
     const check = World.canPlaceTransit("elevator", span.tile, span.bottom, span.top);
+    Pointer.buildCheck = check;
     drawAreaPreview(span.bottom, span.top, span.tile, span.tile + width - 1, check.ok);
     return;
   }
@@ -412,6 +408,7 @@ function drawHoverPreview(w, h) {
   const type = ROOM_TYPES[Tool.current];
   if (!type) return;
   const check = World.canPlaceRoom(Tool.current, Pointer.floor, Pointer.tile);
+  Pointer.buildCheck = check;
   const tileEnd = Pointer.tile + type.width - 1;
   drawAreaPreview(Pointer.floor, Pointer.floor, Pointer.tile, tileEnd, check.ok);
 }
