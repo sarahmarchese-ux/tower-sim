@@ -64,6 +64,17 @@ const World = {
     });
   },
 
+  // Stairs whose top landing is this tile, on the floor above the flight.
+  stairsLandingAt(floor, tile) {
+    return this.transit.find(
+      (t) =>
+        t.kind === "stairs" &&
+        t.floorTop === floor &&
+        tile >= t.tileStart &&
+        tile < t.tileStart + TRANSIT_TYPES.stairs.width,
+    );
+  },
+
   // The stairs or elevator shaft (if any) taking up this tile on this floor.
   transitAt(floor, tile) {
     return this.transitsAt(floor, tile)[0];
@@ -273,6 +284,11 @@ const World = {
       return { ok: true };
     }
     if (this.isFloorBuilt(floor, tile)) {
+      // Stairs take up only their bottom floor, but people step off onto
+      // the floor above, so that landing has to stay.
+      if (this.stairsLandingAt(floor, tile)) {
+        return { ok: false, reason: "Stairs land here: demolish the stairs first" };
+      }
       this.floors.get(floor).delete(tile);
       this.money += FLOOR_COST_PER_TILE / 2;
       this.emit("floorsChanged", { floor });
