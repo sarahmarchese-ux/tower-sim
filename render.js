@@ -3,7 +3,8 @@
 // live preview of what the selected tool would do next (milestone 2), and
 // the stairs, elevators and people moving through it (milestone 4), and
 // which rooms are still empty plus the money floating up from rent, sales
-// and upkeep (milestone 5), and how stressed everyone is (milestone 6).
+// and upkeep (milestone 5), how stressed everyone is (milestone 6), and
+// which shops are open and who's carrying a shopping bag (milestone 8).
 // This file only draws; World (world.js), Elevators and People decide what's
 // true, and input.js decides what the player is doing.
 
@@ -200,9 +201,15 @@ function drawRooms(w, h) {
     ctx.textBaseline = "middle";
     ctx.fillText(type.name, box.left + box.width / 2, box.top + 9, box.width - 6);
     if (empty) {
-      const sign = room.status === "movingIn" ? "Moving in" : type.salePrice ? "For sale" : "For rent";
+      const sign = room.status === "movingIn" ? "Moving in" : vacantLabel(type);
       ctx.font = "italic 10px sans-serif";
       ctx.fillText(sign, box.left + box.width / 2, box.top + 21, box.width - 6);
+    } else if (room.type === "shop") {
+      // In the corner, clear of the shopkeeper standing in the middle.
+      ctx.font = "italic 10px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(Shops.isOpen(room) ? "Open" : "Closed", box.left + 5, box.top + 22, box.width - 10);
+      ctx.textAlign = "center";
     }
 
     // A pink or red dot on rooms whose people are getting stressed, so
@@ -325,6 +332,12 @@ function drawPeople(w, h) {
     ctx.beginPath();
     ctx.arc(x, feet - 12, 2.5, 0, Math.PI * 2);
     ctx.fill();
+
+    // A shopper who bought something carries a bag out.
+    if (person.role === "shopper" && person.bought > 0) {
+      ctx.fillStyle = "#e07a2f";
+      ctx.fillRect(x + 2, feet - 6, 4, 4);
+    }
   }
 }
 
@@ -352,6 +365,14 @@ function drawMoneyPopups(w, h) {
     ctx.fillText(p.text, x, y);
   }
   ctx.globalAlpha = 1;
+}
+
+// What an empty room's sign says: condos are sold, studios rented, and a
+// shop is waiting for someone to run it.
+function vacantLabel(type) {
+  if (type.salePrice) return "For sale";
+  if (type.role === "shopkeeper") return "Vacant";
+  return "For rent";
 }
 
 function roomScreenBox(room, type) {

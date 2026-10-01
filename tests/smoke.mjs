@@ -89,6 +89,7 @@ const state = () =>
     money: World.money,
     minutes: Clock.totalMinutes,
     people: People.population(),
+    shoppers: People.list.filter((p) => p.role === "shopper").length,
     stars: Ratings.stars,
     floors: [...World.floors].map(([f, t]) => [f, [...t].sort((a, b) => a - b)]).sort((a, b) => a[0] - b[0]),
     rooms: World.rooms.map((r) => `${r.type}@${r.floor}:${r.tileStart}:${r.status}`).sort(),
@@ -163,18 +164,35 @@ try {
       await pickTool(tool);
       await clickAt(tile, floor);
     }
+
+    // Shops unlock at 2★. Reaching 100 people would take too long here, so
+    // check the lock, then hand the tower its second star directly.
+    await pickTool("shop");
+    await clickAt(22, 0);
+    check(!(await page.evaluate(() => World.rooms.some((r) => r.type === "shop"))), "a shop was built before 2★");
+    await page.evaluate(() => {
+      Ratings.stars = 2;
+    });
+    await clickAt(22, 0);
     await page.keyboard.press("Escape");
 
     const s = await state();
-    check(s.rooms.length === 6, `expected 6 rooms, got ${s.rooms.length}: ${s.rooms}`);
+    check(s.rooms.length === 7, `expected 7 rooms, got ${s.rooms.length}: ${s.rooms}`);
     check(s.transit.length === 2, `expected stairs and an elevator, got ${s.transit}`);
     check(s.money < 200000, "building should have cost money");
   });
 
   await step(`run ${SIM_DAYS} game days`, async () => {
     const before = await state();
-    await simulate(SIM_DAYS * 24 * 60);
+    // A day at a time, so each step crosses one midnight and banks one
+    // day's shop takings.
+    let sales = 0;
+    for (let day = 0; day < SIM_DAYS; day++) {
+      await simulate(24 * 60);
+      sales += await page.evaluate(() => Economy.lastSales || 0);
+    }
     const after = await state();
+    check(sales > 0, "the shop never sold anything");
     check(after.minutes - before.minutes >= SIM_DAYS * 24 * 60 - 1, "the clock did not advance");
     check(after.people > 0, "nobody moved in");
     check(after.rooms.some((r) => r.endsWith(":occupied")), "no room became occupied");

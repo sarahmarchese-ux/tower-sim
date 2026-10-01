@@ -14,6 +14,11 @@
 //   - Makers come to their studio on weekdays and go home in the evening.
 //   - Residents leave their condo on weekday mornings and come back in the
 //     evening; on weekends about half of them go out around midday.
+//   - Shopkeepers open their shop every day, weekends too, from about 9:30
+//     in the morning to about 8:30 at night.
+//   - Shoppers (milestone 8) are visitors, not tenants. shops.js sends them
+//     in from the lobby while a shop is open; each one walks to the shop,
+//     browses, buys (or doesn't; see shops.js) and leaves for good.
 //
 // Instead of a timetable of "at 9:00 do X", each person just asks, whenever
 // they're standing still: "given the time right now, where should I be — in
@@ -72,19 +77,56 @@ const People = {
         tripWaitMinutes: 0,
         tripStairsMinutes: 0,
         lastTripWaitMinutes: 0,
-        // Minutes after midnight.
-        arriveAt: 8 * 60 + Math.random() * 90, // makers: 8:00–9:30
-        leaveAt: type.role === "maker"
-          ? 16.5 * 60 + Math.random() * 90 // makers: 16:30–18:00
-          : 7.5 * 60 + Math.random() * 90, // residents: 7:30–9:00
-        returnAt: 17.5 * 60 + Math.random() * 90, // residents: 17:30–19:00
-        weekendOuting: Math.random() < 0.5,
-        outingStart: 11 * 60 + Math.random() * 120,
-        outingEnd: 15 * 60 + Math.random() * 180,
+        ...this.dailyTimes(type.role),
       };
       this.list.push(person);
       showUpAt += randomBetween(MOVER_GAP_MINUTES);
     }
+  },
+
+  // Each tenant's own times of day, in minutes after midnight.
+  dailyTimes(role) {
+    const between = (fromHour, toHour) => randomBetween([fromHour * 60, toHour * 60]);
+    if (role === "maker") return { arriveAt: between(8, 9.5), leaveAt: between(16.5, 18) };
+    if (role === "shopkeeper") return { arriveAt: between(9, 10), leaveAt: between(20, 21) };
+    return {
+      leaveAt: between(7.5, 9),
+      returnAt: between(17.5, 19),
+      weekendOuting: Math.random() < 0.5,
+      outingStart: between(11, 13),
+      outingEnd: between(15, 18),
+    };
+  },
+
+  // A shopper turns up at a lobby and heads for this shop. `browseX` is
+  // where in the shop they'll stand, and `budget` what they'd spend after
+  // an easy trip (shops.js).
+  addShopper(room, budget) {
+    const width = ROOM_TYPES[room.type].width;
+    this.list.push({
+      id: this.nextId++,
+      role: "shopper",
+      room,
+      slot: 0,
+      state: "offsite",
+      movingIn: false,
+      movingOut: false,
+      stress: 0,
+      floor: room.floor,
+      x: room.tileStart,
+      browseX: room.tileStart + 0.5 + Math.random() * (width - 1),
+      budget,
+      bought: null, // what they spent once they've been to the till (0 = nothing)
+      route: null,
+      legIndex: 0,
+      legProgress: 0,
+      target: null,
+      idleUntil: Clock.totalMinutes,
+      tripStartedAt: 0,
+      tripWaitMinutes: 0,
+      tripStairsMinutes: 0,
+      lastTripWaitMinutes: 0,
+    });
   },
 
   removeForRoom(room) {
@@ -114,15 +156,26 @@ const People = {
     return room.tileStart + ((slot + 1) * type.width) / (type.tenants + 1);
   },
 
+  // Where this person stands in their room: a tenant's own slot, or the
+  // spot a shopper picked to browse.
+  homeX(person) {
+    return person.role === "shopper" ? person.browseX : this.slotX(person.room, person.slot);
+  },
+
   // The one question: where should this person be at game time `t`?
   desiredLocation(person, t) {
     if (person.movingOut) return "offsite";
     if (person.movingIn) return "room";
+    // A shopper is in the shop until they've been to the till, then gone.
+    if (person.role === "shopper") return person.bought === null ? "room" : "offsite";
     const day = Math.floor(t / MINUTES_PER_DAY);
     const minute = t - day * MINUTES_PER_DAY;
     const weekend = day % 7 >= 5;
     if (person.role === "maker") {
       return !weekend && minute >= person.arriveAt && minute < person.leaveAt ? "room" : "offsite";
+    }
+    if (person.role === "shopkeeper") {
+      return minute >= person.arriveAt && minute < person.leaveAt ? "room" : "offsite";
     }
     if (!weekend) {
       return minute >= person.leaveAt && minute < person.returnAt ? "offsite" : "room";
@@ -135,11 +188,25 @@ const People = {
     for (const person of this.list) {
       if (person.state === "inRoom" || person.state === "offsite") {
         if (now < person.idleUntil) continue;
+        // Done browsing: pay (or not) on the way out.
+        if (person.role === "shopper" && person.state === "inRoom" && person.bought === null && !person.movingOut) {
+          Shops.checkout(person);
+        }
         const here = person.state === "inRoom" ? "room" : "offsite";
         const want = this.desiredLocation(person, now);
         if (want !== here) this.startTrip(person, want);
       } else {
-        this.advanceTrip(person, minutes);
+        // A shopper whose trip in has dragged on past the point of buying
+        // anything turns back (but not mid-ride or mid-climb).
+        const turnBack = person.role === "shopper" && person.target === "room" && !person.movingOut &&
+          (person.state === "walking" || person.state === "waitingForElevator") && Shops.shouldGiveUp(person);
+        if (turnBack) {
+          Shops.giveUp(person);
+          person.target = "offsite";
+          this.reroute(person);
+        } else {
+          this.advanceTrip(person, minutes);
+        }
       }
     }
   },
@@ -147,7 +214,7 @@ const People = {
   // Plan a route and set off. Coming in, you appear at a lobby; going out,
   // you head for one and vanish when you reach it.
   startTrip(person, target, from) {
-    const home = { floor: person.room.floor, x: this.slotX(person.room, person.slot) };
+    const home = { floor: person.room.floor, x: this.homeX(person) };
     const starts = from ? [from] : target === "room" ? Routing.lobbyPoints() : [home];
     const goals = target === "room" ? [home] : Routing.lobbyPoints();
     const route = starts.length && goals.length ? Routing.plan(starts, goals) : null;
@@ -156,8 +223,9 @@ const People = {
       // No way through (no lobby, a missing elevator, a gap in the floor...).
       // Anyone already inside the building gives up and leaves; everyone
       // tries again in a little while in case the player fixes it. Being
-      // stuck is stressful. Someone moving out finds their own way out.
-      if (person.movingOut) {
+      // stuck is stressful. Someone moving out finds their own way out, and
+      // a shopper who can't get there (or back) gives up and goes home.
+      if (person.movingOut || person.role === "shopper") {
         this.remove(person);
         return;
       }
@@ -243,19 +311,21 @@ const People = {
     person.state = person.target === "room" ? "inRoom" : "offsite";
     person.route = null;
     person.lastTripWaitMinutes = person.tripWaitMinutes;
+    let felt = 0;
     if (!person.movingIn && !person.movingOut) {
       const tripMinutes = Clock.totalMinutes - person.tripStartedAt;
-      Stress.onTripFinished(person, tripMinutes, person.tripStairsMinutes, person.tripWaitMinutes);
+      felt = Stress.onTripFinished(person, tripMinutes, person.tripStairsMinutes, person.tripWaitMinutes);
     }
     person.tripWaitMinutes = 0;
     person.tripStairsMinutes = 0;
-    if (person.movingOut && person.target === "offsite") {
+    if ((person.movingOut || person.role === "shopper") && person.target === "offsite") {
       this.remove(person);
       return;
     }
     if (person.target === "room") {
       person.floor = person.room.floor;
-      person.x = this.slotX(person.room, person.slot);
+      person.x = this.homeX(person);
+      if (person.role === "shopper") Shops.onShopperArrived(person, felt);
       if (person.movingIn) {
         person.movingIn = false;
         person.idleUntil = Clock.totalMinutes + randomBetween(UNPACK_MINUTES);
@@ -335,9 +405,9 @@ const People = {
   },
 
   // Everyone who lives or works here: not movers still on their way in,
-  // nor those on their way out.
+  // nor those on their way out, nor shoppers just visiting.
   population() {
-    return this.list.filter((p) => !p.movingIn && !p.movingOut).length;
+    return this.list.filter((p) => !p.movingIn && !p.movingOut && p.role !== "shopper").length;
   },
 };
 

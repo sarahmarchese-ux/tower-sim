@@ -120,6 +120,11 @@
       background: #3ea45c;
       border-color: #3ea45c;
     }
+    /* A room type the tower hasn't earned yet (see rooms.js unlocksAt). It
+       can still be picked, so hovering says what it takes to unlock. */
+    #toolbar button.locked {
+      opacity: 0.5;
+    }
     #toolbar button small {
       color: #ccc;
       font-size: 10px;
@@ -242,6 +247,7 @@
     <button data-tool="woodwork">Woodwork<small>$10,000 · rent $9.1k/wk</small></button>
     <button data-tool="jewellery">Jewellery<small>$15,000 · rent $17.5k/wk</small></button>
     <button data-tool="condo">Condo<small>$20,000 · sells $30k</small></button>
+    <button data-tool="shop" class="locked" title="Shoppers visit from the lobby and spend; takings are banked every midnight. A long trip in puts them off buying.">Shop<small>$15,000 · daily sales · 2★</small></button>
     <button data-tool="stairs">Stairs<small>$5,000</small></button>
     <button data-tool="elevator" title="Drag up or down to build a shaft. Drag from the top or bottom of a shaft to extend it ($1k per floor).">Elevator<small>drag · $20k + $1k/floor · $1k/day</small></button>
     <button data-tool="demolish">Demolish<small>refund 50%</small></button>
@@ -257,6 +263,7 @@
   <script src="people.js"></script>
   <script src="economy.js"></script>
   <script src="stress.js"></script>
+  <script src="shops.js"></script>
   <script src="ratings.js"></script>
   <script src="save.js"></script>
   <script src="input.js"></script>

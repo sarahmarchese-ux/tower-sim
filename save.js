@@ -84,6 +84,7 @@ const SaveGame = {
       economy: {
         lastTallyDay: Economy.lastTallyDay,
         lastPayday: Economy.lastPayday,
+        lastSales: Economy.lastSales,
         debtSince: Economy.debtSince,
       },
       ratings: { stars: Ratings.stars },
@@ -172,6 +173,7 @@ const SaveGame = {
       const economy = {
         lastTallyDay: number(data.economy.lastTallyDay),
         lastPayday: data.economy.lastPayday,
+        lastSales: data.economy.lastSales == null ? null : number(data.economy.lastSales), // saves from before shops have none
         debtSince: data.economy.debtSince === null ? null : number(data.economy.debtSince),
       };
       const stars = number(data.ratings.stars);
@@ -192,6 +194,7 @@ const SaveGame = {
       Elevators.cars = cars;
       Economy.lastTallyDay = economy.lastTallyDay;
       Economy.lastPayday = economy.lastPayday;
+      Economy.lastSales = economy.lastSales;
       Economy.debtSince = economy.debtSince;
       Economy.bankrupt = false;
       Economy.popups = [];
@@ -199,6 +202,7 @@ const SaveGame = {
       Camera.x = camera.x;
       Camera.y = camera.y;
       Stress.refreshWorking(); // the game starts paused, so the noise readout needs this now
+      Shops.refreshOpen(); // ...and the shops' open/closed signs
       this.lastSavedDay = Clock.day;
       return true;
     } catch (e) {
