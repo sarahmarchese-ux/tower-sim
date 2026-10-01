@@ -1,0 +1,11 @@
+{
+  "name": "tower-sim",
+  "private": true,
+  "description": "Tower Sim. The game itself has no build step; this file is only for the smoke test.",
+  "scripts": {
+    "smoke": "node tests/smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}
