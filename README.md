@@ -18,6 +18,23 @@ python3 -m http.server
 
 Then visit `http://localhost:8000`.
 
+## Smoke test
+
+`tests/smoke.mjs` opens the game in headless Chromium, builds a small tower
+with real mouse clicks, runs 8 game days, hovers every room, saves and
+reloads, demolishes things and keeps running. It fails on any page error,
+`console.error`, frozen game loop, or save that doesn't restore the same
+state. GitHub Actions runs it on every pull request
+(`.github/workflows/smoke.yml`). To run it yourself:
+
+```
+npm install
+npx playwright install chromium   # first time only
+npm run smoke
+```
+
+(The game itself still needs no install; `package.json` is only for this test.)
+
 ## Status
 
 **Milestone 7: save/load & polish.** Close the tab and pick up where you
