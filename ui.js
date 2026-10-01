@@ -70,6 +70,14 @@ const UI = {
       const average = Stress.roomAverage(room);
       if (average !== null) parts.push(`stress ${Math.round(average)} (${Stress.band(average)})`);
     }
+    if (room.type === "shop" && room.status === "occupied") {
+      parts.splice(1, 0, Shops.isOpen(room) ? "open" : "closed"); // right after its name
+      const shoppers = Shops.shoppersFor(room);
+      if (shoppers > 0) parts.push(`${shoppers} shopper${shoppers === 1 ? "" : "s"}`);
+      let sales = `sales today ${World.formatMoney(room.till || 0)}`;
+      if (room.salesYesterday !== undefined) sales += ` (yesterday ${World.formatMoney(room.salesYesterday)})`;
+      parts.push(sales);
+    }
     if (type.role === "resident") {
       // Studios are only noisy while their makers work, so show both.
       const now = Stress.noiseAt(room);
@@ -139,9 +147,14 @@ const UI = {
     money.textContent = World.formatMoney(World.money);
     money.classList.toggle("in-debt", World.money < 0);
 
-    // Rent building up towards Sunday night's payday.
+    // Shop takings banked at midnight, and rent building up towards Sunday
+    // night's payday.
+    const sales = Shops.takingsToday();
     const due = Economy.rentDue();
-    document.getElementById("ledger").textContent = due > 0 ? `(rent due Sun night +${World.formatMoney(due)})` : "";
+    const ledger = [];
+    if (sales > 0) ledger.push(`sales today +${World.formatMoney(sales)}`);
+    if (due > 0) ledger.push(`rent due Sun night +${World.formatMoney(due)}`);
+    document.getElementById("ledger").textContent = ledger.length ? `(${ledger.join(" · ")})` : "";
 
     // In the red: count down to bankruptcy.
     const left = Economy.minutesUntilBankrupt();
@@ -166,6 +179,11 @@ const UI = {
 
   updatePopulation() {
     document.getElementById("stars").textContent = "★".repeat(Ratings.stars);
+    // Room types the tower hasn't earned yet are greyed out on the toolbar.
+    document.querySelectorAll("#toolbar button[data-tool]").forEach((button) => {
+      const type = ROOM_TYPES[button.dataset.tool];
+      button.classList.toggle("locked", !!type && !!type.unlocksAt && Ratings.stars < type.unlocksAt);
+    });
     const next = Ratings.nextTarget();
     const population = People.population();
     document.getElementById("population").textContent = next

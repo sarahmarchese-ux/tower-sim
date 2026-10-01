@@ -110,6 +110,11 @@ const World = {
     const type = ROOM_TYPES[typeKey];
     if (!type) return { ok: false, reason: "Unknown room type" };
 
+    // New room types are the reward for each star (ratings.js).
+    if (type.unlocksAt && Ratings.stars < type.unlocksAt) {
+      return { ok: false, reason: `${type.name}s unlock at ${type.unlocksAt}★: grow the tower to ${starTarget(type.unlocksAt).population} people first` };
+    }
+
     if (type.groundOnly && floor !== 0) {
       return { ok: false, reason: "The lobby has to be on the ground floor" };
     }

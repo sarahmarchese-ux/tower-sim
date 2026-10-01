@@ -14,7 +14,8 @@
 //
 // Every midnight is a tally. Each occupied studio adds a day's worth of its
 // weekly rent to what it owes (so a studio that moved in on Thursday pays
-// for Thursday to Sunday), and each elevator's upkeep is paid. Once a week,
+// for Thursday to Sunday), each shop's takings for the day are banked (see
+// shops.js), and each elevator's upkeep is paid. Once a week,
 // at midnight at the end of Sunday, is payday: everything owed comes in at
 // once. Upkeep keeps coming every night whether or not anyone pays you, so
 // money can dip below zero between paydays. Stay in the red for a full game
@@ -27,14 +28,16 @@
 const MOVE_IN_DELAY_MINUTES = [60, 240]; // after placing: 1–4 game hours
 const MOVE_IN_RETRY_MINUTES = [30, 90]; // unreachable: look again this soon
 // When movers turn up. Makers come to see a studio during working hours
-// (weekdays, 8am–4pm); condo buyers can come any day until the evening.
-const MOVE_IN_HOURS = { maker: [8, 16], resident: [8, 20] };
-const MOVE_IN_WEEKDAYS_ONLY = { maker: true, resident: false };
+// (weekdays, 8am–4pm); condo buyers can come any day until the evening,
+// and so can shopkeepers (shops open at weekends too) until 6pm.
+const MOVE_IN_HOURS = { maker: [8, 16], resident: [8, 20], shopkeeper: [8, 18] };
+const MOVE_IN_WEEKDAYS_ONLY = { maker: true, resident: false, shopkeeper: false };
 const BANKRUPTCY_GRACE_DAYS = 7;
 
 const Economy = {
   lastTallyDay: Clock.day,
   lastPayday: null, // total rent paid at the most recent payday
+  lastSales: null, // total shop takings banked at the most recent midnight
   debtSince: null, // game minute money went negative, or null
   bankrupt: false,
   popups: [], // floating "Rent +$11,200" labels; see render.js
@@ -115,6 +118,19 @@ const Economy = {
       const rentPerWeek = ROOM_TYPES[room.type].rentPerWeek;
       if (rentPerWeek && room.status === "occupied") room.rentOwed += rentPerWeek / 7;
     }
+
+    let sales = 0;
+    for (const room of World.rooms) {
+      if (room.type !== "shop") continue;
+      const takings = room.till || 0;
+      room.salesYesterday = takings;
+      room.till = 0;
+      if (takings <= 0) continue;
+      sales += takings;
+      this.popupOverRoom(room, `Sales +${World.formatMoney(takings)}`, "#7dffa0");
+    }
+    World.money += sales;
+    this.lastSales = sales;
 
     for (const t of World.transit) {
       const upkeepPerDay = TRANSIT_TYPES[t.kind].upkeepPerDay;

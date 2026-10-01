@@ -96,9 +96,12 @@ const Stress = {
     }
   },
 
+  // Returns how long the trip felt, which is what a shopper's mood (and
+  // so their spending) hangs on; see shops.js.
   onTripFinished(person, tripMinutes, stairsMinutes, waitMinutes) {
     const felt = tripMinutes + stairsMinutes + waitMinutes;
     this.add(person, Math.max(0, felt - COMFORTABLE_TRIP_MINUTES));
+    return felt;
   },
 
   onNoRoute(person) {
@@ -110,8 +113,9 @@ const Stress = {
   },
 
   // The average stress of a room's settled tenants (null if none yet).
+  // Shoppers are only passing through, so they don't count.
   roomAverage(room) {
-    const people = People.list.filter((p) => p.room === room && !p.movingIn && !p.movingOut);
+    const people = People.list.filter((p) => p.room === room && !p.movingIn && !p.movingOut && p.role !== "shopper");
     if (!people.length) return null;
     return people.reduce((sum, p) => sum + p.stress, 0) / people.length;
   },

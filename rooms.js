@@ -14,6 +14,11 @@
 // Sunday night, for the days their makers were in; a condo pays `salePrice`
 // once, when its residents move in. Jewellery earns the most per tile and
 // woodwork the least, so the roomy, loud studio is the cheap one.
+//
+// A shop (milestone 8, see shops.js) has one shopkeeper and earns from the
+// shoppers who visit it: each spends around `spendPerShopper`, and the
+// day's takings are banked at midnight. `unlocksAt` is the star rating a
+// room type needs before it can be built.
 
 const STARTING_MONEY = 200000;
 const FLOOR_COST_PER_TILE = 200;
@@ -25,6 +30,7 @@ const ROOM_TYPES = {
   woodwork: { name: "Woodwork Studio", width: 12, cost: 10000, color: "#8b5e34", tenants: 3, role: "maker", noise: 3, rentPerWeek: 9100 },
   jewellery: { name: "Jewellery Studio", width: 6, cost: 15000, color: "#f4d35e", tenants: 1, role: "maker", noise: 0, rentPerWeek: 17500 },
   condo: { name: "Condo", width: 16, cost: 20000, color: "#a3c9d8", tenants: 3, role: "resident", noise: 0, salePrice: 30000 },
+  shop: { name: "Craft Shop", width: 10, cost: 15000, color: "#8fd1a8", tenants: 1, role: "shopkeeper", noise: 0, spendPerShopper: [50, 150], unlocksAt: 2 },
 };
 
 // Stairs always join exactly two neighbouring floors. An elevator shaft can

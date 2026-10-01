@@ -3,12 +3,17 @@
 // Every tower starts at 1★. Each target below is a population to reach
 // (and, from 3★ on, facilities to provide, once those exist). Stars are
 // never taken away: a tower that dips back under a target keeps its stars,
-// as in SimTower. 2★ at 100 people is the MVP's goal; it unlocks shops and
-// hotel rooms once they exist.
+// as in SimTower. 2★ at 100 people is the MVP's goal; it unlocks shops
+// (rooms.js: `unlocksAt`), and hotel rooms once they exist.
 
 const STAR_TARGETS = [
   { stars: 2, population: 100 },
 ];
+
+// The target for a given star rating.
+function starTarget(stars) {
+  return STAR_TARGETS.find((target) => target.stars === stars);
+}
 
 const Ratings = {
   stars: 1,

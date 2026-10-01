@@ -21,8 +21,9 @@ Then visit `http://localhost:8000`.
 ## Smoke test
 
 `tests/smoke.mjs` opens the game in headless Chromium, builds a small tower
-with real mouse clicks, runs 8 game days, hovers every room, saves and
-reloads, demolishes things and keeps running. It fails on any page error,
+with real mouse clicks (checking shops stay locked until 2★, then adding
+one), runs 8 game days (checking the shop sells something), hovers every
+room, saves and reloads, demolishes things and keeps running. It fails on any page error,
 `console.error`, frozen game loop, or save that doesn't restore the same
 state. GitHub Actions runs it on every pull request
 (`.github/workflows/smoke.yml`). To run it yourself:
@@ -37,9 +38,35 @@ npm run smoke
 
 ## Status
 
-**Milestone 7: save/load & polish.** Close the tab and pick up where you
-left off. That completes the first playable version: build a tower, fill
-it, keep it calm, and reach 2★.
+**Milestone 8: shops.** Makers sell their work, and shoppers come to buy
+it: the first people in the tower who are visiting rather than living or
+working there.
+
+- **Shops unlock at 2★.** Until then the Shop button is greyed out, and
+  hovering with it says what it takes. A Craft Shop is 10 tiles wide and
+  costs $15,000.
+- **A shopkeeper** moves in like any tenant and keeps shop every day,
+  weekends too, from about 9:30am to 8:30pm. The shop is open (its sign
+  says so) only while they're in. They count towards the population.
+- **Shoppers** arrive at the lobby while a shop is open, 10am–7:30pm: one
+  every 40 minutes or so on a weekday, twice as many at weekends, and more
+  again after 5pm. Each walks (or climbs, or rides) to the shop, browses
+  for 15–40 minutes, pays, and leaves with a bag. They don't count towards
+  the population.
+- **Layout sets the takings.** A shopper spends $50–150 after an easy trip
+  in. If it felt longer than 30 minutes (stairs and queueing count
+  double, as for stress) they spend less, and after an hour they leave
+  without buying ("No sale"). A shop by the lobby earns about $13–14k a
+  week; one three flights up by stairs alone, about $11k.
+- **Daily takings.** Each sale goes into the shop's till ("sales today" in
+  the top bar and the shop's tooltip), and every till is banked at
+  midnight ("Sales +$1,500").
+
+<details>
+<summary>Milestone 7: save/load & polish</summary>
+
+Close the tab and pick up where you left off. That completed the first
+playable version: build a tower, fill it, keep it calm, and reach 2★.
 
 - **Your tower is saved** in your browser: automatically at the start of
   every game day, whenever you close or switch away from the tab, and when
@@ -56,6 +83,7 @@ it, keep it calm, and reach 2★.
   your browser blocks storage the game still works; Save just says it
   can't.
 - Polish: error messages fade after a few seconds instead of sticking.
+</details>
 
 <details>
 <summary>Milestone 6: stress & ratings</summary>
@@ -153,13 +181,16 @@ or visiting a GitHub Pages link.
 - `routing.js` — plans a route through the building (walk / stairs /
   elevator legs) and works out which rooms can be reached from a lobby.
 - `elevators.js` — self-running elevator cars ("collective control").
-- `people.js` — every tenant: moving in, their daily schedule, and how
-  they work through a route.
+- `people.js` — every tenant and shopper: moving in, their daily schedule,
+  and how they work through a route.
 - `economy.js` — who moves in (and out) when, condo sales and refunds,
-  weekly rent, nightly upkeep, and bankruptcy.
+  weekly rent, nightly shop takings and upkeep, and bankruptcy.
+- `shops.js` — shops: when they're open, sending shoppers in, what each
+  shopper spends (less after a long trip), and the day's takings.
 - `stress.js` — each person's stress: trips, noise, rest, and the weekly
   review that decides who moves out.
-- `ratings.js` — the star rating and its population targets.
+- `ratings.js` — the star rating and its population targets (2★ unlocks
+  shops).
 - `save.js` — saving the whole game to the browser and loading it back,
   turning pointers between objects into ids and back.
 - `input.js` — turns mouse events into grid coordinates and tool actions
@@ -171,4 +202,4 @@ or visiting a GitHub Pages link.
   day), the grid, built floors, rooms, and a live green/red placement preview.
 - `main.js` — the game loop: once per animation frame, poll held keys for
   panning, advance the simulation in small fixed steps (clock, elevators,
-  people, stress, economy, ratings), and redraw.
+  people, shops, stress, economy, ratings), and redraw.
