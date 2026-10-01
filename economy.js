@@ -123,8 +123,8 @@ const Economy = {
     for (const room of World.rooms) {
       if (room.type !== "shop") continue;
       const takings = room.till || 0;
-      room.salesYesterday = takings;
       room.till = 0;
+      if (room.status === "occupied" || takings > 0) room.salesYesterday = takings; // not before it ever opened
       if (takings <= 0) continue;
       sales += takings;
       this.popupOverRoom(room, `Sales +${World.formatMoney(takings)}`, "#7dffa0");

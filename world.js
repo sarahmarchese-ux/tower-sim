@@ -112,7 +112,9 @@ const World = {
 
     // New room types are the reward for each star (ratings.js).
     if (type.unlocksAt && Ratings.stars < type.unlocksAt) {
-      return { ok: false, reason: `${type.name}s unlock at ${type.unlocksAt}★: grow the tower to ${starTarget(type.unlocksAt).population} people first` };
+      const target = starTarget(type.unlocksAt);
+      const how = target ? `: grow the tower to ${target.population} people first` : "";
+      return { ok: false, reason: `${type.name}s unlock at ${type.unlocksAt}★${how}` };
     }
 
     if (type.groundOnly && floor !== 0) {

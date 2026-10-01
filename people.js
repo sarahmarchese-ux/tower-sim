@@ -196,7 +196,17 @@ const People = {
         const want = this.desiredLocation(person, now);
         if (want !== here) this.startTrip(person, want);
       } else {
-        this.advanceTrip(person, minutes);
+        // A shopper whose trip in has dragged on past the point of buying
+        // anything turns back (but not mid-ride or mid-climb).
+        const turnBack = person.role === "shopper" && person.target === "room" && !person.movingOut &&
+          (person.state === "walking" || person.state === "waitingForElevator") && Shops.shouldGiveUp(person);
+        if (turnBack) {
+          Shops.giveUp(person);
+          person.target = "offsite";
+          this.reroute(person);
+        } else {
+          this.advanceTrip(person, minutes);
+        }
       }
     }
   },

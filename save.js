@@ -173,7 +173,7 @@ const SaveGame = {
       const economy = {
         lastTallyDay: number(data.economy.lastTallyDay),
         lastPayday: data.economy.lastPayday,
-        lastSales: data.economy.lastSales ?? null, // saves from before shops have none
+        lastSales: data.economy.lastSales == null ? null : number(data.economy.lastSales), // saves from before shops have none
         debtSince: data.economy.debtSince === null ? null : number(data.economy.debtSince),
       };
       const stars = number(data.ratings.stars);

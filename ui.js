@@ -64,7 +64,7 @@ const UI = {
   describeRoom(room) {
     const type = ROOM_TYPES[room.type];
     const parts = [type.name];
-    if (room.status === "vacant") parts.push(type.salePrice ? "for sale" : "for rent");
+    if (room.status === "vacant") parts.push(type.role === "shopkeeper" ? "looking for a shopkeeper" : vacantLabel(type).toLowerCase());
     else if (room.status === "movingIn") parts.push("moving in");
     else {
       const average = Stress.roomAverage(room);
@@ -180,10 +180,14 @@ const UI = {
   updatePopulation() {
     document.getElementById("stars").textContent = "★".repeat(Ratings.stars);
     // Room types the tower hasn't earned yet are greyed out on the toolbar.
-    document.querySelectorAll("#toolbar button[data-tool]").forEach((button) => {
-      const type = ROOM_TYPES[button.dataset.tool];
-      button.classList.toggle("locked", !!type && !!type.unlocksAt && Ratings.stars < type.unlocksAt);
-    });
+    // (Only redone when the stars change, not every frame.)
+    if (this._lockedForStars !== Ratings.stars) {
+      this._lockedForStars = Ratings.stars;
+      document.querySelectorAll("#toolbar button[data-tool]").forEach((button) => {
+        const type = ROOM_TYPES[button.dataset.tool];
+        button.classList.toggle("locked", !!type && !!type.unlocksAt && Ratings.stars < type.unlocksAt);
+      });
+    }
     const next = Ratings.nextTarget();
     const population = People.population();
     document.getElementById("population").textContent = next

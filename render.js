@@ -201,7 +201,7 @@ function drawRooms(w, h) {
     ctx.textBaseline = "middle";
     ctx.fillText(type.name, box.left + box.width / 2, box.top + 9, box.width - 6);
     if (empty) {
-      const sign = room.status === "movingIn" ? "Moving in" : type.salePrice ? "For sale" : "For rent";
+      const sign = room.status === "movingIn" ? "Moving in" : vacantLabel(type);
       ctx.font = "italic 10px sans-serif";
       ctx.fillText(sign, box.left + box.width / 2, box.top + 21, box.width - 6);
     } else if (room.type === "shop") {
@@ -365,6 +365,14 @@ function drawMoneyPopups(w, h) {
     ctx.fillText(p.text, x, y);
   }
   ctx.globalAlpha = 1;
+}
+
+// What an empty room's sign says: condos are sold, studios rented, and a
+// shop is waiting for someone to run it.
+function vacantLabel(type) {
+  if (type.salePrice) return "For sale";
+  if (type.role === "shopkeeper") return "Vacant";
+  return "For rent";
 }
 
 function roomScreenBox(room, type) {

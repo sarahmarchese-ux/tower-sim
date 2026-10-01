@@ -55,9 +55,14 @@ working there.
   the population.
 - **Layout sets the takings.** A shopper spends $50–150 after an easy trip
   in. If it felt longer than 30 minutes (stairs and queueing count
-  double, as for stress) they spend less, and after an hour they leave
-  without buying ("No sale"). A shop by the lobby earns about $13–14k a
-  week; one three flights up by stairs alone, about $11k.
+  double, as for stress) they spend less, and once it has felt like an
+  hour they give up and go home ("Gave up: too far"). A shopper who
+  arrives after closing buys nothing either. A shop by the lobby earns
+  about $13–14k a week; one three flights up by stairs alone, less.
+- **Word gets around.** A shop that keeps letting shoppers down draws
+  fewer of them (down to a quarter), so a jammed elevator isn't swamped
+  by shoppers who won't buy anything. Shoppers who do buy still ride the
+  elevators, so busy shops need good transit.
 - **Daily takings.** Each sale goes into the shop's till ("sales today" in
   the top bar and the shop's tooltip), and every till is banked at
   midnight ("Sales +$1,500").
