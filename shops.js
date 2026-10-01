@@ -25,6 +25,13 @@
 // number. That also keeps shoppers from piling into an elevator that's
 // already jammed, pushing the tenants who rely on it out.
 //
+// A quiet shop closes. Each shop keeps the takings of every full day it
+// traded this week (`room.weekSales` over `room.weekDays`; the day it
+// opened doesn't count, as it wasn't open all day). At the weekly review,
+// a shop that has traded at least MIN_DAYS_JUDGED full days and averaged
+// under QUIET_SALES_PER_DAY closes: its shopkeeper leaves and it goes back
+// on the market, and the next shopkeeper starts with a fresh name.
+//
 // Takings go into the shop's till (`room.till`) as the day goes on, and
 // economy.js banks every till at midnight. Like rent owed, the till lives
 // on the room, so it's saved with it and lost if the shop is demolished.
@@ -39,6 +46,8 @@ const NO_SALE_TRIP_MINUTES = 60; // a trip that felt this long: no sale
 const MAX_SHOPPERS_PER_SHOP = 8; // in the building at once
 const WORD_OF_MOUTH = 0.2; // how much each visit moves a shop's reputation
 const MIN_REPUTATION = 0.25; // even a shop with a bad name sees some shoppers
+const QUIET_SALES_PER_DAY = 700; // a week averaging under this closes the shop
+const MIN_DAYS_JUDGED = 3; // full days of trading before a shop can be judged quiet
 
 const Shops = {
   _open: new Set(), // shops whose shopkeeper is in right now; see update()
@@ -155,6 +164,44 @@ const Shops = {
     } else {
       Economy.popupOverRoom(room, open ? "No sale: the trip took too long" : "No sale: closed", "#d0d0d0");
     }
+  },
+
+  // Called by economy.js at midnight, with the day's takings, for a shop
+  // that was occupied the whole day just ended.
+  recordFullDay(room, takings) {
+    room.weekSales = (room.weekSales || 0) + takings;
+    room.weekDays = (room.weekDays || 0) + 1;
+  },
+
+  // This week's average takings per full day (null before the first).
+  weekAverage(room) {
+    return room.weekDays ? room.weekSales / room.weekDays : null;
+  },
+
+  // On course to close at the weekly review?
+  isQuiet(room) {
+    const average = this.weekAverage(room);
+    return average !== null && average < QUIET_SALES_PER_DAY;
+  },
+
+  // Sunday night, after the stress review: quiet shops close. Every shop
+  // starts the new week with a clean slate.
+  weeklyReview() {
+    for (const room of [...World.rooms]) {
+      if (room.type !== "shop") continue;
+      if (room.status === "occupied" && room.weekDays >= MIN_DAYS_JUDGED && this.isQuiet(room)) {
+        Economy.moveOut(room, "Closed: too few shoppers");
+      }
+      room.weekSales = 0;
+      room.weekDays = 0;
+    }
+  },
+
+  // A shop changing hands starts afresh.
+  onMovedOut(room) {
+    room.reputation = 1;
+    room.weekSales = 0;
+    room.weekDays = 0;
   },
 
   // Everything taken in the shops so far today, banked at midnight.

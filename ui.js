@@ -28,6 +28,9 @@ const UI = {
     if (tenanted && !Pointer.dragging) {
       tip.textContent = this.describeRoom(room);
       if (!Routing.isReachable(room)) this.addWarning(tip, "! " + this.unreachableAdvice(room));
+      if (room.type === "shop" && room.status === "occupied" && Shops.isQuiet(room)) {
+        this.addWarning(tip, `Too few shoppers: closes at the weekly review if takings stay under ${World.formatMoney(QUIET_SALES_PER_DAY)} a day. Shoppers give up on long trips: bring it nearer the lobby or the elevators.`);
+      }
     } else if (Pointer.buildCheck && !Pointer.buildCheck.ok) {
       // A build that would be refused says why, right where you're aiming,
       // before you click.
@@ -77,6 +80,8 @@ const UI = {
       let sales = `sales today ${World.formatMoney(room.till || 0)}`;
       if (room.salesYesterday !== undefined) sales += ` (yesterday ${World.formatMoney(room.salesYesterday)})`;
       parts.push(sales);
+      const average = Shops.weekAverage(room);
+      if (average !== null) parts.push(`this week ${World.formatMoney(average)}/day`);
     }
     if (type.role === "resident") {
       // Studios are only noisy while their makers work, so show both.

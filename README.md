@@ -66,6 +66,12 @@ working there.
 - **Daily takings.** Each sale goes into the shop's till ("sales today" in
   the top bar and the shop's tooltip), and every till is banked at
   midnight ("Sales +$1,500").
+- **Quiet shops close.** At the Sunday-night review, a shop that has
+  traded at least 3 full days that week and averaged under $700 a day
+  closes ("Closed: too few shoppers") and goes back on the market with a
+  fresh name. Its tooltip shows the week's average a day, and warns while
+  it's on course to close. Shops sell on their own: what they take
+  doesn't depend on the tower's studios.
 
 <details>
 <summary>Milestone 7: save/load & polish</summary>

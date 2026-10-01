@@ -103,6 +103,7 @@ const Economy = {
   onArrived(room) {
     if (room.status !== "movingIn") return;
     World.setRoomStatus(room, "occupied");
+    room.occupiedAt = Clock.totalMinutes;
     room.rentOwed = room.rentOwed || 0;
     const salePrice = ROOM_TYPES[room.type].salePrice;
     if (salePrice) {
@@ -124,6 +125,10 @@ const Economy = {
       if (room.type !== "shop") continue;
       const takings = room.till || 0;
       room.till = 0;
+      // Occupied all through the day just ended? Then it counts towards
+      // the week's average (shops.js).
+      const dayStart = (this.lastTallyDay - 1) * MINUTES_PER_DAY;
+      if (room.status === "occupied" && (room.occupiedAt ?? 0) <= dayStart) Shops.recordFullDay(room, takings);
       if (room.status === "occupied" || takings > 0) room.salesYesterday = takings; // not before it ever opened
       if (takings <= 0) continue;
       sales += takings;
@@ -141,22 +146,25 @@ const Economy = {
 
     if (this.lastTallyDay % 7 === 0) {
       Stress.weeklyReview();
+      Shops.weeklyReview();
       this.payday();
     }
   },
 
-  // Too stressed: the tenants leave and the room is back on the market.
-  // A departing studio still pays the rent it owes at payday.
-  moveOut(room) {
+  // Too stressed (or, for a shop, too quiet; see shops.js): the tenants
+  // leave and the room is back on the market. A departing studio still
+  // pays the rent it owes at payday.
+  moveOut(room, reason = "Moved out") {
     World.setRoomStatus(room, "vacant");
     room.moveInAt = Clock.totalMinutes + randomBetween(MOVE_IN_DELAY_MINUTES);
     People.moveOut(room);
+    if (room.type === "shop") Shops.onMovedOut(room);
     const salePrice = ROOM_TYPES[room.type].salePrice;
     if (salePrice) {
       World.money -= salePrice;
       this.popupOverRoom(room, `Moved out: refund -${World.formatMoney(salePrice)}`, "#ff9d9d");
     } else {
-      this.popupOverRoom(room, "Moved out", "#ff9d9d");
+      this.popupOverRoom(room, reason, "#ff9d9d");
     }
   },
 
