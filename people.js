@@ -19,6 +19,9 @@
 //   - Shoppers (milestone 8) are visitors, not tenants. shops.js sends them
 //     in from the lobby while a shop is open; each one walks to the shop,
 //     browses, buys (or doesn't; see shops.js) and leaves for good.
+//   - Hotel guests (milestone 9) are visitors too. hotels.js checks a
+//     party in at a lobby; they stay in their room for a night or a few,
+//     apart from the odd daytime outing, then check out and leave.
 //
 // Instead of a timetable of "at 9:00 do X", each person just asks, whenever
 // they're standing still: "given the time right now, where should I be — in
@@ -129,6 +132,37 @@ const People = {
     });
   },
 
+  // A hotel guest turns up at a lobby at `showUpAt` and heads for their
+  // room. `outings` maps a game day to the [from, to] minutes they're out
+  // that day (hotels.js). `peakStress` is the most stressed they get during
+  // the stay, which is what their review hangs on.
+  addGuest(room, slot, showUpAt, outings) {
+    this.list.push({
+      id: this.nextId++,
+      role: "guest",
+      room,
+      slot,
+      state: "offsite",
+      movingIn: false,
+      movingOut: false,
+      stress: 0,
+      peakStress: 0,
+      arrived: false,
+      outings,
+      floor: room.floor,
+      x: this.slotX(room, slot),
+      route: null,
+      legIndex: 0,
+      legProgress: 0,
+      target: null,
+      idleUntil: showUpAt,
+      tripStartedAt: 0,
+      tripWaitMinutes: 0,
+      tripStairsMinutes: 0,
+      lastTripWaitMinutes: 0,
+    });
+  },
+
   removeForRoom(room) {
     for (const person of this.list.filter((p) => p.room === room)) Elevators.forget(person);
     this.list = this.list.filter((p) => p.room !== room);
@@ -168,6 +202,12 @@ const People = {
     if (person.movingIn) return "room";
     // A shopper is in the shop until they've been to the till, then gone.
     if (person.role === "shopper") return person.bought === null ? "room" : "offsite";
+    // A guest is in their room, unless they're out for the day's outing.
+    // (Checking out is hotels.js's call: it sends them off as movingOut.)
+    if (person.role === "guest") {
+      const outing = person.outings[Math.floor(t / MINUTES_PER_DAY)];
+      return outing && t >= outing[0] && t < outing[1] ? "offsite" : "room";
+    }
     const day = Math.floor(t / MINUTES_PER_DAY);
     const minute = t - day * MINUTES_PER_DAY;
     const weekend = day % 7 >= 5;
@@ -326,6 +366,7 @@ const People = {
       person.floor = person.room.floor;
       person.x = this.homeX(person);
       if (person.role === "shopper") Shops.onShopperArrived(person, felt);
+      if (person.role === "guest") Hotels.onGuestArrived(person);
       if (person.movingIn) {
         person.movingIn = false;
         person.idleUntil = Clock.totalMinutes + randomBetween(UNPACK_MINUTES);
@@ -405,9 +446,9 @@ const People = {
   },
 
   // Everyone who lives or works here: not movers still on their way in,
-  // nor those on their way out, nor shoppers just visiting.
+  // nor those on their way out, nor visitors (shoppers and hotel guests).
   population() {
-    return this.list.filter((p) => !p.movingIn && !p.movingOut && p.role !== "shopper").length;
+    return this.list.filter((p) => !p.movingIn && !p.movingOut && !isVisitor(p)).length;
   },
 };
 
@@ -416,3 +457,9 @@ World.subscribe((event, payload) => {
   if (event === "transitRemoved") People.onTransitRemoved(payload);
   if (event === "floorsChanged") People.onFloorsChanged();
 });
+
+// Shoppers and hotel guests are only visiting, so they don't count
+// towards the population.
+function isVisitor(person) {
+  return person.role === "shopper" || person.role === "guest";
+}

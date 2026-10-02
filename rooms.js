@@ -19,6 +19,10 @@
 // shoppers who visit it: each spends around `spendPerShopper`, and the
 // day's takings are banked at midnight. `unlocksAt` is the star rating a
 // room type needs before it can be built.
+//
+// A hotel room (milestone 9, see hotels.js) has no tenants of its own:
+// parties of up to `tenants` guests book it for a night or a few, and it
+// earns `ratePerNight` for every night someone sleeps in it.
 
 const STARTING_MONEY = 200000;
 const FLOOR_COST_PER_TILE = 200;
@@ -31,6 +35,7 @@ const ROOM_TYPES = {
   jewellery: { name: "Jewellery Studio", width: 6, cost: 15000, color: "#f4d35e", tenants: 1, role: "maker", noise: 0, rentPerWeek: 17500 },
   condo: { name: "Condo", width: 16, cost: 20000, color: "#a3c9d8", tenants: 3, role: "resident", noise: 0, salePrice: 30000 },
   shop: { name: "Craft Shop", width: 10, cost: 15000, color: "#8fd1a8", tenants: 1, role: "shopkeeper", noise: 0, spendPerShopper: [50, 150], unlocksAt: 2 },
+  hotel: { name: "Hotel Room", width: 8, cost: 14000, color: "#e9a6a6", tenants: 2, role: "guest", noise: 0, ratePerNight: 2000, unlocksAt: 2 },
 };
 
 // Stairs always join exactly two neighbouring floors. An elevator shaft can

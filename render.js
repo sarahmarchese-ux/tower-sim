@@ -4,7 +4,8 @@
 // the stairs, elevators and people moving through it (milestone 4), and
 // which rooms are still empty plus the money floating up from rent, sales
 // and upkeep (milestone 5), how stressed everyone is (milestone 6), and
-// which shops are open and who's carrying a shopping bag (milestone 8).
+// which shops are open and who's carrying a shopping bag (milestone 8), and
+// which hotel rooms have guests and who's carrying a suitcase (milestone 9).
 // This file only draws; World (world.js), Elevators and People decide what's
 // true, and input.js decides what the player is doing.
 
@@ -183,7 +184,7 @@ function drawRooms(w, h) {
 
     // A room nobody has moved into yet is drawn faded, with a dashed
     // outline and a sign saying it's on the market.
-    const empty = room.status === "vacant" || room.status === "movingIn";
+    const empty = room.status === "vacant" || room.status === "movingIn" || room.status === "checkingIn";
     ctx.globalAlpha = empty ? 0.4 : 1;
     ctx.fillStyle = type.color;
     ctx.fillRect(box.left, box.top, box.width, box.height);
@@ -201,7 +202,7 @@ function drawRooms(w, h) {
     ctx.textBaseline = "middle";
     ctx.fillText(type.name, box.left + box.width / 2, box.top + 9, box.width - 6);
     if (empty) {
-      const sign = room.status === "movingIn" ? "Moving in" : vacantLabel(type);
+      const sign = room.status === "movingIn" ? "Moving in" : room.status === "checkingIn" ? "Checking in" : vacantLabel(type);
       ctx.font = "italic 10px sans-serif";
       ctx.fillText(sign, box.left + box.width / 2, box.top + 21, box.width - 6);
     } else if (room.type === "shop") {
@@ -338,6 +339,13 @@ function drawPeople(w, h) {
       ctx.fillStyle = "#e07a2f";
       ctx.fillRect(x + 2, feet - 6, 4, 4);
     }
+
+    // A hotel guest wheels a suitcase in when they check in, and out again
+    // when they leave.
+    if (person.role === "guest" && (!person.arrived || person.movingOut)) {
+      ctx.fillStyle = "#3b5b92";
+      ctx.fillRect(x + 3, feet - 7, 4, 7);
+    }
   }
 }
 
@@ -367,10 +375,11 @@ function drawMoneyPopups(w, h) {
   ctx.globalAlpha = 1;
 }
 
-// What an empty room's sign says: condos are sold, studios rented, and a
-// shop is waiting for someone to run it.
+// What an empty room's sign says: condos are sold, studios rented, a shop
+// is waiting for someone to run it, and a hotel room for its next guests.
 function vacantLabel(type) {
   if (type.salePrice) return "For sale";
+  if (type.role === "guest") return "Vacancy";
   if (type.role === "shopkeeper") return "Vacant";
   return "For rent";
 }

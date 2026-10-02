@@ -9,16 +9,20 @@
 //     are fine, but eight flights, or a 15-minute queue, are not.
 //   - Not being able to get there at all (no route, e.g. a demolished
 //     elevator).
-//   - Noise, for residents only. A studio gives off noise while its makers
-//     are at work in it (rooms.js: Woodwork 3, Pottery 2, Sewing 1,
-//     Jewellery 0) to the rooms beside it and on the floors directly above
-//     and below. After hours and at weekends it's quiet. A resident at home
-//     in a noisy condo gains stress every hour. Makers don't mind noise.
+//   - Noise, for residents and hotel guests. A studio gives off noise while
+//     its makers are at work in it (rooms.js: Woodwork 3, Pottery 2, Sewing
+//     1, Jewellery 0) to the rooms beside it and on the floors directly
+//     above and below. After hours and at weekends it's quiet. A resident
+//     at home in a noisy condo gains stress every hour. Hotel guests, who
+//     are in during the day and came to get away from it all, gain it five
+//     times as fast: a woodwork studio next door sends them red within a
+//     couple of weekdays. Makers and shopkeepers don't mind noise.
 // What takes it away: resting, i.e. being at home in peace, or out of the
 // building.
 //
 // Each week (at the Sunday-night tally), every room checks its people's
-// average stress. If it's in the red, they move out (economy.js).
+// average stress. If it's in the red, they move out (economy.js). Hotel
+// rooms are judged stay by stay instead (hotels.js).
 
 const STRESS_MAX = 100;
 const STRESS_PINK = 35; // people turn pink from here...
@@ -26,6 +30,7 @@ const STRESS_RED = 65; // ...and red from here. A room averaging red moves out.
 const COMFORTABLE_TRIP_MINUTES = 30;
 const NO_ROUTE_STRESS = 10;
 const NOISE_STRESS_PER_HOUR = 0.4; // per point of noise, while at home
+const GUEST_NOISE_STRESS_PER_HOUR = 3; // the same, for a hotel guest in their room
 const REST_PER_HOUR = 0.5;
 
 const Stress = {
@@ -85,10 +90,12 @@ const Stress = {
     this.refreshWorking();
     for (const person of People.list) {
       if (person.movingIn || person.movingOut) continue;
-      if (person.state === "inRoom" && person.role === "resident") {
+      const hearsNoise = person.role === "resident" || person.role === "guest";
+      if (person.state === "inRoom" && hearsNoise) {
         const noise = this.noiseAt(person.room);
         if (noise > 0) {
-          this.add(person, noise * NOISE_STRESS_PER_HOUR * hours);
+          const perHour = person.role === "guest" ? GUEST_NOISE_STRESS_PER_HOUR : NOISE_STRESS_PER_HOUR;
+          this.add(person, noise * perHour * hours);
           continue;
         }
       }
@@ -112,8 +119,9 @@ const Stress = {
     person.stress = Math.min(STRESS_MAX, Math.max(0, person.stress + amount));
   },
 
-  // The average stress of a room's settled tenants (null if none yet).
-  // Shoppers are only passing through, so they don't count.
+  // The average stress of a room's settled tenants, or of the guests
+  // staying in a hotel room (null if none yet). Shoppers are only passing
+  // through, so they don't count.
   roomAverage(room) {
     const people = People.list.filter((p) => p.room === room && !p.movingIn && !p.movingOut && p.role !== "shopper");
     if (!people.length) return null;
@@ -130,7 +138,7 @@ const Stress = {
   // Once a week: rooms whose people are in the red move out.
   weeklyReview() {
     for (const room of [...World.rooms]) {
-      if (room.status !== "occupied") continue;
+      if (room.status !== "occupied" || room.type === "hotel") continue;
       const average = this.roomAverage(room);
       if (average !== null && average >= STRESS_RED) Economy.moveOut(room);
     }

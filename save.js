@@ -85,6 +85,7 @@ const SaveGame = {
         lastTallyDay: Economy.lastTallyDay,
         lastPayday: Economy.lastPayday,
         lastSales: Economy.lastSales,
+        lastHotel: Economy.lastHotel,
         debtSince: Economy.debtSince,
       },
       ratings: { stars: Ratings.stars },
@@ -174,6 +175,7 @@ const SaveGame = {
         lastTallyDay: number(data.economy.lastTallyDay),
         lastPayday: data.economy.lastPayday,
         lastSales: data.economy.lastSales == null ? null : number(data.economy.lastSales), // saves from before shops have none
+        lastHotel: data.economy.lastHotel == null ? null : number(data.economy.lastHotel), // ...or hotels
         debtSince: data.economy.debtSince === null ? null : number(data.economy.debtSince),
       };
       const stars = number(data.ratings.stars);
@@ -195,6 +197,7 @@ const SaveGame = {
       Economy.lastTallyDay = economy.lastTallyDay;
       Economy.lastPayday = economy.lastPayday;
       Economy.lastSales = economy.lastSales;
+      Economy.lastHotel = economy.lastHotel;
       Economy.debtSince = economy.debtSince;
       Economy.bankrupt = false;
       Economy.popups = [];

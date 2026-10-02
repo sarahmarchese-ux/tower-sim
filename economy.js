@@ -15,7 +15,8 @@
 // Every midnight is a tally. Each occupied studio adds a day's worth of its
 // weekly rent to what it owes (so a studio that moved in on Thursday pays
 // for Thursday to Sunday), each shop's takings for the day are banked (see
-// shops.js), and each elevator's upkeep is paid. Once a week,
+// shops.js), each hotel room with guests in it earns its night (see
+// hotels.js), and each elevator's upkeep is paid. Once a week,
 // at midnight at the end of Sunday, is payday: everything owed comes in at
 // once. Upkeep keeps coming every night whether or not anyone pays you, so
 // money can dip below zero between paydays. Stay in the red for a full game
@@ -23,7 +24,7 @@
 //
 // State lives in two places: each room's `status` / `moveInAt` / `rentOwed`
 // (so it disappears with the room if it's demolished), and the few totals
-// below.
+// below. Hotel rooms don't take tenants: hotels.js books guests into them.
 
 const MOVE_IN_DELAY_MINUTES = [60, 240]; // after placing: 1–4 game hours
 const MOVE_IN_RETRY_MINUTES = [30, 90]; // unreachable: look again this soon
@@ -38,12 +39,13 @@ const Economy = {
   lastTallyDay: Clock.day,
   lastPayday: null, // total rent paid at the most recent payday
   lastSales: null, // total shop takings banked at the most recent midnight
+  lastHotel: null, // total hotel nights paid at the most recent midnight
   debtSince: null, // game minute money went negative, or null
   bankrupt: false,
   popups: [], // floating "Rent +$11,200" labels; see render.js
 
   onRoomAdded(room) {
-    if (room.status === "vacant") {
+    if (room.status === "vacant" && room.type !== "hotel") {
       room.moveInAt = Clock.totalMinutes + randomBetween(MOVE_IN_DELAY_MINUTES);
     }
   },
@@ -52,7 +54,7 @@ const Economy = {
     const now = Clock.totalMinutes;
 
     for (const room of World.rooms) {
-      if (room.status === "vacant" && now >= room.moveInAt) this.tryMoveIn(room);
+      if (room.status === "vacant" && room.type !== "hotel" && now >= room.moveInAt) this.tryMoveIn(room);
     }
 
     while (Clock.day > this.lastTallyDay) {
@@ -136,6 +138,10 @@ const Economy = {
     }
     World.money += sales;
     this.lastSales = sales;
+
+    const nights = Hotels.nightlyTally();
+    World.money += nights;
+    this.lastHotel = nights;
 
     for (const t of World.transit) {
       const upkeepPerDay = TRANSIT_TYPES[t.kind].upkeepPerDay;
