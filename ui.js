@@ -106,7 +106,7 @@ const UI = {
   // reviewed, and how many of the last week's nights it was booked.
   describeHotel(room) {
     const parts = [];
-    if (room.status === "vacant") parts.push(room.nextGuestsAt != null ? "booked: guests arrive later today" : "vacant tonight");
+    if (room.status === "vacant") parts.push(room.nextGuestsAt != null ? "booked: guests arrive later today" : "vacant");
     else if (room.status === "checkingIn") parts.push(`${room.party === "tourists" ? "2 tourists" : "a buyer"} checking in`);
     else {
       parts.push(Hotels.describeStay(room));

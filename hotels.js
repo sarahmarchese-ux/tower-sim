@@ -137,6 +137,9 @@ const Hotels = {
   // Called by people.js when a guest reaches the room (on arrival, or
   // back from an outing).
   onGuestArrived(person) {
+    // Someone from a party that has already checked out, still finishing
+    // their trip up, mustn't check in the next party for them.
+    if (person.movingOut) return;
     person.arrived = true;
     if (person.room.status === "checkingIn") World.setRoomStatus(person.room, "occupied");
   },
@@ -188,9 +191,13 @@ const Hotels = {
     return total;
   },
 
-  // What tonight's guests will pay at midnight, for the top bar.
+  // What tonight's guests will pay at midnight, for the top bar. A party
+  // checking out this morning has had its last night.
   tonight() {
-    return World.rooms.filter((room) => room.type === "hotel" && room.status === "occupied").length * ROOM_TYPES.hotel.ratePerNight;
+    const staying = World.rooms.filter(
+      (room) => room.type === "hotel" && room.status === "occupied" && Clock.day < room.checkInDay + room.nights,
+    );
+    return staying.length * ROOM_TYPES.hotel.ratePerNight;
   },
 
   // "2 tourists, night 2 of 3", for the hover readout.

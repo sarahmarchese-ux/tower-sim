@@ -55,7 +55,7 @@ during the day, so studio noise now really matters.
   books a room they can't reach.
 - **Guests are in by day.** Apart from the odd outing (tourists go
   sightseeing more than buyers), guests spend the day in their room, and
-  studio noise stresses them five times as fast as it does condo
+  studio noise stresses them 7½ times as fast as it does condo
   residents. A woodwork studio next door, or pottery below, makes for a
   stressful weekday; weekends are quiet whatever the layout. Long trips
   up from the lobby stress them too.
@@ -70,7 +70,7 @@ during the day, so studio noise now really matters.
 - **Hover a hotel room** to see who's staying and which night of how many,
   their stress, the room's reviews, how many of the last 7 nights it was
   booked, and the noise it gets now and in working hours. It warns when a
-  room is noisy in working hours.
+  room gets pottery-or-louder noise in working hours.
 - Hotel rooms aren't part of the weekly stress review: guests are judged
   stay by stay instead.
 

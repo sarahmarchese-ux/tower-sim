@@ -14,9 +14,9 @@
 //     1, Jewellery 0) to the rooms beside it and on the floors directly
 //     above and below. After hours and at weekends it's quiet. A resident
 //     at home in a noisy condo gains stress every hour. Hotel guests, who
-//     are in during the day and came to get away from it all, gain it five
-//     times as fast: a woodwork studio next door sends them red within a
-//     couple of weekdays. Makers and shopkeepers don't mind noise.
+//     are in during the day and came to get away from it all, gain it 7½
+//     times as fast: a woodwork studio next door can send them red in a
+//     single working day. Makers and shopkeepers don't mind noise.
 // What takes it away: resting, i.e. being at home in peace, or out of the
 // building.
 //
