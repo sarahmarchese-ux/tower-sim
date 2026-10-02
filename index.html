@@ -178,7 +178,9 @@
       color: #ff9d9d;
     }
 
-    #gameover {
+    /* Full-screen notices: going bankrupt, and "start a new game?". */
+    #gameover,
+    #newgame {
       position: fixed;
       inset: 0;
       display: none;
@@ -191,7 +193,8 @@
       text-align: center;
       z-index: 20;
     }
-    #gameover.shown {
+    #gameover.shown,
+    #newgame.shown {
       display: flex;
     }
     #gameover h1 {
@@ -199,7 +202,19 @@
       font-size: 40px;
       color: #ff9d9d;
     }
-    #gameover button {
+    #newgame h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    #newgame .buttons {
+      display: flex;
+      gap: 10px;
+    }
+    #newgame-no {
+      background: #555 !important;
+    }
+    #gameover button,
+    #newgame button {
       padding: 8px 18px;
       border: none;
       border-radius: 6px;
@@ -237,6 +252,17 @@
     <h1>Bankrupt</h1>
     <p>The tower spent a whole week in the red, and the bank has taken it back.</p>
     <button id="restart-btn">Start over</button>
+  </div>
+
+  <!-- Asked here rather than with the browser's confirm(), which some
+       embedded pages (like the claude.ai artifact) aren't allowed to show. -->
+  <div id="newgame">
+    <h1>Start a new game?</h1>
+    <p>Your current tower and its save will be lost.</p>
+    <div class="buttons">
+      <button id="newgame-yes">Start over</button>
+      <button id="newgame-no">Keep playing</button>
+    </div>
   </div>
 
   <div id="toolbar">

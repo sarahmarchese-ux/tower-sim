@@ -265,9 +265,13 @@ const UI = {
         saveBtn.classList.remove("saved");
       }, 1500);
     });
-    document.getElementById("new-btn").addEventListener("click", () => {
-      if (confirm("Start a new game? Your current tower and its save will be lost.")) this.startOver();
-    });
+    // "New game" asks first, on the page itself: the browser's own
+    // confirm() is silently refused where the game is embedded in a
+    // sandboxed frame, which made the button do nothing.
+    const ask = document.getElementById("newgame");
+    document.getElementById("new-btn").addEventListener("click", () => ask.classList.add("shown"));
+    document.getElementById("newgame-no").addEventListener("click", () => ask.classList.remove("shown"));
+    document.getElementById("newgame-yes").addEventListener("click", () => this.startOver());
   },
 
   attachClockControls() {
