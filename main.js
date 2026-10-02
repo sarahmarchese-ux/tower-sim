@@ -25,6 +25,7 @@ function advanceSimulation(minutes) {
     Elevators.update(step);
     People.update(step);
     Shops.update();
+    Hotels.update();
     Stress.update(step);
     Economy.update();
     Ratings.update();

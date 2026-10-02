@@ -21,9 +21,9 @@ Then visit `http://localhost:8000`.
 ## Smoke test
 
 `tests/smoke.mjs` opens the game in headless Chromium, builds a small tower
-with real mouse clicks (checking shops stay locked until 2★, then adding
-one), runs 8 game days (checking the shop sells something), hovers every
-room, saves and reloads, demolishes things and keeps running. It fails on any page error,
+with real mouse clicks (checking shops and hotel rooms stay locked until
+2★, then adding one of each), runs 8 game days (checking the shop sells
+something and the hotel room earns a night), hovers every room, saves and reloads, demolishes things and keeps running. It fails on any page error,
 `console.error`, frozen game loop, or save that doesn't restore the same
 state. GitHub Actions runs it on every pull request
 (`.github/workflows/smoke.yml`). To run it yourself:
@@ -38,9 +38,47 @@ npm run smoke
 
 ## Status
 
-**Milestone 8: shops.** Makers sell their work, and shoppers come to buy
-it: the first people in the tower who are visiting rather than living or
-working there.
+**Milestone 9: hotel rooms.** Visiting buyers and tourists check in for a
+night or a few, and pay for every night they stay. They're in their rooms
+during the day, so studio noise now really matters.
+
+- **Hotel rooms unlock at 2★**, like shops. A Hotel Room is 8 tiles wide,
+  costs $14,000 and earns $2,000 for every night a guest sleeps in it,
+  paid at the midnight tally ("Night +$2,000", and "hotel tonight" in the
+  top bar).
+- **Bookings.** Each afternoon an empty room may get a booking, and the
+  guests turn up at the lobby between 2pm and 9pm: a buyer on their own
+  (mostly in the week) or a pair of tourists (mostly Fridays and
+  Saturdays, the busiest nights). They stay 1–3 nights and check out
+  between 8 and 11 in the morning. Guests wheel a suitcase in and out.
+  They're visitors, so they don't count towards the population. Nobody
+  books a room they can't reach.
+- **Guests are in by day.** Apart from the odd outing (tourists go
+  sightseeing more than buyers), guests spend the day in their room, and
+  studio noise stresses them 7½ times as fast as it does condo
+  residents. A woodwork studio next door, or pottery below, makes for a
+  stressful weekday; weekends are quiet whatever the layout. Long trips
+  up from the lobby stress them too.
+- **Too much and they leave.** A guest who goes red checks out early
+  ("Checked out early: too noisy"), and that night earns nothing.
+- **Reviews set occupancy.** Every stay ends with a review: good if the
+  guests hardly noticed a thing, poor if they went red. A room's
+  reviews set how often it's booked, down to a quarter as often. In a
+  test run over six weeks, a quiet room was booked about 5 nights a week
+  ($10k), one beside a sewing studio 4½, one over a pottery studio 3½,
+  and one beside a woodwork studio 3 ($6k).
+- **Hover a hotel room** to see who's staying and which night of how many,
+  their stress, the room's reviews, how many of the last 7 nights it was
+  booked, and the noise it gets now and in working hours. It warns when a
+  room gets pottery-or-louder noise in working hours.
+- Hotel rooms aren't part of the weekly stress review: guests are judged
+  stay by stay instead.
+
+<details>
+<summary>Milestone 8: shops</summary>
+
+Makers sell their work, and shoppers come to buy it: the first people in
+the tower who are visiting rather than living or working there.
 
 - **Shops unlock at 2★.** Until then the Shop button is greyed out, and
   hovering with it says what it takes. A Craft Shop is 10 tiles wide and
@@ -72,6 +110,7 @@ working there.
   fresh name. Its tooltip shows the week's average a day, and warns while
   it's on course to close. Shops sell on their own: what they take
   doesn't depend on the tower's studios.
+</details>
 
 <details>
 <summary>Milestone 7: save/load & polish</summary>
@@ -192,16 +231,19 @@ or visiting a GitHub Pages link.
 - `routing.js` — plans a route through the building (walk / stairs /
   elevator legs) and works out which rooms can be reached from a lobby.
 - `elevators.js` — self-running elevator cars ("collective control").
-- `people.js` — every tenant and shopper: moving in, their daily schedule,
+- `people.js` — every tenant, shopper and hotel guest: moving in, their daily schedule,
   and how they work through a route.
 - `economy.js` — who moves in (and out) when, condo sales and refunds,
-  weekly rent, nightly shop takings and upkeep, and bankruptcy.
+  weekly rent, nightly shop takings, hotel nights and upkeep, and
+  bankruptcy.
 - `shops.js` — shops: when they're open, sending shoppers in, what each
   shopper spends (less after a long trip), and the day's takings.
+- `hotels.js` — hotel rooms: bookings, checking guests in and out (early,
+  if they're too stressed), reviews and occupancy, and nightly takings.
 - `stress.js` — each person's stress: trips, noise, rest, and the weekly
   review that decides who moves out.
 - `ratings.js` — the star rating and its population targets (2★ unlocks
-  shops).
+  shops and hotel rooms).
 - `save.js` — saving the whole game to the browser and loading it back,
   turning pointers between objects into ids and back.
 - `input.js` — turns mouse events into grid coordinates and tool actions
@@ -213,4 +255,4 @@ or visiting a GitHub Pages link.
   day), the grid, built floors, rooms, and a live green/red placement preview.
 - `main.js` — the game loop: once per animation frame, poll held keys for
   panning, advance the simulation in small fixed steps (clock, elevators,
-  people, shops, stress, economy, ratings), and redraw.
+  people, shops, hotels, stress, economy, ratings), and redraw.

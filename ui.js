@@ -31,6 +31,13 @@ const UI = {
       if (room.type === "shop" && room.status === "occupied" && Shops.isQuiet(room)) {
         this.addWarning(tip, `Too few shoppers: closes at the weekly review if takings stay under ${World.formatMoney(QUIET_SALES_PER_DAY)} a day. Shoppers give up on long trips: bring it nearer the lobby or the elevators.`);
       }
+      if (room.type === "hotel") {
+        if (Stress.noiseAt(room, true) >= 2) {
+          this.addWarning(tip, "Noisy in working hours: guests are in by day, and studio noise stresses them fast. Keep hotel rooms a floor away from pottery and woodwork.");
+        } else if (Hotels.reviewsLabel(room) === "poor") {
+          this.addWarning(tip, "Poor reviews mean fewer bookings. Guests mind long trips up from the lobby: bring the room nearer the lobby or the elevators.");
+        }
+      }
     } else if (Pointer.buildCheck && !Pointer.buildCheck.ok) {
       // A build that would be refused says why, right where you're aiming,
       // before you click.
@@ -67,7 +74,8 @@ const UI = {
   describeRoom(room) {
     const type = ROOM_TYPES[room.type];
     const parts = [type.name];
-    if (room.status === "vacant") parts.push(type.role === "shopkeeper" ? "looking for a shopkeeper" : vacantLabel(type).toLowerCase());
+    if (room.type === "hotel") parts.push(...this.describeHotel(room));
+    else if (room.status === "vacant") parts.push(type.role === "shopkeeper" ? "looking for a shopkeeper" : vacantLabel(type).toLowerCase());
     else if (room.status === "movingIn") parts.push("moving in");
     else {
       const average = Stress.roomAverage(room);
@@ -83,7 +91,7 @@ const UI = {
       const average = Shops.weekAverage(room);
       if (average !== null) parts.push(`this week ${World.formatMoney(average)}/day`);
     }
-    if (type.role === "resident") {
+    if (type.role === "resident" || type.role === "guest") {
       // Studios are only noisy while their makers work, so show both.
       const now = Stress.noiseAt(room);
       const working = Stress.noiseAt(room, true);
@@ -92,6 +100,28 @@ const UI = {
     else if (type.noise > 0) parts.push(`makes noise ${type.noise}`);
     else parts.push("quiet");
     return parts.join(" · ");
+  },
+
+  // Who's staying in a hotel room (and how they're feeling), how it's been
+  // reviewed, and how many of the last week's nights it was booked.
+  describeHotel(room) {
+    const parts = [];
+    if (room.status === "vacant") parts.push(room.nextGuestsAt != null ? "booked: guests arrive later today" : "vacant");
+    else if (room.status === "checkingIn") parts.push(`${room.party === "tourists" ? "2 tourists" : "a buyer"} checking in`);
+    else {
+      parts.push(Hotels.describeStay(room));
+      const average = Stress.roomAverage(room);
+      if (average !== null) parts.push(`stress ${Math.round(average)} (${Stress.band(average)})`);
+    }
+    const reviews = Hotels.reviewsLabel(room);
+    if (reviews) parts.push(`${reviews} reviews`);
+    const history = room.nightHistory || [];
+    if (history.length) {
+      const booked = history.filter(Boolean).length;
+      if (history.length === 1) parts.push(booked ? "booked last night" : "empty last night");
+      else parts.push(`booked ${booked} of the last ${history.length} nights`);
+    }
+    return parts;
   },
 
   // Nobody moves into a room they can't walk to from a lobby. The usual
@@ -152,12 +182,14 @@ const UI = {
     money.textContent = World.formatMoney(World.money);
     money.classList.toggle("in-debt", World.money < 0);
 
-    // Shop takings banked at midnight, and rent building up towards Sunday
-    // night's payday.
+    // Shop takings and hotel nights banked at midnight, and rent building
+    // up towards Sunday night's payday.
     const sales = Shops.takingsToday();
+    const tonight = Hotels.tonight();
     const due = Economy.rentDue();
     const ledger = [];
     if (sales > 0) ledger.push(`sales today +${World.formatMoney(sales)}`);
+    if (tonight > 0) ledger.push(`hotel tonight +${World.formatMoney(tonight)}`);
     if (due > 0) ledger.push(`rent due Sun night +${World.formatMoney(due)}`);
     document.getElementById("ledger").textContent = ledger.length ? `(${ledger.join(" · ")})` : "";
 
