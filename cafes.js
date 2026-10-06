@@ -61,16 +61,38 @@ const Cafes = {
     return best;
   },
 
-  // Called by people.js when a maker sits down: they pay for lunch.
+  // Called by people.js when a maker sits down: they pay for lunch. If
+  // it's shut, they go and eat out instead.
   onMakerArrived(person) {
     const room = person.lunchCafe;
     if (!Shops.isOpen(room)) {
-      Economy.popupOverRoom(room, "Closed: no lunch", "#d0d0d0");
+      Economy.popupOverRoom(room, "Closed: eating out", "#d0d0d0");
+      this.eatOut(person);
       return;
     }
     const spend = Math.round(randomBetween(ROOM_TYPES.cafe.visitors.spend));
     room.till = (room.till || 0) + spend;
     Economy.popupOverRoom(room, `+${World.formatMoney(spend)}`, "#c8f7d4");
+  },
+
+  // A café has closed (its owner moved out) or been knocked down: makers
+  // eating there or on their way eat out instead (or, if their break is
+  // over, go back to work).
+  onClosed(room) {
+    for (const person of People.list) {
+      if (person.lunchCafe === room) this.eatOut(person);
+    }
+  },
+
+  eatOut(person) {
+    person.lunchCafe = null; // keeps `lunchDay`: today's plan is now "out"
+    const want = People.desiredLocation(person, Clock.totalMinutes);
+    if (person.state === "eating") {
+      People.startTrip(person, want, { floor: person.floor, x: person.x });
+    } else if (person.route && person.target === "cafe") {
+      person.target = want;
+      People.reroute(person);
+    }
   },
 
   // Makers having lunch here today, or on their way.

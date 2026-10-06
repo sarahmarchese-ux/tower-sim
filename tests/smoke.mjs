@@ -283,7 +283,9 @@ try {
     // Saves from before Singles and Twins have 8-tile "hotel" rooms. Fake
     // one by relabelling the Twin, guests and all, then reload.
     const before = await page.evaluate(() => {
-      const data = SaveGame.snapshot();
+      // A copy: the snapshot shares the live rooms, and relabelling the
+      // live Twin would trip up the game before the reload.
+      const data = JSON.parse(JSON.stringify(SaveGame.snapshot()));
       const twin = data.world.rooms.find((r) => r.type === "twin");
       twin.type = "hotel";
       SaveGame.discarded = true; // so reloading doesn't save over it

@@ -165,6 +165,7 @@ const Economy = {
     room.moveInAt = Clock.totalMinutes + randomBetween(MOVE_IN_DELAY_MINUTES);
     People.moveOut(room);
     if (isStorefront(room)) Shops.onMovedOut(room);
+    if (room.type === "cafe") Cafes.onClosed(room);
     const salePrice = ROOM_TYPES[room.type].salePrice;
     if (salePrice) {
       World.money -= salePrice;

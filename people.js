@@ -191,17 +191,7 @@ const People = {
   removeForRoom(room) {
     for (const person of this.list.filter((p) => p.room === room)) Elevators.forget(person);
     this.list = this.list.filter((p) => p.room !== room);
-    // Makers lunching at (or heading for) a café that's just been knocked
-    // down go back to their studio.
-    for (const person of this.list) {
-      if (person.lunchCafe !== room) continue;
-      person.lunchCafe = null;
-      if (person.state === "eating") this.startTrip(person, "room", { floor: room.floor, x: person.x });
-      else if (person.route && person.target === "cafe") {
-        person.target = "room";
-        this.reroute(person);
-      }
-    }
+    if (room.type === "cafe") Cafes.onClosed(room);
   },
 
   // A room's tenants are leaving for good. Anyone already out of the

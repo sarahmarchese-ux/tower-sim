@@ -86,7 +86,8 @@ const Shops = {
       if (room.nextShopperAt == null) {
         room.nextShopperAt = now + this.gapMinutes(room);
       } else if (now >= room.nextShopperAt) {
-        if (this.shoppersFor(room) < visitors.max) People.addShopper(room, randomBetween(visitors.spend));
+        const full = this.shoppersFor(room) >= visitors.max || (room.type === "cafe" && Cafes.seated(room) >= CAFE_SEATS);
+        if (!full) People.addShopper(room, randomBetween(visitors.spend));
         room.nextShopperAt = now + this.gapMinutes(room);
       }
     }
