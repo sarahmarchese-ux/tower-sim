@@ -75,7 +75,7 @@ const Routing = {
 
   // starts / goals: arrays of { floor, x }. Several starts or goals are
   // allowed (e.g. "any lobby") — the cheapest one wins.
-  // Returns { start, goal, legs } or null if there's no way through.
+  // Returns { start, goal, legs, cost } or null if there's no way through.
   plan(starts, goals) {
     const nodes = [];
     for (const s of starts) nodes.push({ floor: s.floor, x: s.x, isStart: true });
@@ -105,7 +105,7 @@ const Routing = {
       }
       if (current === -1) return null; // nothing left to explore: no route
       const node = nodes[current];
-      if (node.isGoal) return this._legsTo(current, nodes, prev);
+      if (node.isGoal) return { ...this._legsTo(current, nodes, prev), cost: dist[current] };
       done[current] = true;
 
       const relax = (next, cost) => {

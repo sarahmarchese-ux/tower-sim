@@ -22,8 +22,9 @@ Then visit `http://localhost:8000`.
 
 `tests/smoke.mjs` opens the game in headless Chromium, builds a small tower
 with real mouse clicks (checking shops and hotel rooms stay locked until
-2★, then adding one of each), runs 8 game days (checking the shop sells
-something and the hotel room earns a night), hovers every room, saves and reloads, demolishes things and keeps running. It fails on any page error,
+2★, then adding one of each, plus a café), runs 8 game days (checking
+the shop sells something, the hotel rooms earn a night and makers have
+lunch at the café), hovers every room, saves and reloads, demolishes things and keeps running. It fails on any page error,
 `console.error`, frozen game loop, or save that doesn't restore the same
 state. GitHub Actions runs it on every pull request
 (`.github/workflows/smoke.yml`). To run it yourself:
@@ -37,6 +38,40 @@ npm run smoke
 (The game itself still needs no install; `package.json` is only for this test.)
 
 ## Status
+
+**Milestone 10: food & lunch trips.** Makers now take a lunch break, and
+the tower can feed them. Lunchtime brings a third rush to the elevators,
+after the morning and the evening.
+
+- **Lunch breaks.** On weekdays every maker takes a 30–45 minute break,
+  starting some time between 11:30am and 1:30pm. With no café in the
+  tower, they go out of the building and come back, as in SimTower:
+  two more trips through the lobby each, in the middle of the day.
+- **The Café** (available from the start, 1★) is 12 tiles wide and costs
+  $16,000. A café owner moves in like a shopkeeper and keeps it open every
+  day, about 8am to 4pm. Makers eat at the nearest café that's open and
+  has a seat, unless it's much further than going out; each pays $15–25.
+  A lunch crowd also comes in from the lobby, 11:30am–2pm (half as many
+  at weekends), and spends the same. Takings are banked at midnight.
+- **Where it goes matters.** A café by the elevator on the studios' floors
+  feeds nearly every maker. One at the far end of a floor only feeds the
+  makers on that floor. One high up the tower pulls everyone up a single
+  elevator at once: in a test with 48 makers and one elevator, a café on
+  the 10th floor stretched lunchtime waits past an hour, and a fifth of
+  the makers moved out.
+- **It's noisy at lunch.** While it's serving lunch on weekdays, a café
+  gives off noise 1 (like a sewing studio) to the rooms around it. Keep
+  it away from hotel rooms.
+- In a test tower with 48 makers, a café by the elevator took about
+  $1,300 on a weekday and $350 at weekends, about $7,000 a week. A café
+  that averages under $300 a day closes at the weekly review, as quiet
+  shops do ("Closed: too few diners").
+- **Hover a café** to see whether it's open, how many are at lunch,
+  today's takings and this week's average a day.
+- Makers in an older save get their lunch breaks when it loads.
+
+<details>
+<summary>Milestone 9: hotel rooms</summary>
 
 **Milestone 9: hotel rooms.** Visiting buyers and tourists check in for a
 night or a few, and pay for every night they stay. They're in their rooms
@@ -86,6 +121,7 @@ loads.
   room gets pottery-or-louder noise in working hours.
 - Hotel rooms aren't part of the weekly stress review: guests are judged
   stay by stay instead.
+</details>
 
 <details>
 <summary>Milestone 8: shops</summary>
@@ -244,13 +280,17 @@ or visiting a GitHub Pages link.
 - `routing.js` — plans a route through the building (walk / stairs /
   elevator legs) and works out which rooms can be reached from a lobby.
 - `elevators.js` — self-running elevator cars ("collective control").
-- `people.js` — every tenant, shopper and hotel guest: moving in, their daily schedule,
-  and how they work through a route.
+- `people.js` — every tenant, shopper and hotel guest: moving in, their
+  daily schedule (makers' lunch breaks included), and how they work
+  through a route.
 - `economy.js` — who moves in (and out) when, condo sales and refunds,
   weekly rent, nightly shop takings, hotel nights and upkeep, and
   bankruptcy.
-- `shops.js` — shops: when they're open, sending shoppers in, what each
-  shopper spends (less after a long trip), and the day's takings.
+- `shops.js` — shops and cafés: when they're open, sending shoppers (and
+  the lunch crowd) in, what each spends (less after a long trip), the
+  day's takings, and closing quiet ones.
+- `cafes.js` — makers' lunch: which café (if any) each maker eats at, what
+  they pay, and when a café is serving lunch (and noisy).
 - `hotels.js` — hotel rooms: bookings, checking guests in and out (early,
   if they're too stressed), reviews and occupancy, and nightly takings.
 - `stress.js` — each person's stress: trips, noise, rest, and the weekly

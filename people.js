@@ -12,10 +12,14 @@
 //
 // Each person belongs to one room and follows a simple daily rhythm:
 //   - Makers come to their studio on weekdays and go home in the evening.
+//     Around midday they take a lunch break (milestone 10): at a café in
+//     the tower if one's open and close enough (cafes.js), or out of the
+//     building if not, which makes for a lunchtime rush on the elevators.
 //   - Residents leave their condo on weekday mornings and come back in the
 //     evening; on weekends about half of them go out around midday.
 //   - Shopkeepers open their shop every day, weekends too, from about 9:30
-//     in the morning to about 8:30 at night.
+//     in the morning to about 8:30 at night. A café's keeper keeps café
+//     hours instead, about 8am to 4pm (rooms.js: `keeperHours`).
 //   - Shoppers (milestone 8) are visitors, not tenants. shops.js sends them
 //     in from the lobby while a shop is open; each one walks to the shop,
 //     browses, buys (or doesn't; see shops.js) and leaves for good.
@@ -25,14 +29,15 @@
 //
 // Instead of a timetable of "at 9:00 do X", each person just asks, whenever
 // they're standing still: "given the time right now, where should I be — in
-// my room, or out of the building?" If the answer differs from where they
-// are, they set off. That one question handles everything: a studio placed
+// my room, out of the building, or (a maker at lunch) at a café?" If the
+// answer differs from where they are, they set off. That one question handles everything: a studio placed
 // at 2pm, a maker who got stuck in a queue past quitting time, a weekend.
 //
 // While travelling, a person works through the legs of their route (see
 // routing.js) one at a time. States:
 //   offsite            — out of the building, not drawn
 //   inRoom             — in their studio or condo
+//   eating             — a maker having lunch at a café (`lunchCafe`)
 //   walking            — walking along a floor
 //   onStairs           — climbing or descending one flight
 //   waitingForElevator — queueing at a shaft (elevators.js takes over)
@@ -47,6 +52,8 @@ const STAIRS_MINUTES_PER_FLOOR = 2;
 const RETRY_MINUTES = 30; // how long to wait before trying again if there's no route
 const MOVER_GAP_MINUTES = [3, 8]; // movers arrive a few minutes apart
 const UNPACK_MINUTES = [20, 40]; // a new arrival stays put this long
+const LUNCH_START_HOURS = [11.5, 13.5]; // makers' lunch breaks start 11:30am–1:30pm...
+const LUNCH_MINUTES = [30, 45]; // ...and last this long
 
 const People = {
   list: [],
@@ -80,7 +87,7 @@ const People = {
         tripWaitMinutes: 0,
         tripStairsMinutes: 0,
         lastTripWaitMinutes: 0,
-        ...this.dailyTimes(type.role),
+        ...this.dailyTimes(room),
       };
       this.list.push(person);
       showUpAt += randomBetween(MOVER_GAP_MINUTES);
@@ -88,16 +95,34 @@ const People = {
   },
 
   // Each tenant's own times of day, in minutes after midnight.
-  dailyTimes(role) {
+  dailyTimes(room) {
+    const type = ROOM_TYPES[room.type];
     const between = (fromHour, toHour) => randomBetween([fromHour * 60, toHour * 60]);
-    if (role === "maker") return { arriveAt: between(8, 9.5), leaveAt: between(16.5, 18) };
-    if (role === "shopkeeper") return { arriveAt: between(9, 10), leaveAt: between(20, 21) };
+    if (type.role === "maker") return { arriveAt: between(8, 9.5), leaveAt: between(16.5, 18), ...this.lunchTimes() };
+    if (type.role === "shopkeeper") {
+      const [arrive, leave] = type.keeperHours;
+      return { arriveAt: between(...arrive), leaveAt: between(...leave) };
+    }
     return {
       leaveAt: between(7.5, 9),
       returnAt: between(17.5, 19),
       weekendOuting: Math.random() < 0.5,
       outingStart: between(11, 13),
       outingEnd: between(15, 18),
+    };
+  },
+
+  // When a maker takes their lunch break, and for how long, in minutes.
+  // `lunchDay` / `lunchCafe` are today's plan, made when the break starts
+  // (cafes.js): the game day it was made for, and the café, or null to go
+  // out.
+  lunchTimes() {
+    return {
+      lunchAt: randomBetween(LUNCH_START_HOURS.map((h) => h * 60)),
+      lunchMinutes: randomBetween(LUNCH_MINUTES),
+      lunchDay: null,
+      lunchCafe: null,
+      seatX: 0,
     };
   },
 
@@ -166,6 +191,17 @@ const People = {
   removeForRoom(room) {
     for (const person of this.list.filter((p) => p.room === room)) Elevators.forget(person);
     this.list = this.list.filter((p) => p.room !== room);
+    // Makers lunching at (or heading for) a café that's just been knocked
+    // down go back to their studio.
+    for (const person of this.list) {
+      if (person.lunchCafe !== room) continue;
+      person.lunchCafe = null;
+      if (person.state === "eating") this.startTrip(person, "room", { floor: room.floor, x: person.x });
+      else if (person.route && person.target === "cafe") {
+        person.target = "room";
+        this.reroute(person);
+      }
+    }
   },
 
   // A room's tenants are leaving for good. Anyone already out of the
@@ -196,6 +232,20 @@ const People = {
     return person.role === "shopper" ? person.browseX : this.slotX(person.room, person.slot);
   },
 
+  // Where someone is when standing still: "room", "cafe" or "offsite".
+  whereIs(person) {
+    if (person.state === "inRoom") return "room";
+    if (person.state === "eating") return "cafe";
+    return "offsite";
+  },
+
+  // The spots that count as being at a place (any lobby, for "offsite").
+  pointsFor(person, place) {
+    if (place === "room") return [{ floor: person.room.floor, x: this.homeX(person) }];
+    if (place === "cafe") return person.lunchCafe ? [{ floor: person.lunchCafe.floor, x: person.seatX }] : [];
+    return Routing.lobbyPoints();
+  },
+
   // The one question: where should this person be at game time `t`?
   desiredLocation(person, t) {
     if (person.movingOut) return "offsite";
@@ -212,7 +262,11 @@ const People = {
     const minute = t - day * MINUTES_PER_DAY;
     const weekend = day % 7 >= 5;
     if (person.role === "maker") {
-      return !weekend && minute >= person.arriveAt && minute < person.leaveAt ? "room" : "offsite";
+      if (weekend || minute < person.arriveAt || minute >= person.leaveAt) return "offsite";
+      if (minute >= person.lunchAt && minute < person.lunchAt + person.lunchMinutes) {
+        return person.lunchDay === day && person.lunchCafe ? "cafe" : "offsite";
+      }
+      return "room";
     }
     if (person.role === "shopkeeper") {
       return minute >= person.arriveAt && minute < person.leaveAt ? "room" : "offsite";
@@ -226,13 +280,16 @@ const People = {
   update(minutes) {
     const now = Clock.totalMinutes;
     for (const person of this.list) {
-      if (person.state === "inRoom" || person.state === "offsite") {
+      if (person.state === "inRoom" || person.state === "offsite" || person.state === "eating") {
         if (now < person.idleUntil) continue;
+        // A maker at work whose lunch break has come round decides where
+        // to eat.
+        if (person.role === "maker" && person.state === "inRoom" && !person.movingIn && !person.movingOut) Cafes.planLunch(person, now);
         // Done browsing: pay (or not) on the way out.
         if (person.role === "shopper" && person.state === "inRoom" && person.bought === null && !person.movingOut) {
           Shops.checkout(person);
         }
-        const here = person.state === "inRoom" ? "room" : "offsite";
+        const here = this.whereIs(person);
         const want = this.desiredLocation(person, now);
         if (want !== here) this.startTrip(person, want);
       } else {
@@ -251,12 +308,13 @@ const People = {
     }
   },
 
-  // Plan a route and set off. Coming in, you appear at a lobby; going out,
-  // you head for one and vanish when you reach it.
+  // Plan a route and set off, from where they are (or `from`, when
+  // re-routing mid-trip) to `target`: "room", "cafe" or "offsite". Coming
+  // in, you appear at a lobby; going out, you head for one and vanish when
+  // you reach it.
   startTrip(person, target, from) {
-    const home = { floor: person.room.floor, x: this.homeX(person) };
-    const starts = from ? [from] : target === "room" ? Routing.lobbyPoints() : [home];
-    const goals = target === "room" ? [home] : Routing.lobbyPoints();
+    const starts = from ? [from] : this.pointsFor(person, this.whereIs(person));
+    const goals = this.pointsFor(person, target);
     const route = starts.length && goals.length ? Routing.plan(starts, goals) : null;
 
     if (!route) {
@@ -348,7 +406,7 @@ const People = {
   },
 
   finishTrip(person) {
-    person.state = person.target === "room" ? "inRoom" : "offsite";
+    person.state = person.target === "room" ? "inRoom" : person.target === "cafe" ? "eating" : "offsite";
     person.route = null;
     person.lastTripWaitMinutes = person.tripWaitMinutes;
     let felt = 0;
@@ -372,6 +430,11 @@ const People = {
         person.idleUntil = Clock.totalMinutes + randomBetween(UNPACK_MINUTES);
         Economy.onArrived(person.room);
       }
+    }
+    if (person.target === "cafe") {
+      person.floor = person.lunchCafe.floor;
+      person.x = person.seatX;
+      Cafes.onMakerArrived(person);
     }
   },
 

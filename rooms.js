@@ -16,9 +16,15 @@
 // woodwork the least, so the roomy, loud studio is the cheap one.
 //
 // A shop (milestone 8, see shops.js) has one shopkeeper and earns from the
-// shoppers who visit it: each spends around `spendPerShopper`, and the
-// day's takings are banked at midnight. `unlocksAt` is the star rating a
-// room type needs before it can be built.
+// shoppers who visit it, and the day's takings are banked at midnight.
+// `unlocksAt` is the star rating a room type needs before it can be built.
+// A café (milestone 10) works the same way, with its own hours and
+// visitors: makers on their lunch break, and a lunch crowd from outside.
+// Shops and cafés are "storefronts": `keeperHours` is when the keeper is
+// in (the room is open), and `visitors` says when visitors come from the
+// lobby, how often, how long they stay and what they spend. A café is
+// noisy (`noise`) only while it's serving lunch, as a studio is only while
+// its makers work.
 //
 // A hotel room (milestone 9, see hotels.js) has no tenants of its own:
 // parties of up to `tenants` guests book it for a night or a few, and it
@@ -37,7 +43,23 @@ const ROOM_TYPES = {
   woodwork: { name: "Woodwork Studio", width: 12, cost: 10000, color: "#8b5e34", tenants: 3, role: "maker", noise: 3, rentPerWeek: 9100 },
   jewellery: { name: "Jewellery Studio", width: 6, cost: 15000, color: "#f4d35e", tenants: 1, role: "maker", noise: 0, rentPerWeek: 17500 },
   condo: { name: "Condo", width: 16, cost: 20000, color: "#a3c9d8", tenants: 3, role: "resident", noise: 0, salePrice: 30000 },
-  shop: { name: "Craft Shop", width: 10, cost: 15000, color: "#8fd1a8", tenants: 1, role: "shopkeeper", noise: 0, spendPerShopper: [50, 150], unlocksAt: 2 },
+  shop: {
+    name: "Craft Shop", width: 10, cost: 15000, color: "#8fd1a8", tenants: 1, role: "shopkeeper", noise: 0, unlocksAt: 2,
+    keeperHours: [[9, 10], [20, 21]], // arrives 9–10am, leaves 8–9pm
+    visitors: {
+      who: "shoppers", hours: [10, 19.5], gapMinutes: 40, weekendRush: 2, eveningRush: 1.5, max: 8,
+      stayMinutes: [15, 40], spend: [50, 150], quietPerDay: 700,
+    },
+  },
+  cafe: {
+    name: "Café", width: 12, cost: 16000, color: "#f2c48d", tenants: 1, role: "shopkeeper", noise: 1,
+    keeperHours: [[7.5, 8.5], [15.5, 16.5]], // arrives 7:30–8:30am, leaves 3:30–4:30pm
+    visitors: {
+      who: "diners", hours: [11.5, 14], gapMinutes: 4, weekendRush: 0.5, eveningRush: 1, max: 14,
+      stayMinutes: [20, 35], spend: [15, 25], quietPerDay: 300,
+    },
+    lunchHours: [11.5, 14], // when it's busy (and noisy) on weekdays
+  },
   single: { name: "Single Room", width: 6, cost: 10000, color: "#e9a6a6", tenants: 1, role: "guest", noise: 0, ratePerNight: 2000, parties: ["buyer"], unlocksAt: 2 },
   twin: { name: "Twin Room", width: 10, cost: 17000, color: "#e08f9a", tenants: 2, role: "guest", noise: 0, ratePerNight: 2800, parties: ["tourists", "buyer"], unlocksAt: 2 },
 };
@@ -49,6 +71,11 @@ const TRANSIT_TYPES = {
   stairs: { name: "Stairs", width: 4, cost: 5000, upkeepPerDay: 0 },
   elevator: { name: "Elevator", width: 4, baseCost: 20000, costPerFloor: 1000, maxFloors: 30, upkeepPerDay: 1000 },
 };
+
+// Shops and cafés: rooms with a keeper that sell to visitors (shops.js).
+function isStorefront(room) {
+  return !!ROOM_TYPES[room.type].visitors;
+}
 
 // Single and Twin rooms are both hotel rooms.
 function isHotel(room) {

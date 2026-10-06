@@ -19,7 +19,8 @@
 //     at home in a noisy condo gains stress every hour. Hotel guests, who
 //     are in during the day and came to get away from it all, gain it 7½
 //     times as fast: a woodwork studio next door can send them red in a
-//     single working day. Makers and shopkeepers don't mind noise.
+//     single working day. A café is noisy too, while it's serving lunch
+//     on weekdays (cafes.js). Makers and shopkeepers don't mind noise.
 // What takes it away: resting, i.e. being at home in peace, or out of the
 // building.
 //
@@ -83,11 +84,15 @@ const Stress = {
 
   // Noise and rest, for everyone who isn't mid-trip. Movers aren't settled
   // in yet (or are on their way out), so they're left alone.
-  // Which studios have a maker at work right now.
+  // Which rooms are making noise right now: studios with a maker at work
+  // (not out at lunch), and cafés serving lunch.
   refreshWorking() {
     this._working = new Set(
       People.list.filter((p) => p.role === "maker" && p.state === "inRoom").map((p) => p.room),
     );
+    for (const room of World.rooms) {
+      if (room.type === "cafe" && Cafes.isServingLunch(room)) this._working.add(room);
+    }
   },
 
   update(minutes) {
@@ -104,7 +109,7 @@ const Stress = {
           continue;
         }
       }
-      if (person.state === "inRoom" || person.state === "offsite") this.add(person, -REST_PER_HOUR * hours);
+      if (person.state === "inRoom" || person.state === "offsite" || person.state === "eating") this.add(person, -REST_PER_HOUR * hours);
     }
   },
 

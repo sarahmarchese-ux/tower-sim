@@ -161,6 +161,7 @@ try {
       ["woodwork", 22, 1],
       ["jewellery", 4, 2],
       ["condo", 10, 2],
+      ["cafe", 4, 3], // by the elevator, so the makers below come up for lunch
     ]) {
       await pickTool(tool);
       await clickAt(tile, floor);
@@ -169,19 +170,20 @@ try {
     // Shops and hotel rooms unlock at 2★. Reaching 100 people would take
     // too long here, so check the lock, then hand the tower its second star
     // directly. (The Single sits over the woodwork studio, so its weekday
-    // guests get noise too; the Twin is up on the quiet top floor.)
+    // guests get noise too; the Twin is up on the top floor, clear of the
+    // café.)
     await pickTool("shop");
     await clickAt(22, 0);
     await pickTool("single");
     await clickAt(26, 2);
     await pickTool("twin");
-    await clickAt(4, 3);
+    await clickAt(28, 3);
     const early = await page.evaluate(() => World.rooms.filter((r) => r.type === "shop" || isHotel(r)).length);
     check(early === 0, "a shop or hotel room was built before 2★");
     await page.evaluate(() => {
       Ratings.stars = 2;
     });
-    await clickAt(4, 3);
+    await clickAt(28, 3);
     await pickTool("single");
     await clickAt(26, 2);
     await pickTool("shop");
@@ -189,7 +191,7 @@ try {
     await page.keyboard.press("Escape");
 
     const s = await state();
-    check(s.rooms.length === 9, `expected 9 rooms, got ${s.rooms.length}: ${s.rooms}`);
+    check(s.rooms.length === 10, `expected 10 rooms, got ${s.rooms.length}: ${s.rooms}`);
     check(s.transit.length === 2, `expected stairs and an elevator, got ${s.transit}`);
     check(s.money < 200000, "building should have cost money");
   });
@@ -200,11 +202,18 @@ try {
     // day's shop takings and hotel nights.
     let sales = 0;
     let nights = 0;
+    let lunches = 0;
     for (let day = 0; day < SIM_DAYS; day++) {
       await simulate(24 * 60);
-      sales += await page.evaluate(() => Economy.lastSales || 0);
+      sales += await page.evaluate(() => World.rooms.find((r) => r.type === "shop").salesYesterday || 0);
       nights += await page.evaluate(() => Economy.lastHotel || 0);
+      lunches += await page.evaluate(() => World.rooms.find((r) => r.type === "cafe").salesYesterday || 0);
     }
+    check(lunches > 0, "the café never sold a lunch");
+    check(
+      await page.evaluate(() => People.list.some((p) => p.role === "maker" && p.lunchCafe)),
+      "no maker ever had lunch at the café",
+    );
     const after = await state();
     check(sales > 0, "the shop never sold anything");
     check(nights > 0, "the hotel rooms never earned a night");

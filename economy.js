@@ -15,7 +15,7 @@
 // Every midnight is a tally. Each occupied studio adds a day's worth of its
 // weekly rent to what it owes (so a studio that moved in on Thursday pays
 // for Thursday to Sunday), each shop's takings for the day are banked (see
-// shops.js), each hotel room with guests in it earns its night (see
+// shops.js; cafés too), each hotel room with guests in it earns its night (see
 // hotels.js), and each elevator's upkeep is paid. Once a week,
 // at midnight at the end of Sunday, is payday: everything owed comes in at
 // once. Upkeep keeps coming every night whether or not anyone pays you, so
@@ -124,7 +124,7 @@ const Economy = {
 
     let sales = 0;
     for (const room of World.rooms) {
-      if (room.type !== "shop") continue;
+      if (!isStorefront(room)) continue;
       const takings = room.till || 0;
       room.till = 0;
       // Occupied all through the day just ended? Then it counts towards
@@ -164,7 +164,7 @@ const Economy = {
     World.setRoomStatus(room, "vacant");
     room.moveInAt = Clock.totalMinutes + randomBetween(MOVE_IN_DELAY_MINUTES);
     People.moveOut(room);
-    if (room.type === "shop") Shops.onMovedOut(room);
+    if (isStorefront(room)) Shops.onMovedOut(room);
     const salePrice = ROOM_TYPES[room.type].salePrice;
     if (salePrice) {
       World.money -= salePrice;

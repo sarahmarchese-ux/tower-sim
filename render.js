@@ -205,7 +205,7 @@ function drawRooms(w, h) {
       const sign = room.status === "movingIn" ? "Moving in" : room.status === "checkingIn" ? "Checking in" : vacantLabel(type);
       ctx.font = "italic 10px sans-serif";
       ctx.fillText(sign, box.left + box.width / 2, box.top + 21, box.width - 6);
-    } else if (room.type === "shop") {
+    } else if (isStorefront(room)) {
       // In the corner, clear of the shopkeeper standing in the middle.
       ctx.font = "italic 10px sans-serif";
       ctx.textAlign = "left";
@@ -335,7 +335,7 @@ function drawPeople(w, h) {
     ctx.fill();
 
     // A shopper who bought something carries a bag out.
-    if (person.role === "shopper" && person.bought > 0) {
+    if (person.role === "shopper" && person.bought > 0 && person.room.type === "shop") {
       ctx.fillStyle = "#e07a2f";
       ctx.fillRect(x + 2, feet - 6, 4, 4);
     }
