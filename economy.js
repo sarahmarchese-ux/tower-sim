@@ -45,7 +45,7 @@ const Economy = {
   popups: [], // floating "Rent +$11,200" labels; see render.js
 
   onRoomAdded(room) {
-    if (room.status === "vacant" && room.type !== "hotel") {
+    if (room.status === "vacant" && !isHotel(room)) {
       room.moveInAt = Clock.totalMinutes + randomBetween(MOVE_IN_DELAY_MINUTES);
     }
   },
@@ -54,7 +54,7 @@ const Economy = {
     const now = Clock.totalMinutes;
 
     for (const room of World.rooms) {
-      if (room.status === "vacant" && room.type !== "hotel" && now >= room.moveInAt) this.tryMoveIn(room);
+      if (room.status === "vacant" && !isHotel(room) && now >= room.moveInAt) this.tryMoveIn(room);
     }
 
     while (Clock.day > this.lastTallyDay) {

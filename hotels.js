@@ -2,10 +2,13 @@
 // night or a few, and the first rooms that earn by the night.
 //
 // A hotel room has no tenants. Instead, each afternoon an empty room may
-// get a booking: a party (a buyer on their own, or a pair of tourists)
-// turns up at a lobby some time between CHECK_IN_HOURS and walks up to it.
-// Fridays and Saturdays are the busy nights, and tourists mostly come then;
-// buyers mostly come in the week. A party stays 1 to 3 nights, and checks
+// get a booking: a party turns up at a lobby some time between
+// CHECK_IN_HOURS and walks up to it. Rooms come in two sizes (rooms.js). A
+// Single takes a buyer on their own, who mostly comes in the week. A Twin
+// takes a pair of tourists, who mostly come on Fridays and Saturdays; on a
+// night no tourists book it, it takes a lone buyer if every Single in the
+// tower is taken, at the Single rate. So a tower needs both sizes to stay
+// full all week. A party stays 1 to 3 nights, and checks
 // out between 8 and 11 in the morning. While they're staying, the room
 // earns its nightly rate at every midnight tally (economy.js).
 //
@@ -31,10 +34,12 @@
 
 const CHECK_IN_HOURS = [14, 21]; // parties arrive at the lobby 2pm–9pm
 const CHECK_OUT_HOURS = [8, 11];
-// The chance an empty room gets a booking, by the day the party arrives
-// (Mon ... Sun): Friday and Saturday nights fill up.
-const BOOKING_CHANCE = [0.55, 0.55, 0.55, 0.6, 0.9, 0.9, 0.4];
-const TOURIST_SHARE = { weekday: 0.3, weekend: 0.7 }; // the rest are buyers
+// The chance an empty room that suits them gets booked, by the day the
+// party arrives (Mon ... Sun): buyers come in the week, tourists at weekends.
+const BOOKING_CHANCE = {
+  buyer: [0.6, 0.6, 0.6, 0.6, 0.35, 0.25, 0.4],
+  tourists: [0.1, 0.1, 0.1, 0.2, 0.9, 0.9, 0.3],
+};
 const OUTING_CHANCE = { tourists: 0.6, buyer: 0.3 }; // per full day of a stay
 const OUTING_START_HOURS = [10, 13];
 const OUTING_LENGTH_HOURS = [2, 5];
@@ -53,8 +58,10 @@ const Hotels = {
       guestsByRoom.get(person.room).push(person);
     }
 
-    for (const room of World.rooms) {
-      if (room.type !== "hotel") continue;
+    // Singles first, so a buyer only ends up in a Twin when every Single
+    // is taken.
+    const rooms = World.rooms.filter(isHotel).sort((a, b) => ROOM_TYPES[a.type].tenants - ROOM_TYPES[b.type].tenants);
+    for (const room of rooms) {
       if (room.status === "vacant") {
         this.updateBooking(room, now);
         continue;
@@ -81,19 +88,42 @@ const Hotels = {
     if (room.nextGuestsAt == null) {
       if (hour < CHECK_IN_HOURS[0] || hour >= CHECK_IN_HOURS[1] || room.bookingDay === Clock.day) return;
       room.bookingDay = Clock.day;
-      if (Math.random() < this.bookingChance(room)) {
+      const party = this.whoBooks(room);
+      if (party) {
+        room.nextParty = party;
         const lastArrival = Clock.day * MINUTES_PER_DAY + CHECK_IN_HOURS[1] * 60;
         room.nextGuestsAt = randomBetween([now, lastArrival]);
       }
     } else if (now >= room.nextGuestsAt) {
       room.nextGuestsAt = null;
       // Nobody books a room they can't get to (the red "!").
-      if (Routing.isReachable(room)) this.checkIn(room);
+      if (Routing.isReachable(room)) this.checkIn(room, room.nextParty || "buyer");
     }
   },
 
-  bookingChance(room) {
-    return BOOKING_CHANCE[Clock.day % 7] * Math.max(MIN_BOOKING_REPUTATION, this.reputation(room));
+  // Who (if anyone) books this room tonight: "buyer", "tourists" or null.
+  // Each kind of party the room takes gets a chance, in the order rooms.js
+  // lists them; a Twin only gets a buyer when there's no Single free.
+  whoBooks(room) {
+    const goodName = Math.max(MIN_BOOKING_REPUTATION, this.reputation(room));
+    for (const party of ROOM_TYPES[room.type].parties) {
+      if (party === "buyer" && room.type !== "single" && this.singleFree()) continue;
+      if (Math.random() < BOOKING_CHANCE[party][Clock.day % 7] * goodName) return party;
+    }
+    return null;
+  },
+
+  // Is there a Single nobody has booked tonight, that a buyer could get to?
+  singleFree() {
+    return World.rooms.some(
+      (room) => room.type === "single" && room.status === "vacant" && room.nextGuestsAt == null && Routing.isReachable(room),
+    );
+  },
+
+  // What a party pays a night: a buyer pays the Single rate, whichever
+  // room they're in.
+  rateFor(room) {
+    return room.party === "buyer" ? ROOM_TYPES.single.ratePerNight : ROOM_TYPES[room.type].ratePerNight;
   },
 
   // A new room starts with a good name.
@@ -102,10 +132,11 @@ const Hotels = {
   },
 
   // A party turns up at the lobby and heads for the room.
-  checkIn(room) {
+  checkIn(room, party) {
     const weekday = Clock.day % 7;
     const weekendArrival = weekday === 4 || weekday === 5; // Friday or Saturday
-    const tourists = Math.random() < (weekendArrival ? TOURIST_SHARE.weekend : TOURIST_SHARE.weekday);
+    const tourists = party === "tourists";
+    room.nextParty = null;
     const nights = 1 + Math.floor(Math.random() * (weekendArrival ? 2 : 3));
     room.party = tourists ? "tourists" : "buyer";
     room.nights = nights;
@@ -180,11 +211,11 @@ const Hotels = {
   nightlyTally() {
     let total = 0;
     for (const room of World.rooms) {
-      if (room.type !== "hotel") continue;
+      if (!isHotel(room)) continue;
       const booked = room.status === "occupied";
       room.nightHistory = [...(room.nightHistory || []), booked].slice(-NIGHTS_REMEMBERED);
       if (!booked) continue;
-      const rate = ROOM_TYPES.hotel.ratePerNight;
+      const rate = this.rateFor(room);
       total += rate;
       Economy.popupOverRoom(room, `Night +${World.formatMoney(rate)}`, "#7dffa0");
     }
@@ -195,14 +226,15 @@ const Hotels = {
   // checking out this morning has had its last night.
   tonight() {
     const staying = World.rooms.filter(
-      (room) => room.type === "hotel" && room.status === "occupied" && Clock.day < room.checkInDay + room.nights,
+      (room) => isHotel(room) && room.status === "occupied" && Clock.day < room.checkInDay + room.nights,
     );
-    return staying.length * ROOM_TYPES.hotel.ratePerNight;
+    return staying.reduce((sum, room) => sum + this.rateFor(room), 0);
   },
 
   // "2 tourists, night 2 of 3", for the hover readout.
   describeStay(room) {
-    const who = room.party === "tourists" ? "2 tourists" : "a buyer";
+    let who = room.party === "tourists" ? "2 tourists" : "a buyer";
+    if (room.party === "buyer" && room.type === "twin") who += " (at the Single rate)";
     const night = Clock.day - room.checkInDay + 1;
     if (night > room.nights) return `${who}, checking out this morning`;
     return `${who}, night ${night} of ${room.nights}`;

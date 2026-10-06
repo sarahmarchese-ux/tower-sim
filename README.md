@@ -42,14 +42,23 @@ npm run smoke
 night or a few, and pay for every night they stay. They're in their rooms
 during the day, so studio noise now really matters.
 
-- **Hotel rooms unlock at 2★**, like shops. A Hotel Room is 8 tiles wide,
-  costs $14,000 and earns $2,000 for every night a guest sleeps in it,
-  paid at the midnight tally ("Night +$2,000", and "hotel tonight" in the
-  top bar).
+Since milestone 9 shipped, hotel rooms come in two sizes, Single and
+Twin, and guests mind long trips more. A save with the old 8-tile hotel
+rooms has them taken down and refunded in full ($14,000 each) when it
+loads.
+
+- **Hotel rooms unlock at 2★**, like shops, and come in two sizes, as in
+  SimTower. Each earns for every night guests sleep in it, paid at the
+  midnight tally ("Night +$2,000", and "hotel tonight" in the top bar).
+  - **Single Room:** 6 tiles, $10,000, $2,000 a night. Takes a buyer on
+    their own.
+  - **Twin Room:** 10 tiles, $17,000, $2,800 a night. Takes a pair of
+    tourists. On a night no tourists book it, it takes a lone buyer if
+    every Single is taken, but a buyer only pays the Single rate.
 - **Bookings.** Each afternoon an empty room may get a booking, and the
-  guests turn up at the lobby between 2pm and 9pm: a buyer on their own
-  (mostly in the week) or a pair of tourists (mostly Fridays and
-  Saturdays, the busiest nights). They stay 1–3 nights and check out
+  guests turn up at the lobby between 2pm and 9pm. Buyers come mostly in
+  the week and tourists mostly on Fridays and Saturdays, so a tower needs
+  both sizes to stay full all week. They stay 1–3 nights and check out
   between 8 and 11 in the morning. Guests wheel a suitcase in and out.
   They're visitors, so they don't count towards the population. Nobody
   books a room they can't reach.
@@ -58,15 +67,19 @@ during the day, so studio noise now really matters.
   studio noise stresses them 7½ times as fast as it does condo
   residents. A woodwork studio next door, or pottery below, makes for a
   stressful weekday; weekends are quiet whatever the layout. Long trips
-  up from the lobby stress them too.
+  up from the lobby stress them too, more than residents: anything over
+  15 minutes counts (stairs and queueing double, as ever), so two flights
+  of stairs are fine but five are not.
 - **Too much and they leave.** A guest who goes red checks out early
   ("Checked out early: too noisy"), and that night earns nothing.
 - **Reviews set occupancy.** Every stay ends with a review: good if the
   guests hardly noticed a thing, poor if they went red. A room's
   reviews set how often it's booked, down to a quarter as often. In a
-  test run over six weeks, a quiet room was booked about 5 nights a week
-  ($10k), one beside a sewing studio 4½, one over a pottery studio 3½,
-  and one beside a woodwork studio 3 ($6k).
+  test run over twelve weeks, a quiet Single was booked 4–5 nights a week
+  (about $1,400–1,700 a tile), one beside a sewing studio about 3½, one
+  five flights up by stairs alone 3⅓, and one beside a woodwork studio or
+  over a pottery studio about 2 ($600–800 a tile). A quiet Twin was booked
+  about 5½ nights ($1,250–1,400 a tile).
 - **Hover a hotel room** to see who's staying and which night of how many,
   their stress, the room's reviews, how many of the last 7 nights it was
   booked, and the noise it gets now and in working hours. It warns when a

@@ -31,7 +31,7 @@ const UI = {
       if (room.type === "shop" && room.status === "occupied" && Shops.isQuiet(room)) {
         this.addWarning(tip, `Too few shoppers: closes at the weekly review if takings stay under ${World.formatMoney(QUIET_SALES_PER_DAY)} a day. Shoppers give up on long trips: bring it nearer the lobby or the elevators.`);
       }
-      if (room.type === "hotel") {
+      if (isHotel(room)) {
         if (Stress.noiseAt(room, true) >= 2) {
           this.addWarning(tip, "Noisy in working hours: guests are in by day, and studio noise stresses them fast. Keep hotel rooms a floor away from pottery and woodwork.");
         } else if (Hotels.reviewsLabel(room) === "poor") {
@@ -74,7 +74,7 @@ const UI = {
   describeRoom(room) {
     const type = ROOM_TYPES[room.type];
     const parts = [type.name];
-    if (room.type === "hotel") parts.push(...this.describeHotel(room));
+    if (isHotel(room)) parts.push(...this.describeHotel(room));
     else if (room.status === "vacant") parts.push(type.role === "shopkeeper" ? "looking for a shopkeeper" : vacantLabel(type).toLowerCase());
     else if (room.status === "movingIn") parts.push("moving in");
     else {
