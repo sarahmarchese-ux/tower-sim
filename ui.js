@@ -28,8 +28,10 @@ const UI = {
     if (tenanted && !Pointer.dragging) {
       tip.textContent = this.describeRoom(room);
       if (!Routing.isReachable(room)) this.addWarning(tip, "! " + this.unreachableAdvice(room));
-      if (room.type === "shop" && room.status === "occupied" && Shops.isQuiet(room)) {
-        this.addWarning(tip, `Too few shoppers: closes at the weekly review if takings stay under ${World.formatMoney(QUIET_SALES_PER_DAY)} a day. Shoppers give up on long trips: bring it nearer the lobby or the elevators.`);
+      if (isStorefront(room) && room.status === "occupied" && Shops.isQuiet(room)) {
+        const visitors = ROOM_TYPES[room.type].visitors;
+        const Who = visitors.who[0].toUpperCase() + visitors.who.slice(1);
+        this.addWarning(tip, `Too few ${visitors.who}: closes at the weekly review if takings stay under ${World.formatMoney(visitors.quietPerDay)} a day. ${Who} give up on long trips: bring it nearer the lobby or the elevators.`);
       }
       if (isHotel(room)) {
         if (Stress.noiseAt(room, true) >= 2) {
@@ -81,10 +83,15 @@ const UI = {
       const average = Stress.roomAverage(room);
       if (average !== null) parts.push(`stress ${Math.round(average)} (${Stress.band(average)})`);
     }
-    if (room.type === "shop" && room.status === "occupied") {
+    if (isStorefront(room) && room.status === "occupied") {
       parts.splice(1, 0, Shops.isOpen(room) ? "open" : "closed"); // right after its name
-      const shoppers = Shops.shoppersFor(room);
-      if (shoppers > 0) parts.push(`${shoppers} shopper${shoppers === 1 ? "" : "s"}`);
+      if (room.type === "cafe") {
+        const eating = Cafes.seated(room);
+        if (eating > 0) parts.push(`${eating} at lunch`);
+      } else {
+        const shoppers = Shops.shoppersFor(room);
+        if (shoppers > 0) parts.push(`${shoppers} shopper${shoppers === 1 ? "" : "s"}`);
+      }
       let sales = `sales today ${World.formatMoney(room.till || 0)}`;
       if (room.salesYesterday !== undefined) sales += ` (yesterday ${World.formatMoney(room.salesYesterday)})`;
       parts.push(sales);
@@ -97,7 +104,7 @@ const UI = {
       const working = Stress.noiseAt(room, true);
       parts.push(now === working ? `noise here: ${now}` : `noise here: ${now} now, ${working} in working hours`);
     }
-    else if (type.noise > 0) parts.push(`makes noise ${type.noise}`);
+    else if (type.noise > 0) parts.push(room.type === "cafe" ? `noise ${type.noise} while serving lunch` : `makes noise ${type.noise}`);
     else parts.push("quiet");
     return parts.join(" · ");
   },

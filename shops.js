@@ -1,6 +1,12 @@
 // Shops (milestone 8): where the tower's makers sell their work, and the
 // first rooms that earn from visitors rather than tenants.
 //
+// Cafés (milestone 10) run on the same machinery: a keeper, visitors from
+// the lobby (the lunch crowd), a till and a weekly review. What differs,
+// such as their hours and what visitors spend, is in rooms.js (`keeperHours`,
+// `visitors`). Makers' lunch breaks are in cafes.js. Below, "shop" means
+// either, and "shopper" any visitor, diners included.
+//
 // A shop has one shopkeeper, who moves in like any tenant (economy.js) and
 // keeps shop every day, weekends included (people.js). The shop is open
 // while they're in it. While it's open, shoppers turn up at a lobby every
@@ -29,24 +35,19 @@
 // traded this week (`room.weekSales` over `room.weekDays`; the day it
 // opened doesn't count, as it wasn't open all day). At the weekly review,
 // a shop that has traded at least MIN_DAYS_JUDGED full days and averaged
-// under QUIET_SALES_PER_DAY closes: its shopkeeper leaves and it goes back
+// under its `quietPerDay` (rooms.js) closes: its shopkeeper leaves and it goes back
 // on the market, and the next shopkeeper starts with a fresh name.
 //
 // Takings go into the shop's till (`room.till`) as the day goes on, and
 // economy.js banks every till at midnight. Like rent owed, the till lives
 // on the room, so it's saved with it and lost if the shop is demolished.
 
-const SHOPPER_HOURS = [10, 19.5]; // shoppers arrive 10:00–19:30
-const SHOPPER_GAP_MINUTES = 40; // average gap between one shop's shoppers, weekday daytime
-const WEEKEND_RUSH = 2; // twice as many shoppers at weekends...
-const EVENING_RUSH = 1.5; // ...and half as many again after work
-const EVENING_FROM_HOUR = 17;
-const BROWSE_MINUTES = [15, 40];
+// Each storefront's visitor hours, rushes, stay, spend and quiet line are
+// its `visitors` in rooms.js.
+const EVENING_FROM_HOUR = 17; // the evening rush starts here
 const NO_SALE_TRIP_MINUTES = 60; // a trip that felt this long: no sale
-const MAX_SHOPPERS_PER_SHOP = 8; // in the building at once
 const WORD_OF_MOUTH = 0.2; // how much each visit moves a shop's reputation
 const MIN_REPUTATION = 0.25; // even a shop with a bad name sees some shoppers
-const QUIET_SALES_PER_DAY = 700; // a week averaging under this closes the shop
 const MIN_DAYS_JUDGED = 3; // full days of trading before a shop can be judged quiet
 
 const Shops = {
@@ -73,10 +74,11 @@ const Shops = {
     this.refreshOpen();
     const now = Clock.totalMinutes;
     const hour = Clock.hour;
-    const inHours = hour >= SHOPPER_HOURS[0] && hour < SHOPPER_HOURS[1];
 
     for (const room of World.rooms) {
-      if (room.type !== "shop") continue;
+      if (!isStorefront(room)) continue;
+      const visitors = ROOM_TYPES[room.type].visitors;
+      const inHours = hour >= visitors.hours[0] && hour < visitors.hours[1];
       if (!inHours || !this.isOpen(room)) {
         room.nextShopperAt = null; // the first shopper comes a while after opening
         continue;
@@ -84,9 +86,8 @@ const Shops = {
       if (room.nextShopperAt == null) {
         room.nextShopperAt = now + this.gapMinutes(room);
       } else if (now >= room.nextShopperAt) {
-        if (this.shoppersFor(room) < MAX_SHOPPERS_PER_SHOP) {
-          People.addShopper(room, randomBetween(ROOM_TYPES.shop.spendPerShopper));
-        }
+        const full = this.shoppersFor(room) >= visitors.max || (room.type === "cafe" && Cafes.seated(room) >= CAFE_SEATS);
+        if (!full) People.addShopper(room, randomBetween(visitors.spend));
         room.nextShopperAt = now + this.gapMinutes(room);
       }
     }
@@ -96,10 +97,11 @@ const Shops = {
   // it's busy and grows when the shop has a bad name, so they don't arrive
   // like clockwork.
   gapMinutes(room) {
+    const visitors = ROOM_TYPES[room.type].visitors;
     let rush = Math.max(MIN_REPUTATION, this.reputation(room));
-    if (Clock.isWeekend) rush *= WEEKEND_RUSH;
-    if (Clock.hour >= EVENING_FROM_HOUR) rush *= EVENING_RUSH;
-    return (SHOPPER_GAP_MINUTES / rush) * randomBetween([0.5, 1.5]);
+    if (Clock.isWeekend) rush *= visitors.weekendRush;
+    if (Clock.hour >= EVENING_FROM_HOUR) rush *= visitors.eveningRush;
+    return (visitors.gapMinutes / rush) * randomBetween([0.5, 1.5]);
   },
 
   // A new shop starts with a good name.
@@ -147,7 +149,7 @@ const Shops = {
   // Called by people.js when a shopper walks in.
   onShopperArrived(person, feltMinutes) {
     person.mood = this.moodFor(feltMinutes);
-    person.idleUntil = Clock.totalMinutes + randomBetween(BROWSE_MINUTES);
+    person.idleUntil = Clock.totalMinutes + randomBetween(ROOM_TYPES[person.room.type].visitors.stayMinutes);
   },
 
   // Called by people.js when a shopper has finished browsing.
@@ -181,16 +183,16 @@ const Shops = {
   // On course to close at the weekly review?
   isQuiet(room) {
     const average = this.weekAverage(room);
-    return average !== null && average < QUIET_SALES_PER_DAY;
+    return average !== null && average < ROOM_TYPES[room.type].visitors.quietPerDay;
   },
 
   // Sunday night, after the stress review: quiet shops close. Every shop
   // starts the new week with a clean slate.
   weeklyReview() {
     for (const room of [...World.rooms]) {
-      if (room.type !== "shop") continue;
+      if (!isStorefront(room)) continue;
       if (room.status === "occupied" && room.weekDays >= MIN_DAYS_JUDGED && this.isQuiet(room)) {
-        Economy.moveOut(room, "Closed: too few shoppers");
+        Economy.moveOut(room, `Closed: too few ${ROOM_TYPES[room.type].visitors.who}`);
       }
       room.weekSales = 0;
       room.weekDays = 0;

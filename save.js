@@ -87,7 +87,13 @@ const SaveGame = {
       },
       people: {
         nextId: People.nextId,
-        list: People.list.map((p) => ({ ...p, room: undefined, roomId: p.room.id })),
+        list: People.list.map((p) => ({
+          ...p,
+          room: undefined,
+          roomId: p.room.id,
+          lunchCafe: undefined,
+          lunchCafeId: p.lunchCafe ? p.lunchCafe.id : null,
+        })),
       },
       elevators: cars,
       economy: {
@@ -159,9 +165,16 @@ const SaveGame = {
 
       const roomsById = new Map(rooms.map((room) => [room.id, room]));
       const people = data.people.list.map((saved) => {
-        const { roomId, ...person } = saved;
+        const { roomId, lunchCafeId, ...person } = saved;
         person.room = roomsById.get(roomId);
         if (!person.room) throw new Error("a person's room is missing");
+        // A maker's lunch café, if they're eating at or heading for one.
+        // Makers from before lunch breaks get their times now.
+        if (person.role === "maker") {
+          if (person.lunchAt == null) Object.assign(person, People.lunchTimes());
+          person.lunchCafe = (lunchCafeId != null && roomsById.get(lunchCafeId)) || null;
+          if (person.state === "eating" && !person.lunchCafe) person.state = "offsite";
+        }
         return person;
       });
       const peopleById = new Map(people.map((p) => [p.id, p]));
@@ -223,8 +236,8 @@ const SaveGame = {
       Ratings.stars = stars;
       Camera.x = camera.x;
       Camera.y = camera.y;
-      Stress.refreshWorking(); // the game starts paused, so the noise readout needs this now
-      Shops.refreshOpen(); // ...and the shops' open/closed signs
+      Shops.refreshOpen(); // the game starts paused, so the shops' open/closed signs need this now...
+      Stress.refreshWorking(); // ...and the noise readout (which needs to know which cafés are open)
       this.lastSavedDay = Clock.day;
       this.refundNote = refund
         ? `Hotel rooms now come in two sizes, Single and Twin. Your ${oldHotelIds.size === 1 ? "old hotel room was" : `${oldHotelIds.size} old hotel rooms were`} taken down and refunded in full (${World.formatMoney(refund)}).`
