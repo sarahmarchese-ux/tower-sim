@@ -11,6 +11,14 @@
 // game day and whenever you press Save, and read once when the page opens.
 // A save carries a version number; a save from a different version of the
 // game is ignored rather than risking a half-restored tower.
+//
+// Hotel rooms used to come in one size, 8 tiles wide (type "hotel"). They
+// now come as Singles and Twins, so a save from before that has its old
+// hotel rooms knocked down on load, their guests sent home and their full
+// cost refunded; `refundNote` says so in the welcome-back message.
+
+// The one-size hotel room from before Singles and Twins, and what it cost.
+const OLD_HOTEL = { type: "hotel", cost: 14000 };
 
 const SAVE_KEY = "tower-sim-save";
 const SAVE_VERSION = 1;
@@ -18,6 +26,7 @@ const SAVE_VERSION = 1;
 const SaveGame = {
   lastSavedDay: null,
   discarded: false, // set by "New game" so closing the tab doesn't re-save
+  refundNote: null, // set by load() when it refunded old hotel rooms
 
   // localStorage can be missing or full (private browsing, blocked cookies),
   // so every use goes through these two, which fail quietly.
@@ -137,7 +146,17 @@ const SaveGame = {
         return found;
       };
 
-      const rooms = data.world.rooms;
+      // Old one-size hotel rooms are knocked down and refunded (see top).
+      const oldHotelIds = new Set(data.world.rooms.filter((r) => r.type === OLD_HOTEL.type).map((r) => r.id));
+      const oldGuestIds = new Set(data.people.list.filter((p) => oldHotelIds.has(p.roomId)).map((p) => p.id));
+      const rooms = data.world.rooms.filter((r) => !oldHotelIds.has(r.id));
+      data.people.list = data.people.list.filter((p) => !oldGuestIds.has(p.id));
+      for (const saved of data.elevators) {
+        saved.riders = saved.riders.filter((r) => !oldGuestIds.has(r.personId));
+        saved.waiting = saved.waiting.filter((w) => !oldGuestIds.has(w.personId));
+      }
+      const refund = oldHotelIds.size * OLD_HOTEL.cost;
+
       const roomsById = new Map(rooms.map((room) => [room.id, room]));
       const people = data.people.list.map((saved) => {
         const { roomId, ...person } = saved;
@@ -169,7 +188,7 @@ const SaveGame = {
       // Everything else is read here too, before anything is swapped in, so
       // a damaged save can't leave the game half old and half new.
       const totalMinutes = number(data.clock.totalMinutes);
-      const money = number(data.world.money);
+      const money = number(data.world.money) + refund;
       const floors = new Map(data.world.floors.map(([floor, tiles]) => [floor, new Set(tiles)]));
       const economy = {
         lastTallyDay: number(data.economy.lastTallyDay),
@@ -207,6 +226,9 @@ const SaveGame = {
       Stress.refreshWorking(); // the game starts paused, so the noise readout needs this now
       Shops.refreshOpen(); // ...and the shops' open/closed signs
       this.lastSavedDay = Clock.day;
+      this.refundNote = refund
+        ? `Hotel rooms now come in two sizes, Single and Twin. Your ${oldHotelIds.size === 1 ? "old hotel room was" : `${oldHotelIds.size} old hotel rooms were`} taken down and refunded in full (${World.formatMoney(refund)}).`
+        : null;
       return true;
     } catch (e) {
       console.error("Couldn't load the saved game:", e);

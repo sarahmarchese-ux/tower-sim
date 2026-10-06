@@ -7,6 +7,9 @@
 //     twice. Every minute of that over COMFORTABLE_TRIP_MINUTES adds a
 //     point. So a lift to the 8th floor is fine, a few flights of stairs
 //     are fine, but eight flights, or a 15-minute queue, are not.
+//     Hotel guests, hauling a suitcase and paying by the night, are
+//     fussier: anything over GUEST_COMFORTABLE_TRIP_MINUTES counts, and
+//     counts double. Two flights of stairs are fine; five are not.
 //   - Not being able to get there at all (no route, e.g. a demolished
 //     elevator).
 //   - Noise, for residents and hotel guests. A studio gives off noise while
@@ -28,6 +31,8 @@ const STRESS_MAX = 100;
 const STRESS_PINK = 35; // people turn pink from here...
 const STRESS_RED = 65; // ...and red from here. A room averaging red moves out.
 const COMFORTABLE_TRIP_MINUTES = 30;
+const GUEST_COMFORTABLE_TRIP_MINUTES = 15;
+const GUEST_TRIP_STRESS_PER_MINUTE = 1.5; // per minute over, for a hotel guest
 const NO_ROUTE_STRESS = 10;
 const NOISE_STRESS_PER_HOUR = 0.4; // per point of noise, while at home
 const GUEST_NOISE_STRESS_PER_HOUR = 3; // the same, for a hotel guest in their room
@@ -107,7 +112,11 @@ const Stress = {
   // so their spending) hangs on; see shops.js.
   onTripFinished(person, tripMinutes, stairsMinutes, waitMinutes) {
     const felt = tripMinutes + stairsMinutes + waitMinutes;
-    this.add(person, Math.max(0, felt - COMFORTABLE_TRIP_MINUTES));
+    if (person.role === "guest") {
+      this.add(person, Math.max(0, felt - GUEST_COMFORTABLE_TRIP_MINUTES) * GUEST_TRIP_STRESS_PER_MINUTE);
+    } else {
+      this.add(person, Math.max(0, felt - COMFORTABLE_TRIP_MINUTES));
+    }
     return felt;
   },
 
@@ -138,7 +147,7 @@ const Stress = {
   // Once a week: rooms whose people are in the red move out.
   weeklyReview() {
     for (const room of [...World.rooms]) {
-      if (room.status !== "occupied" || room.type === "hotel") continue;
+      if (room.status !== "occupied" || isHotel(room)) continue;
       const average = this.roomAverage(room);
       if (average !== null && average >= STRESS_RED) Economy.moveOut(room);
     }

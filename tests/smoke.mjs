@@ -146,12 +146,12 @@ try {
       Camera.x = 0;
     });
     await pickTool("floor");
-    for (const floor of [0, 1, 2]) await dragAcross([0, floor], [39, floor]);
+    for (const floor of [0, 1, 2, 3]) await dragAcross([0, floor], [39, floor]);
 
     await pickTool("lobby");
     await clickAt(0, 0);
     await pickTool("elevator");
-    await dragAcross([0, 0], [0, 2]);
+    await dragAcross([0, 0], [0, 3]);
     await pickTool("stairs");
     await clickAt(34, 0);
 
@@ -168,24 +168,28 @@ try {
 
     // Shops and hotel rooms unlock at 2★. Reaching 100 people would take
     // too long here, so check the lock, then hand the tower its second star
-    // directly. (The hotel room sits over the woodwork studio, so its
-    // weekday guests get noise too.)
+    // directly. (The Single sits over the woodwork studio, so its weekday
+    // guests get noise too; the Twin is up on the quiet top floor.)
     await pickTool("shop");
     await clickAt(22, 0);
-    await pickTool("hotel");
-    await clickAt(28, 2);
-    const early = await page.evaluate(() => World.rooms.filter((r) => r.type === "shop" || r.type === "hotel").length);
+    await pickTool("single");
+    await clickAt(26, 2);
+    await pickTool("twin");
+    await clickAt(4, 3);
+    const early = await page.evaluate(() => World.rooms.filter((r) => r.type === "shop" || isHotel(r)).length);
     check(early === 0, "a shop or hotel room was built before 2★");
     await page.evaluate(() => {
       Ratings.stars = 2;
     });
-    await clickAt(28, 2);
+    await clickAt(4, 3);
+    await pickTool("single");
+    await clickAt(26, 2);
     await pickTool("shop");
     await clickAt(22, 0);
     await page.keyboard.press("Escape");
 
     const s = await state();
-    check(s.rooms.length === 8, `expected 8 rooms, got ${s.rooms.length}: ${s.rooms}`);
+    check(s.rooms.length === 9, `expected 9 rooms, got ${s.rooms.length}: ${s.rooms}`);
     check(s.transit.length === 2, `expected stairs and an elevator, got ${s.transit}`);
     check(s.money < 200000, "building should have cost money");
   });
@@ -203,7 +207,7 @@ try {
     }
     const after = await state();
     check(sales > 0, "the shop never sold anything");
-    check(nights > 0, "the hotel room never earned a night");
+    check(nights > 0, "the hotel rooms never earned a night");
     check(after.minutes - before.minutes >= SIM_DAYS * 24 * 60 - 1, "the clock did not advance");
     check(after.people > 0, "nobody moved in");
     check(after.rooms.some((r) => r.endsWith(":occupied")), "no room became occupied");
@@ -264,6 +268,34 @@ try {
     await page.waitForTimeout(1500);
     check((await frames()) > f0 + 10, "the game loop stopped");
     check((await state()).minutes > t0, "the clock stopped at 3x speed");
+  });
+
+  await step("an old save's one-size hotel rooms are refunded on load", async () => {
+    // Saves from before Singles and Twins have 8-tile "hotel" rooms. Fake
+    // one by relabelling the Twin, guests and all, then reload.
+    const before = await page.evaluate(() => {
+      const data = SaveGame.snapshot();
+      const twin = data.world.rooms.find((r) => r.type === "twin");
+      twin.type = "hotel";
+      SaveGame.discarded = true; // so reloading doesn't save over it
+      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      return { money: data.world.money, rooms: data.world.rooms.length };
+    });
+    await page.reload();
+    await page.waitForSelector("#toolbar");
+    const after = await page.evaluate(() => ({
+      money: World.money,
+      rooms: World.rooms.length,
+      oldRooms: World.rooms.filter((r) => r.type === "hotel").length,
+      strays: People.list.filter((p) => !World.rooms.includes(p.room)).length,
+      banner: document.getElementById("banner").textContent,
+    }));
+    check(after.oldRooms === 0, "an old hotel room survived loading");
+    check(after.rooms === before.rooms - 1, `expected ${before.rooms - 1} rooms after loading, got ${after.rooms}`);
+    check(after.money === before.money + 14000, `expected a $14,000 refund, money went ${before.money} -> ${after.money}`);
+    check(after.strays === 0, "someone was left behind in a removed hotel room");
+    check(/refunded/.test(after.banner), `the welcome-back note doesn't mention the refund: "${after.banner}"`);
+    await simulate(24 * 60);
   });
 } finally {
   await browser.close();

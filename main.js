@@ -56,7 +56,8 @@ function frame(now) {
 // so nothing happens before you're ready.
 if (SaveGame.load()) {
   UI.setSpeed(0);
-  UI.announce("Welcome back! Your tower is as you left it. Press Play (or space) to carry on.");
+  const note = SaveGame.refundNote ? ` ${SaveGame.refundNote}` : "";
+  UI.announce(`Welcome back! Your tower is as you left it.${note} Press Play (or space) to carry on.`);
 } else {
   SaveGame.lastSavedDay = Clock.day;
 }
