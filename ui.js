@@ -34,11 +34,15 @@ const UI = {
         this.addWarning(tip, `Too few ${visitors.who}: closes at the weekly review if takings stay under ${World.formatMoney(visitors.quietPerDay)} a day. ${Who} give up on long trips: bring it nearer the lobby or the elevators.`);
       }
       if (isHotel(room)) {
-        if (Stress.noiseAt(room, "working") >= 2) {
+        const loudByDay = Stress.noiseAt(room, "working") >= 2;
+        const loudAtNight = Stress.noiseAt(room, "evening") >= 2;
+        if (loudByDay) {
           this.addWarning(tip, "Noisy in working hours: guests are in by day, and studio noise stresses them fast. Keep hotel rooms a floor away from pottery and woodwork.");
-        } else if (Stress.noiseAt(room, "evening") >= 2) {
+        }
+        if (loudAtNight) {
           this.addWarning(tip, "Noisy in the evening: a restaurant next door keeps guests up. Keep hotel rooms a floor away from restaurants.");
-        } else if (Hotels.reviewsLabel(room) === "poor") {
+        }
+        if (!loudByDay && !loudAtNight && Hotels.reviewsLabel(room) === "poor") {
           this.addWarning(tip, "Poor reviews mean fewer bookings. Guests mind long trips up from the lobby: bring the room nearer the lobby or the elevators.");
         }
       }
@@ -113,8 +117,8 @@ const UI = {
       const working = Stress.noiseAt(room, "working");
       const evening = Stress.noiseAt(room, "evening");
       const other = [];
-      if (working !== now) other.push(`${working} in working hours`);
-      if (evening > 0 && evening !== now) other.push(`${evening} in the evening`);
+      if (working > 0) other.push(`${working} in working hours`);
+      if (evening > 0) other.push(`${evening} in the evening`);
       parts.push(other.length ? `noise here: ${now} now, ${other.join(", ")}` : `noise here: ${now}`);
     }
     else if (room.type === "cafe") parts.push(`noise ${type.noise} while serving lunch`);

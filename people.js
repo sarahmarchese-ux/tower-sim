@@ -339,7 +339,7 @@ const People = {
   // re-routing mid-trip) to `target`: "room", "cafe", "restaurant" or
   // "offsite". Coming in, you appear at a lobby; going out, you head for
   // one and vanish when you reach it.
-  startTrip(person, target, from) {
+  startTrip(person, target, from, freshTrip = false) {
     const starts = from ? [from] : this.pointsFor(person, this.whereIs(person));
     const goals = this.pointsFor(person, target);
     const route = starts.length && goals.length ? Routing.plan(starts, goals) : null;
@@ -363,8 +363,9 @@ const People = {
 
     // A re-route (`from`) is the same trip carrying on, so the clock keeps
     // running from when they first set off. A new trip starts from zero,
-    // even if the last one was abandoned partway.
-    if (!from) {
+    // even if the last one was abandoned partway, and so does one from a
+    // seat whose café or restaurant has just shut (`freshTrip`).
+    if (!from || freshTrip) {
       person.tripStartedAt = Clock.totalMinutes;
       person.tripWaitMinutes = 0;
       person.tripStairsMinutes = 0;

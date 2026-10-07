@@ -211,17 +211,24 @@ try {
     let nights = 0;
     let lunches = 0;
     let dinners = 0;
-    let dinedIn = false; // a resident or guest ate at the restaurant
+    // Count residents and guests sitting down to dinner at an open restaurant.
+    await page.evaluate(() => {
+      window.__dinedIn = 0;
+      const arrived = Restaurants.onDinerArrived.bind(Restaurants);
+      Restaurants.onDinerArrived = (person) => {
+        if (Shops.isOpen(person.dinnerRoom) && !person.movingOut) window.__dinedIn++;
+        return arrived(person);
+      };
+    });
     for (let day = 0; day < SIM_DAYS; day++) {
       await simulate(24 * 60);
       sales += await page.evaluate(() => World.rooms.find((r) => r.type === "shop").salesYesterday || 0);
       nights += await page.evaluate(() => Economy.lastHotel || 0);
       lunches += await page.evaluate(() => World.rooms.find((r) => r.type === "cafe").salesYesterday || 0);
       dinners += await page.evaluate(() => World.rooms.find((r) => r.type === "restaurant").salesYesterday || 0);
-      dinedIn ||= await page.evaluate(() => People.list.some((p) => p.dinnerRoom));
     }
     check(dinners > 0, "the restaurant never sold a dinner");
-    check(dinedIn, "no resident or hotel guest ever had dinner at the restaurant");
+    check((await page.evaluate(() => window.__dinedIn)) > 0, "no resident or hotel guest ever had dinner at the restaurant");
     check(lunches > 0, "the café never sold a lunch");
     check(
       await page.evaluate(() => People.list.some((p) => p.role === "maker" && p.lunchCafe)),

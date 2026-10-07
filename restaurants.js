@@ -69,9 +69,11 @@ const Restaurants = {
   },
 
   // Called by people.js when a resident or guest sits down: they pay for
-  // dinner. If it's shut, they go home and eat there instead.
+  // dinner. If it's shut, they go home and eat there instead. A guest who
+  // checked out early on the way down doesn't stop to eat.
   onDinerArrived(person) {
     const room = person.dinnerRoom;
+    if (person.movingOut) return;
     if (!Shops.isOpen(room)) {
       Economy.popupOverRoom(room, "Closed: dinner at home", "#d0d0d0");
       this.goHome(person);
@@ -94,7 +96,7 @@ const Restaurants = {
     person.dinnerRoom = null; // keeps `dinnerDay`: tonight's plan is now "at home"
     const want = People.desiredLocation(person, Clock.totalMinutes);
     if (person.state === "eating") {
-      People.startTrip(person, want, { floor: person.floor, x: person.x });
+      People.startTrip(person, want, { floor: person.floor, x: person.x }, true);
     } else if (person.route && person.target === "restaurant") {
       person.target = want;
       People.reroute(person);
