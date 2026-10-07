@@ -34,11 +34,16 @@ const UI = {
         this.addWarning(tip, `Too few ${visitors.who}: closes at the weekly review if takings stay under ${World.formatMoney(visitors.quietPerDay)} a day. ${Who} give up on long trips: bring it nearer the lobby or the elevators.`);
       }
       if (isHotel(room)) {
-        if (Stress.noiseAt(room, true) >= 2) {
+        if (Stress.noiseAt(room, "working") >= 2) {
           this.addWarning(tip, "Noisy in working hours: guests are in by day, and studio noise stresses them fast. Keep hotel rooms a floor away from pottery and woodwork.");
+        } else if (Stress.noiseAt(room, "evening") >= 2) {
+          this.addWarning(tip, "Noisy in the evening: a restaurant next door keeps guests up. Keep hotel rooms a floor away from restaurants.");
         } else if (Hotels.reviewsLabel(room) === "poor") {
           this.addWarning(tip, "Poor reviews mean fewer bookings. Guests mind long trips up from the lobby: bring the room nearer the lobby or the elevators.");
         }
+      }
+      if (room.type === "condo" && room.status === "occupied" && Stress.noiseAt(room, "evening") >= 2) {
+        this.addWarning(tip, "Noisy in the evening: residents are home to unwind, and a restaurant next door stresses them. Keep condos a floor away from restaurants.");
       }
     } else if (Pointer.buildCheck && !Pointer.buildCheck.ok) {
       // A build that would be refused says why, right where you're aiming,
@@ -88,6 +93,9 @@ const UI = {
       if (room.type === "cafe") {
         const eating = Cafes.seated(room);
         if (eating > 0) parts.push(`${eating} at lunch`);
+      } else if (room.type === "restaurant") {
+        const dining = Restaurants.seated(room);
+        if (dining > 0) parts.push(`${dining} dining`);
       } else {
         const shoppers = Shops.shoppersFor(room);
         if (shoppers > 0) parts.push(`${shoppers} shopper${shoppers === 1 ? "" : "s"}`);
@@ -99,12 +107,19 @@ const UI = {
       if (average !== null) parts.push(`this week ${World.formatMoney(average)}/day`);
     }
     if (type.role === "resident" || type.role === "guest") {
-      // Studios are only noisy while their makers work, so show both.
+      // Studios are only noisy while their makers work, and restaurants
+      // while they serve dinner, so show those too.
       const now = Stress.noiseAt(room);
-      const working = Stress.noiseAt(room, true);
-      parts.push(now === working ? `noise here: ${now}` : `noise here: ${now} now, ${working} in working hours`);
+      const working = Stress.noiseAt(room, "working");
+      const evening = Stress.noiseAt(room, "evening");
+      const other = [];
+      if (working !== now) other.push(`${working} in working hours`);
+      if (evening > 0 && evening !== now) other.push(`${evening} in the evening`);
+      parts.push(other.length ? `noise here: ${now} now, ${other.join(", ")}` : `noise here: ${now}`);
     }
-    else if (type.noise > 0) parts.push(room.type === "cafe" ? `noise ${type.noise} while serving lunch` : `makes noise ${type.noise}`);
+    else if (room.type === "cafe") parts.push(`noise ${type.noise} while serving lunch`);
+    else if (room.type === "restaurant") parts.push(`noise ${type.noise} while serving dinner`);
+    else if (type.noise > 0) parts.push(`makes noise ${type.noise}`);
     else parts.push("quiet");
     return parts.join(" · ");
   },

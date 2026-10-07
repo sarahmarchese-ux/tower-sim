@@ -146,12 +146,12 @@ try {
       Camera.x = 0;
     });
     await pickTool("floor");
-    for (const floor of [0, 1, 2, 3]) await dragAcross([0, floor], [39, floor]);
+    for (const floor of [0, 1, 2, 3, 4]) await dragAcross([0, floor], [39, floor]);
 
     await pickTool("lobby");
     await clickAt(0, 0);
     await pickTool("elevator");
-    await dragAcross([0, 0], [0, 3]);
+    await dragAcross([0, 0], [0, 4]);
     await pickTool("stairs");
     await clickAt(34, 0);
 
@@ -167,23 +167,30 @@ try {
       await clickAt(tile, floor);
     }
 
-    // Shops and hotel rooms unlock at 2★. Reaching 100 people would take
-    // too long here, so check the lock, then hand the tower its second star
-    // directly. (The Single sits over the woodwork studio, so its weekday
-    // guests get noise too; the Twin is up on the top floor, clear of the
-    // café.)
+    // Shops, hotel rooms and restaurants unlock at 2★. Reaching 100 people
+    // would take too long here, so check the lock, then hand the tower its
+    // second star directly, and the money for the lot (it costs more than a
+    // new game's $200,000). (The Single sits over the woodwork studio, so
+    // its weekday guests get noise too; the Twin is up on the 3rd floor,
+    // clear of the café and the restaurant, which is on the 4th by the
+    // elevator.)
     await pickTool("shop");
     await clickAt(22, 0);
     await pickTool("single");
     await clickAt(26, 2);
+    await pickTool("restaurant");
+    await clickAt(4, 4);
     await pickTool("twin");
     await clickAt(28, 3);
-    const early = await page.evaluate(() => World.rooms.filter((r) => r.type === "shop" || isHotel(r)).length);
-    check(early === 0, "a shop or hotel room was built before 2★");
+    const early = await page.evaluate(() => World.rooms.filter((r) => r.type === "shop" || r.type === "restaurant" || isHotel(r)).length);
+    check(early === 0, "a shop, hotel room or restaurant was built before 2★");
     await page.evaluate(() => {
       Ratings.stars = 2;
+      World.money += 50000;
     });
     await clickAt(28, 3);
+    await pickTool("restaurant");
+    await clickAt(4, 4);
     await pickTool("single");
     await clickAt(26, 2);
     await pickTool("shop");
@@ -191,9 +198,9 @@ try {
     await page.keyboard.press("Escape");
 
     const s = await state();
-    check(s.rooms.length === 10, `expected 10 rooms, got ${s.rooms.length}: ${s.rooms}`);
+    check(s.rooms.length === 11, `expected 11 rooms, got ${s.rooms.length}: ${s.rooms}`);
     check(s.transit.length === 2, `expected stairs and an elevator, got ${s.transit}`);
-    check(s.money < 200000, "building should have cost money");
+    check(s.money < 250000, "building should have cost money");
   });
 
   await step(`run ${SIM_DAYS} game days`, async () => {
@@ -203,12 +210,18 @@ try {
     let sales = 0;
     let nights = 0;
     let lunches = 0;
+    let dinners = 0;
+    let dinedIn = false; // a resident or guest ate at the restaurant
     for (let day = 0; day < SIM_DAYS; day++) {
       await simulate(24 * 60);
       sales += await page.evaluate(() => World.rooms.find((r) => r.type === "shop").salesYesterday || 0);
       nights += await page.evaluate(() => Economy.lastHotel || 0);
       lunches += await page.evaluate(() => World.rooms.find((r) => r.type === "cafe").salesYesterday || 0);
+      dinners += await page.evaluate(() => World.rooms.find((r) => r.type === "restaurant").salesYesterday || 0);
+      dinedIn ||= await page.evaluate(() => People.list.some((p) => p.dinnerRoom));
     }
+    check(dinners > 0, "the restaurant never sold a dinner");
+    check(dinedIn, "no resident or hotel guest ever had dinner at the restaurant");
     check(lunches > 0, "the café never sold a lunch");
     check(
       await page.evaluate(() => People.list.some((p) => p.role === "maker" && p.lunchCafe)),
