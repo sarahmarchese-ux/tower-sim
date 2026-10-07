@@ -88,7 +88,7 @@ const Cafes = {
     person.lunchCafe = null; // keeps `lunchDay`: today's plan is now "out"
     const want = People.desiredLocation(person, Clock.totalMinutes);
     if (person.state === "eating") {
-      People.startTrip(person, want, { floor: person.floor, x: person.x });
+      People.startTrip(person, want, { floor: person.floor, x: person.x }, true);
     } else if (person.route && person.target === "cafe") {
       person.target = want;
       People.reroute(person);

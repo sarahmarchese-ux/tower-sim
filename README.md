@@ -21,10 +21,12 @@ Then visit `http://localhost:8000`.
 ## Smoke test
 
 `tests/smoke.mjs` opens the game in headless Chromium, builds a small tower
-with real mouse clicks (checking shops and hotel rooms stay locked until
-2★, then adding one of each, plus a café), runs 8 game days (checking
-the shop sells something, the hotel rooms earn a night and makers have
-lunch at the café), hovers every room, saves and reloads, demolishes things and keeps running. It fails on any page error,
+with real mouse clicks (checking shops, hotel rooms and restaurants stay
+locked until 2★, then adding one of each, plus a café), runs 8 game days
+(checking the shop sells something, the hotel rooms earn a night, makers
+have lunch at the café, and the restaurant sells dinners, some to
+residents or guests), hovers every room, saves and reloads, demolishes
+things and keeps running. It fails on any page error,
 `console.error`, frozen game loop, or save that doesn't restore the same
 state. GitHub Actions runs it on every pull request
 (`.github/workflows/smoke.yml`). To run it yourself:
@@ -39,9 +41,51 @@ npm run smoke
 
 ## Status
 
-**Milestone 10: food & lunch trips.** Makers now take a lunch break, and
-the tower can feed them. Lunchtime brings a third rush to the elevators,
-after the morning and the evening.
+**Milestone 11: the Restaurant.** The tower's first room that's busy at
+night, when residents and hotel guests are home. Evenings bring a fourth
+rush to the elevators.
+
+- **The Restaurant** unlocks at 2★, like shops and hotel rooms. It's 16
+  tiles wide and costs $30,000. A restaurant owner moves in like a
+  shopkeeper and keeps it open every day, about 5pm to 11pm. It serves
+  dinner 6–11pm and seats 40. Diners stay 60–90 minutes and spend $40–80
+  each. Takings are banked at midnight.
+- **Diners from outside** come in from the lobby 6–9pm: steady on
+  weeknights, twice as many on Fridays and Saturdays. Like shoppers,
+  they spend less after a long trip in, and give up after one that feels
+  like an hour.
+- **Residents and hotel guests** eat there some evenings, at 7–9pm:
+  residents about one night in four (one in two on Fridays and
+  Saturdays), guests one in two. They go to the nearest restaurant
+  that's open, has a seat, and isn't too far (about three flights of
+  stairs, or an elevator ride); otherwise they eat at home. Nobody leaves
+  the building for dinner, so a tower without a restaurant has quiet
+  evenings.
+- **It's noisy at dinner.** While it's serving, a restaurant gives off
+  noise 2 (like a pottery studio) to the rooms beside it and directly
+  above and below. Studios are empty by then, but residents and guests
+  are home, and residents mind noise nearly four times as much from 6pm
+  as by day. In a test, a condo over a restaurant went pink in its first
+  week and moved out at the second weekly review. A Single beside one got
+  poor reviews, and by the third week nobody was booking it, while a
+  quiet Single was booked 4 nights a week. Beside or
+  under studios is the place for it. Hovering a condo or hotel room
+  shows its evening noise, with a warning when a restaurant is next door.
+- In a test tower with 30 residents, a restaurant by the lobby took
+  about $2,600 a weeknight and $4,100 on Fridays and Saturdays, about
+  $21,000 a week. Up on the 9th floor it took nearly as much. A
+  restaurant that averages under $1,000 a day closes at the weekly
+  review ("Closed: too few diners").
+- **Hover a restaurant** to see whether it's open, how many are dining,
+  today's takings and this week's average a day.
+- Residents and guests in an older save get their dinner times when it
+  loads.
+
+<details>
+<summary>Milestone 10: food & lunch trips</summary>
+
+Makers now take a lunch break, and the tower can feed them. Lunchtime
+brings a third rush to the elevators, after the morning and the evening.
 
 - **Lunch breaks.** On weekdays every maker takes a 30–45 minute break,
   starting some time between 11:30am and 1:30pm. With no café in the
@@ -69,6 +113,7 @@ after the morning and the evening.
 - **Hover a café** to see whether it's open, how many are at lunch,
   today's takings and this week's average a day.
 - Makers in an older save get their lunch breaks when it loads.
+</details>
 
 <details>
 <summary>Milestone 9: hotel rooms</summary>
@@ -281,22 +326,26 @@ or visiting a GitHub Pages link.
   elevator legs) and works out which rooms can be reached from a lobby.
 - `elevators.js` — self-running elevator cars ("collective control").
 - `people.js` — every tenant, shopper and hotel guest: moving in, their
-  daily schedule (makers' lunch breaks included), and how they work
+  daily schedule (makers' lunch breaks and residents' and guests' dinners
+  included), and how they work
   through a route.
 - `economy.js` — who moves in (and out) when, condo sales and refunds,
   weekly rent, nightly shop takings, hotel nights and upkeep, and
   bankruptcy.
-- `shops.js` — shops and cafés: when they're open, sending shoppers (and
-  the lunch crowd) in, what each spends (less after a long trip), the
-  day's takings, and closing quiet ones.
+- `shops.js` — shops, cafés and restaurants: when they're open, sending
+  shoppers (and the lunch crowd, and diners) in, what each spends (less
+  after a long trip), the day's takings, and closing quiet ones.
 - `cafes.js` — makers' lunch: which café (if any) each maker eats at, what
   they pay, and when a café is serving lunch (and noisy).
+- `restaurants.js` — residents' and guests' dinners: who eats out tonight,
+  at which restaurant, what they pay, and when a restaurant is serving
+  dinner (and noisy).
 - `hotels.js` — hotel rooms: bookings, checking guests in and out (early,
   if they're too stressed), reviews and occupancy, and nightly takings.
 - `stress.js` — each person's stress: trips, noise, rest, and the weekly
   review that decides who moves out.
 - `ratings.js` — the star rating and its population targets (2★ unlocks
-  shops and hotel rooms).
+  shops, hotel rooms and restaurants).
 - `save.js` — saving the whole game to the browser and loading it back,
   turning pointers between objects into ids and back.
 - `input.js` — turns mouse events into grid coordinates and tool actions

@@ -1,11 +1,13 @@
 // Shops (milestone 8): where the tower's makers sell their work, and the
 // first rooms that earn from visitors rather than tenants.
 //
-// Cafés (milestone 10) run on the same machinery: a keeper, visitors from
-// the lobby (the lunch crowd), a till and a weekly review. What differs,
-// such as their hours and what visitors spend, is in rooms.js (`keeperHours`,
-// `visitors`). Makers' lunch breaks are in cafes.js. Below, "shop" means
-// either, and "shopper" any visitor, diners included.
+// Cafés (milestone 10) and restaurants (milestone 11) run on the same
+// machinery: a keeper, visitors from the lobby (the lunch crowd, or diners
+// in the evening), a till and a weekly review. What differs, such as their
+// hours and what visitors spend, is in rooms.js (`keeperHours`,
+// `visitors`). Makers' lunch breaks are in cafes.js, and residents' and
+// guests' dinners in restaurants.js. Below, "shop" means any of them, and
+// "shopper" any visitor, diners included.
 //
 // A shop has one shopkeeper, who moves in like any tenant (economy.js) and
 // keeps shop every day, weekends included (people.js). The shop is open
@@ -86,7 +88,9 @@ const Shops = {
       if (room.nextShopperAt == null) {
         room.nextShopperAt = now + this.gapMinutes(room);
       } else if (now >= room.nextShopperAt) {
-        const full = this.shoppersFor(room) >= visitors.max || (room.type === "cafe" && Cafes.seated(room) >= CAFE_SEATS);
+        const full = this.shoppersFor(room) >= visitors.max ||
+          (room.type === "cafe" && Cafes.seated(room) >= CAFE_SEATS) ||
+          (room.type === "restaurant" && Restaurants.seated(room) >= RESTAURANT_SEATS);
         if (!full) People.addShopper(room, randomBetween(visitors.spend));
         room.nextShopperAt = now + this.gapMinutes(room);
       }
@@ -99,7 +103,8 @@ const Shops = {
   gapMinutes(room) {
     const visitors = ROOM_TYPES[room.type].visitors;
     let rush = Math.max(MIN_REPUTATION, this.reputation(room));
-    if (Clock.isWeekend) rush *= visitors.weekendRush;
+    if (visitors.dayRush) rush *= visitors.dayRush[Clock.day % 7];
+    else if (Clock.isWeekend) rush *= visitors.weekendRush;
     if (Clock.hour >= EVENING_FROM_HOUR) rush *= visitors.eveningRush;
     return (visitors.gapMinutes / rush) * randomBetween([0.5, 1.5]);
   },
