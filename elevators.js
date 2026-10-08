@@ -98,8 +98,19 @@ const Elevators = {
 
     const here = car.waiting.filter((w) => w.floor === floor);
     if (here.length === 0) return;
-    let direction = this.chooseDirection(car);
-    if (direction === 0) direction = here[0].direction; // empty and idle: serve whoever's first
+    // If riders or calls further on need the car to keep going its way,
+    // only people going that way get on. Otherwise the car is free, and the
+    // people here decide: anyone going its way first, else whoever was
+    // first in the queue. (Asking chooseDirection here would look only at
+    // calls on *other* floors: with someone here going up and someone
+    // below going down, the car would turn down, pass them over, then at
+    // the floor below turn up and pass that one over, and bounce between
+    // the two forever.)
+    let direction = car.direction !== 0 && this.hasRequestsBeyond(car, car.direction) ? car.direction : 0;
+    if (direction === 0 && car.riders.length > 0) direction = this.chooseDirection(car);
+    if (direction === 0) {
+      direction = here.some((w) => w.direction === car.direction) ? car.direction : here[0].direction;
+    }
 
     const room = ELEVATOR_CAPACITY - car.riders.length;
     const boarding = here.filter((w) => w.direction === direction).slice(0, room);
@@ -126,11 +137,16 @@ const Elevators = {
         car.direction = this.chooseDirection(car);
         car.state = car.direction === 0 ? "idle" : "moving";
       } else if (car.state === "idle") {
+        // Someone waiting right here gets the doors before the car heads
+        // off to anyone else.
+        if (car.waiting.some((w) => w.floor === Math.round(car.floor))) {
+          car.direction = 0;
+          this.openDoors(car);
+          continue;
+        }
         car.direction = this.chooseDirection(car);
         if (car.direction !== 0) {
           car.state = "moving";
-        } else if (car.waiting.some((w) => w.floor === Math.round(car.floor))) {
-          this.openDoors(car);
         } else {
           return; // nothing to do
         }
