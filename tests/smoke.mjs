@@ -234,10 +234,25 @@ try {
         if (Shops.isOpen(person.dinnerRoom) && !person.movingOut) window.__dinedIn++;
         return arrived(person);
       };
+      // A clean counts only if its housekeeper got to the room and spent
+      // the full 45 minutes there.
       window.__cleaned = 0;
+      window.__badCleans = [];
+      const arrivals = new Map();
+      const onArrived = Housekeeping.onArrived.bind(Housekeeping);
+      Housekeeping.onArrived = (person) => {
+        arrivals.set(person, { room: person.job, at: Clock.totalMinutes });
+        return onArrived(person);
+      };
       const finish = Housekeeping.finish.bind(Housekeeping);
       Housekeeping.finish = (person) => {
-        if (person.job.needsCleaning && person.job.status === "vacant") window.__cleaned++;
+        const arrival = arrivals.get(person);
+        const there = arrival && arrival.room === person.job && person.floor === person.job.floor;
+        if (!there || Clock.totalMinutes - arrival.at < CLEANING_MINUTES - 0.5) {
+          window.__badCleans.push(`${person.job.type} on ${floorLabel(person.job.floor)} at ${Clock.label()}`);
+        } else if (person.job.needsCleaning && person.job.status === "vacant") {
+          window.__cleaned++;
+        }
         return finish(person);
       };
     });
@@ -250,6 +265,8 @@ try {
     }
     check(dinners > 0, "the restaurant never sold a dinner");
     check((await page.evaluate(() => window.__cleaned)) > 0, "no housekeeper ever cleaned a hotel room after a checkout");
+    const badCleans = await page.evaluate(() => window.__badCleans);
+    check(badCleans.length === 0, `rooms marked clean without a housekeeper there for 45 minutes: ${badCleans.join("; ")}`);
     check((await page.evaluate(() => window.__dinedIn)) > 0, "no resident or hotel guest ever had dinner at the restaurant");
     check(lunches > 0, "the café never sold a lunch");
     check(

@@ -13,9 +13,11 @@
 // hotel with no Housekeeping at all stops taking bookings once each room's
 // guests have checked out.
 //
-// A housekeeper's current job is `person.job` (the hotel room), and
-// `jobDoneAt` is when they'll have finished it, once they're there. A room
-// a housekeeper is already on is left to them. Each Housekeeping room
+// A housekeeper's current job is `person.job` (the hotel room). Once
+// they're there, `cleaningAt` is that room and `jobDoneAt` is when they'll
+// have finished it. A room a housekeeper is already on is left to them,
+// and one they can't get to (or are leaving before they've cleaned) is
+// given up for someone else. Each Housekeeping room
 // counts the rooms its staff cleaned today (`cleanedToday` on `cleanedDay`)
 // for its tooltip.
 
@@ -27,7 +29,7 @@ const Housekeeping = {
   // Housekeeping room, or in a hotel room they're cleaning): finish the
   // job if it's done, and pick the next one if they're on shift.
   planWork(person, now) {
-    if (person.state === "cleaning" && person.job && now >= person.jobDoneAt) this.finish(person);
+    if (person.state === "cleaning" && person.job && person.cleaningAt === person.job && now >= person.jobDoneAt) this.finish(person);
     const minute = now % MINUTES_PER_DAY;
     const onShift = minute >= person.arriveAt && minute < person.leaveAt;
     // A job they never got to (no way there, say) is left for tomorrow's shift.
@@ -66,6 +68,7 @@ const Housekeeping = {
 
   // Called by people.js when a housekeeper reaches the room to clean.
   onArrived(person) {
+    person.cleaningAt = person.job;
     person.jobDoneAt = Clock.totalMinutes + CLEANING_MINUTES;
     person.idleUntil = person.jobDoneAt;
   },
@@ -74,6 +77,7 @@ const Housekeeping = {
   finish(person) {
     const room = person.job;
     person.job = null;
+    person.cleaningAt = null;
     room.needsCleaning = false;
     const office = person.room;
     if (office.cleanedDay !== Clock.day) {
@@ -88,15 +92,25 @@ const Housekeeping = {
   // way, drops the job.
   onRoomGone(room) {
     for (const person of People.list) {
-      if (person.role !== "housekeeper" || person.job !== room) continue;
-      person.job = null;
-      const want = People.desiredLocation(person, Clock.totalMinutes);
-      if (person.state === "cleaning") {
-        People.startTrip(person, want, { floor: person.floor, x: person.x }, true);
-      } else if (person.route && person.target === "cleaning") {
-        person.target = want;
-        People.reroute(person);
-      }
+      if (person.role === "housekeeper" && person.job === room) this.dropJob(person);
+    }
+  },
+
+  // A housekeeper gives up their job, unfinished: the room's knocked down,
+  // they're leaving, or (`redirect` false: people.js has it in hand) they
+  // can't get there. Someone else can take it; this one looks again in a
+  // little while, from wherever they end up.
+  dropJob(person, redirect = true) {
+    person.job = null;
+    person.cleaningAt = null;
+    person.lookAt = Clock.totalMinutes + LOOK_AGAIN_MINUTES;
+    if (!redirect) return;
+    const want = People.desiredLocation(person, Clock.totalMinutes);
+    if (person.state === "cleaning") {
+      People.startTrip(person, want, { floor: person.floor, x: person.x }, true);
+    } else if (person.route && person.target === "cleaning") {
+      person.target = want;
+      People.reroute(person);
     }
   },
 
@@ -119,7 +133,7 @@ const Housekeeping = {
   describeRoom(room) {
     const cleaner = this.cleanerFor(room);
     if (!cleaner) return "needs cleaning";
-    return cleaner.state === "cleaning" ? "being cleaned" : "needs cleaning: housekeeper on the way";
+    return cleaner.cleaningAt === room ? "being cleaned" : "needs cleaning: housekeeper on the way";
   },
 
   // Rooms this Housekeeping room's staff have cleaned today.

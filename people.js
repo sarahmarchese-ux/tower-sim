@@ -122,7 +122,7 @@ const People = {
     if (type.role === "housekeeper" || type.role === "guard") {
       const [arrive, leave] = type.shiftHours;
       const times = { arriveAt: between(...arrive), leaveAt: between(...leave) };
-      return type.role === "housekeeper" ? { ...times, job: null, jobDoneAt: 0, workX: 0, lookAt: 0 } : times;
+      return type.role === "housekeeper" ? { ...times, job: null, cleaningAt: null, jobDoneAt: 0, workX: 0, lookAt: 0 } : times;
     }
     return {
       leaveAt: between(7.5, 9),
@@ -239,6 +239,7 @@ const People = {
   moveOut(room) {
     for (const person of this.list.filter((p) => p.room === room)) {
       person.movingOut = true;
+      if (person.job) Housekeeping.dropJob(person); // a housekeeper leaving doesn't go and clean first
       if (person.state === "offsite") this.remove(person);
       else if (person.state === "inRoom" || person.state === "cleaning") person.idleUntil = Clock.totalMinutes + randomBetween(MOVER_GAP_MINUTES);
     }
@@ -263,11 +264,12 @@ const People = {
 
   // Where someone is when standing still: "room", "cafe", "restaurant",
   // "cleaning" or "offsite". Makers eat lunch; everyone else who eats
-  // here, dinner.
+  // here, dinner. A housekeeper who has finished the room they're in
+  // (`cleaningAt`) and taken another job isn't where they want to be yet.
   whereIs(person) {
     if (person.state === "inRoom") return "room";
     if (person.state === "eating") return person.role === "maker" ? "cafe" : "restaurant";
-    if (person.state === "cleaning") return "cleaning";
+    if (person.state === "cleaning") return person.job && person.cleaningAt === person.job ? "cleaning" : "cleaned";
     return "offsite";
   },
 
@@ -311,7 +313,7 @@ const People = {
     }
     if (person.role === "housekeeper") {
       // Once started, a room gets finished, even past five o'clock.
-      if (person.job && person.state === "cleaning") return "cleaning";
+      if (person.job && person.state === "cleaning" && person.cleaningAt === person.job) return "cleaning";
       if (minute < person.arriveAt || minute >= person.leaveAt) return "offsite";
       return person.job ? "cleaning" : "room";
     }
@@ -389,7 +391,9 @@ const People = {
         return;
       }
       if (from) person.state = "offsite";
-      if (!person.movingIn) Stress.onNoRoute(person);
+      // A housekeeper who can't get to a room leaves it to whoever can.
+      if (target === "cleaning") Housekeeping.dropJob(person, false);
+      else if (!person.movingIn) Stress.onNoRoute(person);
       person.route = null;
       person.idleUntil = Clock.totalMinutes + RETRY_MINUTES;
       return;

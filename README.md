@@ -61,12 +61,16 @@ matter, because their staff have to get to the rooms they look after.
   next. Without Housekeeping, a tower's hotel rooms stop taking bookings
   once each one's guests have gone; the room says "Needs cleaning", and
   its tooltip says why.
-- **Where it goes matters, for the staff.** In a test with one elevator,
-  Housekeeping beside the hotel rooms kept 54 of them as busy as rooms
-  that clean themselves (about 3.7 nights a week each). Housekeeping 20
-  floors up, on the same elevator, sent its housekeepers red ("mostly
-  elevator waits, then long trips"): they quit at every weekly review,
-  and bookings fell to 3.5 nights.
+- **How many it can look after.** In a test with one elevator,
+  Housekeeping beside the hotel rooms kept 18 of them as busy as rooms
+  that clean themselves (about 3.6 nights a week each). With 36 rooms,
+  bookings fell by about 8%, and with 54 by about 11%, with rooms still
+  waiting at the end of the day. So a hotel of 30 rooms or more wants a
+  second Housekeeping.
+- **Where it goes matters, for the staff.** Housekeeping 20 floors above
+  the hotel rooms, on the same elevator, sent its housekeepers red
+  ("mostly elevator waits, then long trips"): they quit at every weekly
+  review, and bookings fell to 3.5 nights.
 - **The Security office** is 8 tiles wide and costs $20,000, plus $800 a
   day in wages. Two guards work nights, 8pm–6am, and commute like makers.
   While a guard is on duty, an office protects its own floor and the 5

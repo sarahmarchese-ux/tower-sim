@@ -97,6 +97,7 @@ const SaveGame = {
           dinnerRoomId: p.dinnerRoom ? p.dinnerRoom.id : null,
           job: undefined,
           jobId: p.job ? p.job.id : null,
+          cleaningAt: undefined, // the job, while they're at it (see load)
         })),
       },
       elevators: cars,
@@ -187,7 +188,10 @@ const SaveGame = {
           if (person.state === "eating" && !person.dinnerRoom) person.state = "offsite";
         }
         // A housekeeper's hotel room to clean, if they're on a job.
-        if (person.role === "housekeeper") person.job = (jobId != null && roomsById.get(jobId)) || null;
+        if (person.role === "housekeeper") {
+          person.job = (jobId != null && roomsById.get(jobId)) || null;
+          person.cleaningAt = person.state === "cleaning" ? person.job : null;
+        }
         return person;
       });
       const peopleById = new Map(people.map((p) => [p.id, p]));

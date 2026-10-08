@@ -92,7 +92,6 @@ const Security = {
       room.robbed = true;
       message = `Break-in at the ${where}: ${guests.length === 1 ? "the guest was" : "the guests were"} robbed`;
     }
-    room.lastBreakInDay = Clock.day;
     Economy.popupOverRoom(room, popup, "#ff9d9d");
     UI.announce(message);
     return message;
