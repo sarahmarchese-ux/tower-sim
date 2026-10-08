@@ -95,6 +95,9 @@ const SaveGame = {
           lunchCafeId: p.lunchCafe ? p.lunchCafe.id : null,
           dinnerRoom: undefined,
           dinnerRoomId: p.dinnerRoom ? p.dinnerRoom.id : null,
+          job: undefined,
+          jobId: p.job ? p.job.id : null,
+          cleaningAt: undefined, // the job, while they're at it (see load)
         })),
       },
       elevators: cars,
@@ -167,7 +170,7 @@ const SaveGame = {
 
       const roomsById = new Map(rooms.map((room) => [room.id, room]));
       const people = data.people.list.map((saved) => {
-        const { roomId, lunchCafeId, dinnerRoomId, ...person } = saved;
+        const { roomId, lunchCafeId, dinnerRoomId, jobId, ...person } = saved;
         person.room = roomsById.get(roomId);
         if (!person.room) throw new Error("a person's room is missing");
         // A maker's lunch café, if they're eating at or heading for one.
@@ -183,6 +186,11 @@ const SaveGame = {
           if (person.dinnerAt == null) Object.assign(person, People.dinnerTimes());
           person.dinnerRoom = (dinnerRoomId != null && roomsById.get(dinnerRoomId)) || null;
           if (person.state === "eating" && !person.dinnerRoom) person.state = "offsite";
+        }
+        // A housekeeper's hotel room to clean, if they're on a job.
+        if (person.role === "housekeeper") {
+          person.job = (jobId != null && roomsById.get(jobId)) || null;
+          person.cleaningAt = person.state === "cleaning" ? person.job : null;
         }
         return person;
       });

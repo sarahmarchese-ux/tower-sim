@@ -21,12 +21,16 @@ Then visit `http://localhost:8000`.
 ## Smoke test
 
 `tests/smoke.mjs` opens the game in headless Chromium, builds a small tower
-with real mouse clicks (checking shops, hotel rooms and restaurants stay
-locked until 2★, then adding one of each, plus a café), runs 8 game days
-(checking the shop sells something, the hotel rooms earn a night, makers
-have lunch at the café, and the restaurant sells dinners, some to
-residents or guests), hovers every room, saves and reloads, demolishes
-things and keeps running. It fails on any page error,
+with real mouse clicks (checking shops, hotel rooms, restaurants and
+service rooms stay locked until 2★, then adding one of each, plus a café
+and Housekeeping), runs 8 game days (checking the shop sells something,
+the hotel rooms earn a night, makers have lunch at the café, the
+restaurant sells dinners, some to residents or guests, and a housekeeper
+cleans a room after a checkout), forces a break-in at the unprotected
+shop (checking the money and the message) and two at the jewellery studio
+(checking its tooltip names the cause of its stress), builds a Security
+office and checks nothing under guard is ever robbed, hovers every room,
+saves and reloads, demolishes things and keeps running. It fails on any page error,
 `console.error`, frozen game loop, or save that doesn't restore the same
 state. GitHub Actions runs it on every pull request
 (`.github/workflows/smoke.yml`). To run it yourself:
@@ -40,6 +44,59 @@ npm run smoke
 (The game itself still needs no install; `package.json` is only for this test.)
 
 ## Status
+
+**Milestone 12: service rooms.** The tower's first rooms that cost money
+and earn nothing: Housekeeping and the Security office. Both unlock at
+2★, both will be needed for 3★ (milestone 13), and both make placement
+matter, because their staff have to get to the rooms they look after.
+
+- **Housekeeping** is 8 tiles wide and costs $12,000, plus $500 a day in
+  wages, paid at midnight like elevator upkeep (once its staff are
+  hired). Two housekeepers move in like shopkeepers, count towards the
+  population, and work every day, 9am–5pm.
+- **Hotel rooms need cleaning.** Once guests check out (or leave early),
+  their room needs cleaning, and it can't be booked again until a
+  housekeeper has been, as in SimTower. A housekeeper goes to the nearest
+  room waiting, cleans it for 45 minutes, and moves straight on to the
+  next. Without Housekeeping, a tower's hotel rooms stop taking bookings
+  once each one's guests have gone; the room says "Needs cleaning", and
+  its tooltip says why.
+- **How many it can look after.** In a test with one elevator,
+  Housekeeping beside the hotel rooms kept 18 of them as busy as rooms
+  that clean themselves (about 3.6 nights a week each). With 36 rooms,
+  bookings fell by about 8%, and with 54 by about 11%, with rooms still
+  waiting at the end of the day. So a hotel of 30 rooms or more wants a
+  second Housekeeping.
+- **Where it goes matters, for the staff.** Housekeeping 20 floors above
+  the hotel rooms, on the same elevator, sent its housekeepers red
+  ("mostly elevator waits, then long trips"): they quit at every weekly
+  review, and bookings fell to 3.5 nights.
+- **The Security office** is 8 tiles wide and costs $20,000, plus $800 a
+  day in wages. Two guards work nights, 8pm–6am, and commute like makers.
+  While a guard is on duty, an office protects its own floor and the 5
+  floors above and below. Hover an office, or hold the Security tool, to
+  see the floors it covers shaded.
+- **Break-ins** start once the tower reaches 2★. Between midnight and
+  5am, each shop, jewellery studio and hotel room with guests in has
+  about a 1 in 20 chance a night: a shop loses $1,000–3,000 of stock,
+  straight out of your money; a jewellery studio's maker loses tools and
+  stock and gains 25 stress; hotel guests are robbed, and the stay gets
+  the worst review. A message says what happened ("Break-in at the Craft
+  Shop on 4F: $2,100 of stock taken"). Protected rooms are never robbed,
+  and an unprotected one's tooltip warns "No security within 5 floors".
+  In a test with four shops, a jewellery studio and a Single, there were
+  10–11 break-ins in four weeks; with an office in reach, none.
+- **Stress names its cause.** Everyone keeps a running total of the
+  stress they've gained over the last 7 days, by cause: long trips,
+  elevator waits, stairs, noise by day, noise in the evening, no route,
+  and break-ins. Hover a pink or red room to see its people's top one
+  or two: "stress 96 (red): mostly elevator waits, then long trips".
+- Both rooms together cost $1,300 a day, about $9,100 a week, so a tower
+  needs steady income before it builds them.
+- Hotel rooms in an older save load clean.
+
+<details>
+<summary>Milestone 11: the Restaurant</summary>
 
 **Milestone 11: the Restaurant.** The tower's first room that's busy at
 night, when residents and hotel guests are home. Evenings bring a fourth
@@ -80,6 +137,7 @@ rush to the elevators.
   today's takings and this week's average a day.
 - Residents and guests in an older save get their dinner times when it
   loads.
+</details>
 
 <details>
 <summary>Milestone 10: food & lunch trips</summary>
@@ -326,11 +384,11 @@ or visiting a GitHub Pages link.
   elevator legs) and works out which rooms can be reached from a lobby.
 - `elevators.js` — self-running elevator cars ("collective control").
 - `people.js` — every tenant, shopper and hotel guest: moving in, their
-  daily schedule (makers' lunch breaks and residents' and guests' dinners
-  included), and how they work
-  through a route.
+  daily schedule (makers' lunch breaks, residents' and guests' dinners,
+  housekeepers' and guards' shifts included), and how they work through a
+  route.
 - `economy.js` — who moves in (and out) when, condo sales and refunds,
-  weekly rent, nightly shop takings, hotel nights and upkeep, and
+  weekly rent, nightly shop takings, hotel nights, upkeep and wages, and
   bankruptcy.
 - `shops.js` — shops, cafés and restaurants: when they're open, sending
   shoppers (and the lunch crowd, and diners) in, what each spends (less
@@ -342,10 +400,15 @@ or visiting a GitHub Pages link.
   dinner (and noisy).
 - `hotels.js` — hotel rooms: bookings, checking guests in and out (early,
   if they're too stressed), reviews and occupancy, and nightly takings.
-- `stress.js` — each person's stress: trips, noise, rest, and the weekly
-  review that decides who moves out.
+- `housekeeping.js` — cleaning hotel rooms after their guests leave: which
+  housekeeper takes which room, and the 45 minutes it takes.
+- `security.js` — night-time break-ins, and the Security offices whose
+  guards stop them within 5 floors.
+- `stress.js` — each person's stress: trips, noise, break-ins, rest, what
+  caused it over the last week, and the weekly review that decides who
+  moves out.
 - `ratings.js` — the star rating and its population targets (2★ unlocks
-  shops, hotel rooms and restaurants).
+  shops, hotel rooms, restaurants and service rooms).
 - `save.js` — saving the whole game to the browser and loading it back,
   turning pointers between objects into ids and back.
 - `input.js` — turns mouse events into grid coordinates and tool actions

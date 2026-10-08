@@ -36,6 +36,14 @@
 // sizes, as in SimTower: a Single for a buyer on their own, and a Twin for
 // a pair of tourists. `parties` says who a room takes; a Twin takes a lone
 // buyer too when every Single is taken, but a buyer pays the Single rate.
+//
+// Service rooms (milestone 12) cost money and earn nothing. Their staff
+// move in like any tenant, count towards the population and work
+// `shiftHours` (arrive, leave), and each room costs `wagesPerDay`, paid at
+// the midnight tally once its staff are hired. Housekeeping
+// (housekeeping.js) cleans hotel rooms after their guests check out. A
+// Security office (security.js) stops break-ins on its own floor and the
+// `reach` floors above and below, while its guards are on duty.
 
 const STARTING_MONEY = 200000;
 const FLOOR_COST_PER_TILE = 200;
@@ -75,6 +83,17 @@ const ROOM_TYPES = {
   },
   single: { name: "Single Room", width: 6, cost: 10000, color: "#e9a6a6", tenants: 1, role: "guest", noise: 0, ratePerNight: 2000, parties: ["buyer"], unlocksAt: 2 },
   twin: { name: "Twin Room", width: 10, cost: 17000, color: "#e08f9a", tenants: 2, role: "guest", noise: 0, ratePerNight: 2800, parties: ["tourists", "buyer"], unlocksAt: 2 },
+  housekeeping: {
+    name: "Housekeeping", plural: "Housekeeping rooms", width: 8, cost: 12000, color: "#b8d8d0", tenants: 2, role: "housekeeper", noise: 0, unlocksAt: 2,
+    shiftHours: [[8.75, 9.25], [16.75, 17.25]], // 9am–5pm, every day
+    wagesPerDay: 500,
+  },
+  security: {
+    name: "Security Office", width: 8, cost: 20000, color: "#9fb0c8", tenants: 2, role: "guard", noise: 0, unlocksAt: 2,
+    shiftHours: [[19.5, 20.5], [5.5, 6.5]], // 8pm–6am, every night
+    wagesPerDay: 800,
+    reach: 5, // floors above and below it protects
+  },
 };
 
 // Stairs always join exactly two neighbouring floors. An elevator shaft can
