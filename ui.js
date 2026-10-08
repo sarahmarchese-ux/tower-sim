@@ -49,6 +49,11 @@ const UI = {
       if (room.type === "condo" && room.status === "occupied" && Stress.noiseAt(room, "evening") >= 2) {
         this.addWarning(tip, "Noisy in the evening: residents are home to unwind, and a restaurant next door stresses them. Keep condos a floor away from restaurants.");
       }
+      if (isHotel(room) && room.needsCleaning && !Housekeeping.staffed()) {
+        this.addWarning(tip, "Can't be booked until it's cleaned, and the tower has no housekeepers. Build Housekeeping, near the hotel rooms.");
+      }
+      const unguarded = Security.warning(room);
+      if (unguarded) this.addWarning(tip, unguarded);
     } else if (Pointer.buildCheck && !Pointer.buildCheck.ok) {
       // A build that would be refused says why, right where you're aiming,
       // before you click.
@@ -89,8 +94,10 @@ const UI = {
     else if (room.status === "vacant") parts.push(type.role === "shopkeeper" ? "looking for a shopkeeper" : vacantLabel(type).toLowerCase());
     else if (room.status === "movingIn") parts.push("moving in");
     else {
-      const average = Stress.roomAverage(room);
-      if (average !== null) parts.push(`stress ${Math.round(average)} (${Stress.band(average)})`);
+      if (room.type === "housekeeping") parts.push(...this.describeHousekeeping(room));
+      if (room.type === "security") parts.push(...this.describeSecurity(room));
+      const stress = Stress.roomReadout(room);
+      if (stress) parts.push(stress);
     }
     if (isStorefront(room) && room.status === "occupied") {
       parts.splice(1, 0, Shops.isOpen(room) ? "open" : "closed"); // right after its name
@@ -124,7 +131,7 @@ const UI = {
     else if (room.type === "cafe") parts.push(`noise ${type.noise} while serving lunch`);
     else if (room.type === "restaurant") parts.push(`noise ${type.noise} while serving dinner`);
     else if (type.noise > 0) parts.push(`makes noise ${type.noise}`);
-    else parts.push("quiet");
+    else if (room.type !== "security") parts.push("quiet"); // an office's reach says more (describeSecurity)
     return parts.join(" · ");
   },
 
@@ -132,12 +139,13 @@ const UI = {
   // reviewed, and how many of the last week's nights it was booked.
   describeHotel(room) {
     const parts = [];
-    if (room.status === "vacant") parts.push(room.nextGuestsAt != null ? "booked: guests arrive later today" : "vacant");
+    if (room.status === "vacant" && room.needsCleaning) parts.push(Housekeeping.describeRoom(room));
+    else if (room.status === "vacant") parts.push(room.nextGuestsAt != null ? "booked: guests arrive later today" : "vacant");
     else if (room.status === "checkingIn") parts.push(`${room.party === "tourists" ? "2 tourists" : "a buyer"} checking in`);
     else {
       parts.push(Hotels.describeStay(room));
-      const average = Stress.roomAverage(room);
-      if (average !== null) parts.push(`stress ${Math.round(average)} (${Stress.band(average)})`);
+      const stress = Stress.roomReadout(room);
+      if (stress) parts.push(stress);
     }
     const reviews = Hotels.reviewsLabel(room);
     if (reviews) parts.push(`${reviews} reviews`);
@@ -148,6 +156,27 @@ const UI = {
       else parts.push(`booked ${booked} of the last ${history.length} nights`);
     }
     return parts;
+  },
+
+  // Housekeeping: who's working, the rooms waiting, and today's tally.
+  describeHousekeeping(room) {
+    const staff = People.list.filter((p) => p.room === room && !p.movingIn && !p.movingOut);
+    const cleaning = staff.filter((p) => p.job).length;
+    const atWork = staff.filter((p) => p.state !== "offsite").length;
+    const parts = [atWork ? `${atWork} of ${staff.length} at work${cleaning ? `, ${cleaning} cleaning` : ""}` : "off duty (works 9am–5pm)"];
+    const waiting = Housekeeping.waitingRooms().length;
+    parts.push(`${waiting} room${waiting === 1 ? "" : "s"} waiting`);
+    parts.push(`cleaned today ${Housekeeping.cleanedToday(room)}`);
+    return parts;
+  },
+
+  // Security: whether the guards are on duty, and what's in their reach.
+  describeSecurity(room) {
+    const covered = Security.roomsCovered(room);
+    return [
+      Security.onDuty(room) ? "on duty" : "off duty (guards work 8pm–6am)",
+      `covers ${Security.coverageLabel(room)}: ${covered} room${covered === 1 ? "" : "s"} worth robbing`,
+    ];
   },
 
   // Nobody moves into a room they can't walk to from a lobby. The usual

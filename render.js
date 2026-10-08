@@ -5,7 +5,9 @@
 // which rooms are still empty plus the money floating up from rent, sales
 // and upkeep (milestone 5), how stressed everyone is (milestone 6), and
 // which shops are open and who's carrying a shopping bag (milestone 8), and
-// which hotel rooms have guests and who's carrying a suitcase (milestone 9).
+// which hotel rooms have guests and who's carrying a suitcase (milestone 9),
+// and which hotel rooms need cleaning, whether the guards are on duty and
+// which floors they cover (milestone 12).
 // This file only draws; World (world.js), Elevators and People decide what's
 // true, and input.js decides what the player is doing.
 
@@ -35,6 +37,7 @@ function draw() {
   drawRooms(w, h);
   drawTransit(w, h);
   drawPeople(w, h);
+  drawSecurityCoverage(w, h);
   drawMoneyPopups(w, h);
   drawHoverPreview(w, h);
   drawFloorLabels(h);
@@ -202,7 +205,8 @@ function drawRooms(w, h) {
     ctx.textBaseline = "middle";
     ctx.fillText(type.name, box.left + box.width / 2, box.top + 9, box.width - 6);
     if (empty) {
-      const sign = room.status === "movingIn" ? "Moving in" : room.status === "checkingIn" ? "Checking in" : vacantLabel(type);
+      const sign = room.status === "movingIn" ? "Moving in" : room.status === "checkingIn" ? "Checking in"
+        : room.needsCleaning ? "Needs cleaning" : vacantLabel(type);
       ctx.font = "italic 10px sans-serif";
       ctx.fillText(sign, box.left + box.width / 2, box.top + 21, box.width - 6);
     } else if (isStorefront(room)) {
@@ -210,6 +214,11 @@ function drawRooms(w, h) {
       ctx.font = "italic 10px sans-serif";
       ctx.textAlign = "left";
       ctx.fillText(Shops.isOpen(room) ? "Open" : "Closed", box.left + 5, box.top + 22, box.width - 10);
+      ctx.textAlign = "center";
+    } else if (room.type === "security") {
+      ctx.font = "italic 10px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(Security.onDuty(room) ? "On duty" : "Off duty", box.left + 5, box.top + 22, box.width - 10);
       ctx.textAlign = "center";
     }
 
@@ -340,6 +349,12 @@ function drawPeople(w, h) {
       ctx.fillRect(x + 2, feet - 6, 4, 4);
     }
 
+    // A housekeeper on a job carries a bucket.
+    if (person.role === "housekeeper" && person.job) {
+      ctx.fillStyle = "#3aa3c9";
+      ctx.fillRect(x + 2, feet - 4, 4, 4);
+    }
+
     // A hotel guest wheels a suitcase in when they check in, and out again
     // when they leave.
     if (person.role === "guest" && (!person.arrived || person.movingOut)) {
@@ -376,12 +391,39 @@ function drawMoneyPopups(w, h) {
 }
 
 // What an empty room's sign says: condos are sold, studios rented, a shop
-// is waiting for someone to run it, and a hotel room for its next guests.
+// is waiting for someone to run it, a hotel room for its next guests, and
+// a service room for its staff.
 function vacantLabel(type) {
   if (type.salePrice) return "For sale";
   if (type.role === "guest") return "Vacancy";
   if (type.role === "shopkeeper") return "Vacant";
+  if (type.role === "housekeeper" || type.role === "guard") return "Hiring";
   return "For rent";
+}
+
+// Hovering a Security office, or holding the Security tool, shades the
+// floors it protects (its own and `reach` above and below): every
+// office's, and the one about to be placed.
+function drawSecurityCoverage(w, h) {
+  const hovered = Pointer.floor !== null && World.roomAt(Pointer.floor, Pointer.tile);
+  let floors = [];
+  if (Tool.current === "security") {
+    floors = World.rooms.filter((room) => room.type === "security").map((room) => room.floor);
+    if (Pointer.floor !== null) floors.push(Pointer.floor);
+  } else if (hovered && hovered.type === "security") {
+    floors = [hovered.floor];
+  }
+  if (!floors.length) return;
+  const reach = ROOM_TYPES.security.reach;
+  const covered = new Set();
+  for (const floor of floors) for (let f = floor - reach; f <= floor + reach; f++) covered.add(f);
+  ctx.fillStyle = "rgba(90, 140, 230, 0.12)";
+  for (const floor of covered) {
+    const top = Camera.worldToScreenY(Grid.floorToY(floor + 1));
+    const bottom = Camera.worldToScreenY(Grid.floorToY(floor));
+    if (bottom < 0 || top > h) continue;
+    ctx.fillRect(0, top, w, bottom - top);
+  }
 }
 
 function roomScreenBox(room, type) {

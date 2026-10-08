@@ -30,11 +30,17 @@
 //     party in at a lobby; they stay in their room for a night or a few,
 //     apart from the odd daytime outing (and dinner at a restaurant, if
 //     the tower has one), then check out and leave.
+//   - Housekeepers (milestone 12) work 9am to 5pm every day. Between jobs
+//     they wait in their Housekeeping room; when a hotel room needs
+//     cleaning, one of them goes and cleans it (housekeeping.js).
+//   - Security guards (milestone 12) work nights, 8pm to 6am, in their
+//     Security office, and commute in and out like makers (security.js).
 //
 // Instead of a timetable of "at 9:00 do X", each person just asks, whenever
 // they're standing still: "given the time right now, where should I be — in
-// my room, out of the building, (a maker at lunch) at a café, or (a
-// resident or guest at dinner) at a restaurant?" If the answer differs
+// my room, out of the building, (a maker at lunch) at a café, (a
+// resident or guest at dinner) at a restaurant, or (a housekeeper) in the
+// hotel room they're cleaning?" If the answer differs
 // from where they are, they set off. That one question handles everything:
 // a studio placed at 2pm, a maker who got stuck in a queue past quitting
 // time, a weekend.
@@ -45,6 +51,7 @@
 //   inRoom             — in their studio or condo
 //   eating             — a maker having lunch at a café (`lunchCafe`), or a
 //                        resident or guest at dinner (`dinnerRoom`)
+//   cleaning           — a housekeeper cleaning a hotel room (`job`)
 //   walking            — walking along a floor
 //   onStairs           — climbing or descending one flight
 //   waitingForElevator — queueing at a shaft (elevators.js takes over)
@@ -111,6 +118,11 @@ const People = {
     if (type.role === "shopkeeper") {
       const [arrive, leave] = type.keeperHours;
       return { arriveAt: between(...arrive), leaveAt: between(...leave) };
+    }
+    if (type.role === "housekeeper" || type.role === "guard") {
+      const [arrive, leave] = type.shiftHours;
+      const times = { arriveAt: between(...arrive), leaveAt: between(...leave) };
+      return type.role === "housekeeper" ? { ...times, job: null, jobDoneAt: 0, workX: 0, lookAt: 0 } : times;
     }
     return {
       leaveAt: between(7.5, 9),
@@ -218,6 +230,7 @@ const People = {
     this.list = this.list.filter((p) => p.room !== room);
     if (room.type === "cafe") Cafes.onClosed(room);
     if (room.type === "restaurant") Restaurants.onClosed(room);
+    if (isHotel(room)) Housekeeping.onRoomGone(room);
   },
 
   // A room's tenants are leaving for good. Anyone already out of the
@@ -227,7 +240,7 @@ const People = {
     for (const person of this.list.filter((p) => p.room === room)) {
       person.movingOut = true;
       if (person.state === "offsite") this.remove(person);
-      else if (person.state === "inRoom") person.idleUntil = Clock.totalMinutes + randomBetween(MOVER_GAP_MINUTES);
+      else if (person.state === "inRoom" || person.state === "cleaning") person.idleUntil = Clock.totalMinutes + randomBetween(MOVER_GAP_MINUTES);
     }
   },
 
@@ -248,11 +261,13 @@ const People = {
     return person.role === "shopper" ? person.browseX : this.slotX(person.room, person.slot);
   },
 
-  // Where someone is when standing still: "room", "cafe", "restaurant" or
-  // "offsite". Makers eat lunch; everyone else who eats here, dinner.
+  // Where someone is when standing still: "room", "cafe", "restaurant",
+  // "cleaning" or "offsite". Makers eat lunch; everyone else who eats
+  // here, dinner.
   whereIs(person) {
     if (person.state === "inRoom") return "room";
     if (person.state === "eating") return person.role === "maker" ? "cafe" : "restaurant";
+    if (person.state === "cleaning") return "cleaning";
     return "offsite";
   },
 
@@ -261,6 +276,7 @@ const People = {
     if (place === "room") return [{ floor: person.room.floor, x: this.homeX(person) }];
     if (place === "cafe") return person.lunchCafe ? [{ floor: person.lunchCafe.floor, x: person.seatX }] : [];
     if (place === "restaurant") return person.dinnerRoom ? [{ floor: person.dinnerRoom.floor, x: person.seatX }] : [];
+    if (place === "cleaning") return person.job ? [{ floor: person.job.floor, x: person.workX }] : [];
     return Routing.lobbyPoints();
   },
 
@@ -293,6 +309,16 @@ const People = {
     if (person.role === "shopkeeper") {
       return minute >= person.arriveAt && minute < person.leaveAt ? "room" : "offsite";
     }
+    if (person.role === "housekeeper") {
+      // Once started, a room gets finished, even past five o'clock.
+      if (person.job && person.state === "cleaning") return "cleaning";
+      if (minute < person.arriveAt || minute >= person.leaveAt) return "offsite";
+      return person.job ? "cleaning" : "room";
+    }
+    if (person.role === "guard") {
+      // The night shift runs past midnight: on from the evening, off in the morning.
+      return minute >= person.arriveAt || minute < person.leaveAt ? "room" : "offsite";
+    }
     if (!weekend) {
       return minute >= person.leaveAt && minute < person.returnAt ? "offsite" : "room";
     }
@@ -302,7 +328,7 @@ const People = {
   update(minutes) {
     const now = Clock.totalMinutes;
     for (const person of this.list) {
-      if (person.state === "inRoom" || person.state === "offsite" || person.state === "eating") {
+      if (person.state === "inRoom" || person.state === "offsite" || person.state === "eating" || person.state === "cleaning") {
         if (now < person.idleUntil) continue;
         // A maker at work whose lunch break has come round decides where
         // to eat.
@@ -316,9 +342,17 @@ const People = {
         if (person.role === "shopper" && person.state === "inRoom" && person.bought === null && !person.movingOut) {
           Shops.checkout(person);
         }
+        // A housekeeper at work finishes the room they're cleaning, and
+        // looks for the next one that needs it.
+        if (person.role === "housekeeper" && !person.movingIn && !person.movingOut) Housekeeping.planWork(person, now);
         const here = this.whereIs(person);
         const want = this.desiredLocation(person, now);
-        if (want !== here) this.startTrip(person, want);
+        // From a hotel room that's been cleaned, the next trip starts where
+        // they're standing (the job they were on is done).
+        if (want !== here) {
+          if (person.state === "cleaning") this.startTrip(person, want, { floor: person.floor, x: person.x }, true);
+          else this.startTrip(person, want);
+        }
       } else {
         // A shopper whose trip in has dragged on past the point of buying
         // anything turns back (but not mid-ride or mid-climb).
@@ -434,7 +468,8 @@ const People = {
   },
 
   finishTrip(person) {
-    person.state = person.target === "room" ? "inRoom" : person.target === "cafe" || person.target === "restaurant" ? "eating" : "offsite";
+    const states = { room: "inRoom", cafe: "eating", restaurant: "eating", cleaning: "cleaning" };
+    person.state = states[person.target] || "offsite";
     person.route = null;
     person.lastTripWaitMinutes = person.tripWaitMinutes;
     let felt = 0;
@@ -468,6 +503,11 @@ const People = {
       person.floor = person.dinnerRoom.floor;
       person.x = person.seatX;
       Restaurants.onDinerArrived(person);
+    }
+    if (person.target === "cleaning") {
+      person.floor = person.job.floor;
+      person.x = person.workX;
+      Housekeeping.onArrived(person);
     }
   },
 

@@ -16,7 +16,8 @@
 // weekly rent to what it owes (so a studio that moved in on Thursday pays
 // for Thursday to Sunday), each shop's takings for the day are banked (see
 // shops.js; cafés and restaurants too), each hotel room with guests in it earns its night (see
-// hotels.js), and each elevator's upkeep is paid. Once a week,
+// hotels.js), and each elevator's upkeep and each staffed service room's
+// wages (Housekeeping and Security; rooms.js `wagesPerDay`) are paid. Once a week,
 // at midnight at the end of Sunday, is payday: everything owed comes in at
 // once. Upkeep keeps coming every night whether or not anyone pays you, so
 // money can dip below zero between paydays. Stay in the red for a full game
@@ -30,9 +31,10 @@ const MOVE_IN_DELAY_MINUTES = [60, 240]; // after placing: 1–4 game hours
 const MOVE_IN_RETRY_MINUTES = [30, 90]; // unreachable: look again this soon
 // When movers turn up. Makers come to see a studio during working hours
 // (weekdays, 8am–4pm); condo buyers can come any day until the evening,
-// and so can shopkeepers (shops open at weekends too) until 6pm.
-const MOVE_IN_HOURS = { maker: [8, 16], resident: [8, 20], shopkeeper: [8, 18] };
-const MOVE_IN_WEEKDAYS_ONLY = { maker: true, resident: false, shopkeeper: false };
+// and so can shopkeepers (shops open at weekends too) until 6pm, and new
+// housekeepers and guards (they work weekends too).
+const MOVE_IN_HOURS = { maker: [8, 16], resident: [8, 20], shopkeeper: [8, 18], housekeeper: [8, 18], guard: [8, 18] };
+const MOVE_IN_WEEKDAYS_ONLY = { maker: true, resident: false, shopkeeper: false, housekeeper: false, guard: false };
 const BANKRUPTCY_GRACE_DAYS = 7;
 
 const Economy = {
@@ -148,6 +150,14 @@ const Economy = {
       if (!upkeepPerDay) continue;
       World.money -= upkeepPerDay;
       this.popup(t.tileStart + TRANSIT_TYPES[t.kind].width / 2, t.floorBottom, `-${World.formatMoney(upkeepPerDay)}`, "#ff9d9d");
+    }
+
+    // Service rooms pay their staff every day, once they've been hired.
+    for (const room of World.rooms) {
+      const wages = ROOM_TYPES[room.type].wagesPerDay;
+      if (!wages || room.status !== "occupied") continue;
+      World.money -= wages;
+      this.popupOverRoom(room, `Wages -${World.formatMoney(wages)}`, "#ff9d9d");
     }
 
     if (this.lastTallyDay % 7 === 0) {

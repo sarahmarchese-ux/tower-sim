@@ -114,7 +114,7 @@ const World = {
     if (type.unlocksAt && Ratings.stars < type.unlocksAt) {
       const target = starTarget(type.unlocksAt);
       const how = target ? `: grow the tower to ${target.population} people first` : "";
-      return { ok: false, reason: `${type.name}s unlock at ${type.unlocksAt}★${how}` };
+      return { ok: false, reason: `${type.plural || `${type.name}s`} unlock at ${type.unlocksAt}★${how}` };
     }
 
     if (type.groundOnly && floor !== 0) {

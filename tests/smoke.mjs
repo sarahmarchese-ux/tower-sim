@@ -167,13 +167,15 @@ try {
       await clickAt(tile, floor);
     }
 
-    // Shops, hotel rooms and restaurants unlock at 2★. Reaching 100 people
-    // would take too long here, so check the lock, then hand the tower its
-    // second star directly, and the money for the lot (it costs more than a
-    // new game's $200,000). (The Single sits over the woodwork studio, so
-    // its weekday guests get noise too; the Twin is up on the 3rd floor,
-    // clear of the café and the restaurant, which is on the 4th by the
-    // elevator.)
+    // Shops, hotel rooms, restaurants and service rooms unlock at 2★.
+    // Reaching 100 people would take too long here, so check the lock,
+    // then hand the tower its second star directly, and the money for the
+    // lot (it costs more than a new game's $200,000). (The Single sits
+    // over the woodwork studio, so its weekday guests get noise too; the
+    // Twin is up on the 3rd floor, clear of the café and the restaurant,
+    // which is on the 4th by the elevator. Housekeeping is beside the
+    // Single. The Security office comes later, once a break-in has been
+    // tried without it.)
     await pickTool("shop");
     await clickAt(22, 0);
     await pickTool("single");
@@ -182,12 +184,19 @@ try {
     await clickAt(4, 4);
     await pickTool("twin");
     await clickAt(28, 3);
-    const early = await page.evaluate(() => World.rooms.filter((r) => r.type === "shop" || r.type === "restaurant" || isHotel(r)).length);
-    check(early === 0, "a shop, hotel room or restaurant was built before 2★");
+    await pickTool("housekeeping");
+    await clickAt(32, 2);
+    await pickTool("security");
+    await clickAt(20, 4);
+    const early = await page.evaluate(() =>
+      World.rooms.filter((r) => ["shop", "restaurant", "housekeeping", "security"].includes(r.type) || isHotel(r)).length,
+    );
+    check(early === 0, "a shop, hotel room, restaurant or service room was built before 2★");
     await page.evaluate(() => {
       Ratings.stars = 2;
       World.money += 50000;
     });
+    await pickTool("twin");
     await clickAt(28, 3);
     await pickTool("restaurant");
     await clickAt(4, 4);
@@ -195,10 +204,15 @@ try {
     await clickAt(26, 2);
     await pickTool("shop");
     await clickAt(22, 0);
+    await pickTool("housekeeping");
+    await clickAt(32, 2);
     await page.keyboard.press("Escape");
 
     const s = await state();
-    check(s.rooms.length === 11, `expected 11 rooms, got ${s.rooms.length}: ${s.rooms}`);
+    check(s.rooms.length === 12, `expected 12 rooms, got ${s.rooms.length}: ${s.rooms}`);
+    for (const type of ["lobby", "sewing", "pottery", "woodwork", "jewellery", "condo", "cafe", "shop", "single", "twin", "restaurant", "housekeeping"]) {
+      check(s.rooms.some((r) => r.startsWith(`${type}@`)), `no ${type} was built: ${s.rooms}`);
+    }
     check(s.transit.length === 2, `expected stairs and an elevator, got ${s.transit}`);
     check(s.money < 250000, "building should have cost money");
   });
@@ -211,13 +225,20 @@ try {
     let nights = 0;
     let lunches = 0;
     let dinners = 0;
-    // Count residents and guests sitting down to dinner at an open restaurant.
+    // Count residents and guests sitting down to dinner at an open
+    // restaurant, and hotel rooms cleaned after their guests checked out.
     await page.evaluate(() => {
       window.__dinedIn = 0;
       const arrived = Restaurants.onDinerArrived.bind(Restaurants);
       Restaurants.onDinerArrived = (person) => {
         if (Shops.isOpen(person.dinnerRoom) && !person.movingOut) window.__dinedIn++;
         return arrived(person);
+      };
+      window.__cleaned = 0;
+      const finish = Housekeeping.finish.bind(Housekeeping);
+      Housekeeping.finish = (person) => {
+        if (person.job.needsCleaning && person.job.status === "vacant") window.__cleaned++;
+        return finish(person);
       };
     });
     for (let day = 0; day < SIM_DAYS; day++) {
@@ -228,6 +249,7 @@ try {
       dinners += await page.evaluate(() => World.rooms.find((r) => r.type === "restaurant").salesYesterday || 0);
     }
     check(dinners > 0, "the restaurant never sold a dinner");
+    check((await page.evaluate(() => window.__cleaned)) > 0, "no housekeeper ever cleaned a hotel room after a checkout");
     check((await page.evaluate(() => window.__dinedIn)) > 0, "no resident or hotel guest ever had dinner at the restaurant");
     check(lunches > 0, "the café never sold a lunch");
     check(
@@ -242,6 +264,67 @@ try {
     check(after.rooms.some((r) => r.endsWith(":occupied")), "no room became occupied");
     check(Number.isFinite(after.money), `money is ${after.money}`);
     check(!(await page.evaluate(() => Economy.bankrupt)), "the tower went bankrupt");
+  });
+
+  await step("break-ins, and a Security office that stops them", async () => {
+    // An unprotected shop loses stock, and a message says so.
+    const theft = await page.evaluate(() => {
+      const shop = World.rooms.find((r) => r.type === "shop");
+      const before = World.money;
+      const message = Security.breakIn(shop);
+      return { status: shop.status, message, taken: before - World.money, banner: document.getElementById("banner").textContent };
+    });
+    check(theft.status === "occupied", `the shop should have a shopkeeper by now, but it's ${theft.status}`);
+    check(theft.taken >= 1000 && theft.taken <= 3000, `a break-in at the shop should take $1,000–3,000, took ${theft.taken}`);
+    check(/^Break-in at the Craft Shop on 1F: \$[\d,]+ of stock taken$/.test(theft.banner), `no break-in message: "${theft.banner}"`);
+
+    // Two break-ins at the jewellery studio stress its maker, and hovering
+    // it names the cause.
+    const jewellery = await page.evaluate(() => {
+      const room = World.rooms.find((r) => r.type === "jewellery");
+      Security.breakIn(room);
+      Security.breakIn(room);
+      return { floor: room.floor, tile: room.tileStart, status: room.status };
+    });
+    check(jewellery.status === "occupied", `the jewellery studio should have its maker, but it's ${jewellery.status}`);
+    const p = await spot(jewellery.tile + 1, jewellery.floor);
+    await page.mouse.move(p.x, p.y);
+    await page.waitForFunction(() => document.getElementById("tooltip").classList.contains("shown"), null, { timeout: 2000 });
+    const tip = await page.textContent("#tooltip");
+    check(/stress \d+ \((pink|red)\): mostly break-ins/.test(tip), `a stressed room's tooltip doesn't name the cause: "${tip}"`);
+    check(/No security within 5 floors/.test(tip), `an unprotected studio's tooltip doesn't warn: "${tip}"`);
+    await page.mouse.move(5, 5);
+
+    // A Security office on the top floor covers the whole tower. Run to
+    // 2am, when its guards are on duty: then nothing is ever taken.
+    await pickTool("security");
+    await clickAt(20, 4);
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => {
+      while (Clock.hour < 2 || Clock.hour >= 3) advanceSimulation(15);
+    });
+    const guarded = await page.evaluate(() => {
+      const office = World.rooms.find((r) => r.type === "security");
+      const shop = World.rooms.find((r) => r.type === "shop");
+      const before = World.money;
+      let robbed = 0;
+      for (let i = 0; i < 50; i++) if (Security.breakIn(shop)) robbed++;
+      return { status: office.status, onDuty: Security.onDuty(office), robbed, lost: before - World.money };
+    });
+    check(guarded.status === "occupied" && guarded.onDuty, `the Security office's guards aren't on duty at 2am (${guarded.status})`);
+    check(guarded.robbed === 0 && guarded.lost === 0, `a protected shop was robbed ${guarded.robbed} times`);
+    // And over three more nights, nothing in the tower is broken into.
+    await page.evaluate(() => {
+      window.__robbed = 0;
+      const breakIn = Security.breakIn.bind(Security);
+      Security.breakIn = (room) => {
+        const message = breakIn(room);
+        if (message) window.__robbed++;
+        return message;
+      };
+    });
+    await simulate(3 * 24 * 60);
+    check((await page.evaluate(() => window.__robbed)) === 0, "a room under guard was broken into");
   });
 
   await step("hover every tenanted room", async () => {

@@ -27,6 +27,13 @@
 // often: occupancy is how layout shows up in a hotel's takings. Weekend
 // stays are quiet whatever the layout, since the studios are shut.
 //
+// Once its guests have gone, a room needs cleaning (`needsCleaning`), and
+// nobody can book it until a housekeeper has been (milestone 12,
+// housekeeping.js). Rooms in a save from before then load clean.
+//
+// Guests robbed in a night-time break-in (security.js) give the stay the
+// worst review, however calm they were otherwise (`robbed`).
+//
 // Room state lives on the room: `status` is "vacant", "checkingIn" (a
 // party is on its way up) or "occupied" (they've arrived), and the party's
 // details (`party`, `nights`, `checkInDay`, `checkoutAt`) sit beside it.
@@ -86,6 +93,9 @@ const Hotels = {
   updateBooking(room, now) {
     const hour = Clock.hour;
     if (room.nextGuestsAt == null) {
+      // A room waiting for Housekeeping can't be booked yet. (Once it's
+      // clean, it still gets today's chance if there's time to arrive.)
+      if (room.needsCleaning) return;
       if (hour < CHECK_IN_HOURS[0] || hour >= CHECK_IN_HOURS[1] || room.bookingDay === Clock.day) return;
       room.bookingDay = Clock.day;
       const party = this.whoBooks(room);
@@ -116,7 +126,7 @@ const Hotels = {
   // Is there a Single nobody has booked tonight, that a buyer could get to?
   singleFree() {
     return World.rooms.some(
-      (room) => room.type === "single" && room.status === "vacant" && room.nextGuestsAt == null && Routing.isReachable(room),
+      (room) => room.type === "single" && room.status === "vacant" && !room.needsCleaning && room.nextGuestsAt == null && Routing.isReachable(room),
     );
   },
 
@@ -181,9 +191,12 @@ const Hotels = {
   endStay(room, guests, reason) {
     if (guests.length) {
       const peak = Math.max(...guests.map((g) => g.peakStress));
-      const review = this.reviewFor(peak);
+      const review = room.robbed ? 0 : this.reviewFor(peak);
       room.reputation = this.reputation(room) * (1 - REVIEW_WEIGHT) + review * REVIEW_WEIGHT;
     }
+    // Guests who got as far as the room leave it needing a clean.
+    if (room.status === "occupied") room.needsCleaning = true;
+    room.robbed = false;
     People.moveOut(room);
     World.setRoomStatus(room, "vacant");
     room.party = null;
