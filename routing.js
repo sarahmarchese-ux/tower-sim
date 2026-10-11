@@ -20,7 +20,7 @@
 // On top of that comes the queue, judged the way someone at the call
 // button would: the people who'll fill the car before them (waiting on
 // their floor, or "upstream", where the car comes from, going the same
-// way). Up to a carload costs only a little (the car takes them all);
+// way, and riders in a car on its way to them who are going past). Up to a carload costs only a little (the car takes them all);
 // every full carload ahead means waiting out another round trip of the
 // shaft. Anyone else waiting adds a stop. With these numbers people take
 // nearby stairs for a floor or two, spread out across shafts at rush
@@ -157,7 +157,9 @@ const Routing = {
   boardCost(transit, floor, direction) {
     const car = Elevators.cars.get(transit.id);
     if (!car) return ELEVATOR_BOARD_COST;
-    let ahead = 0;
+    // Riders in a car still coming this way will fill seats first.
+    const coming = car.direction === direction && (car.floor - floor) * direction < 0;
+    let ahead = coming ? car.riders.filter((r) => (r.dest - floor) * direction > 0).length : 0;
     let others = 0;
     for (const w of car.waiting) {
       if (w.direction === direction && (w.floor - floor) * direction <= 0) ahead++;
