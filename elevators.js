@@ -71,9 +71,12 @@ const Elevators = {
     return 0;
   },
 
-  // Rule 2: should the car stop at `floor`, which it has just reached?
+  // Rule 2: should the car stop at `floor`, which it has just reached? A
+  // full car only stops to let people off: opening for people it can't
+  // take would just cost everyone aboard a minute.
   shouldStop(car, floor) {
     if (car.riders.some((r) => r.dest === floor)) return true;
+    if (car.riders.length >= ELEVATOR_CAPACITY) return false;
     const turningAround = !this.hasRequestsBeyond(car, car.direction);
     return car.waiting.some((w) => w.floor === floor && (w.direction === car.direction || turningAround));
   },

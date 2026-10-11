@@ -57,12 +57,16 @@
 //   waitingForElevator — queueing at a shaft (elevators.js takes over)
 //   riding             — inside an elevator car
 //
+// Someone who has queued for an elevator for REPLAN_MINUTES (`queuedSince`)
+// looks again for a quicker way, and every REPLAN_MINUTES after that.
+//
 // `tripWaitMinutes` and `tripStairsMinutes` add up time spent queueing and
 // climbing on the current trip, and `tripStartedAt` is when they set off;
 // on arrival all three go to stress.js.
 
 const WALK_TILES_PER_MINUTE = 3;
 const STAIRS_MINUTES_PER_FLOOR = 2;
+const REPLAN_MINUTES = 10; // queueing this long, people look again for a quicker way
 const RETRY_MINUTES = 30; // how long to wait before trying again if there's no route
 const MOVER_GAP_MINUTES = [3, 8]; // movers arrive a few minutes apart
 const UNPACK_MINUTES = [20, 40]; // a new arrival stays put this long
@@ -365,6 +369,10 @@ const People = {
           person.target = "offsite";
           this.reroute(person);
         } else {
+          if (person.state === "waitingForElevator") {
+            if (person.queuedSince == null) person.queuedSince = now; // queueing in a save from before this
+            if (now - person.queuedSince >= REPLAN_MINUTES) this.reconsiderQueue(person);
+          }
           this.advanceTrip(person, minutes);
         }
       }
@@ -466,6 +474,7 @@ const People = {
           return;
         }
         person.state = "waitingForElevator";
+        person.queuedSince = Clock.totalMinutes;
         Elevators.call(person, leg);
       }
     }
@@ -573,6 +582,28 @@ const People = {
   // stretch past the built floor. They leave any car or queue they were in:
   // the new route starts from scratch. `removed` is the transit just
   // demolished, if that's why, since it's no longer in World.transit.
+  // Someone who has queued for REPLAN_MINUTES looks again: if, from where
+  // they stand, another shaft or the stairs now looks quicker than waiting
+  // on, they go that way (the trip's clock keeps running). If not, they
+  // keep their place and look again later.
+  reconsiderQueue(person) {
+    person.queuedSince = Clock.totalMinutes;
+    const leg = person.route.legs[person.legIndex];
+    const car = Elevators.cars.get(leg.transitId);
+    const spot = car ? car.waiting.findIndex((w) => w.person === person) : -1;
+    if (spot < 0) return;
+    const here = { floor: Math.round(person.floor), x: Routing.stopX(car.transit, leg.fromFloor) };
+    const goals = this.pointsFor(person, person.target);
+    // Planned as if they'd stepped out of the queue, so they don't count
+    // themselves as being in their own way.
+    const [mine] = car.waiting.splice(spot, 1);
+    const route = goals.length ? Routing.plan([here], goals) : null;
+    car.waiting.splice(spot, 0, mine);
+    const first = route && route.legs.find((l) => l.type !== "walk");
+    if (!route || (first && first.transitId === leg.transitId)) return;
+    this.reroute(person);
+  },
+
   reroute(person, removed) {
     const floor = Math.round(person.floor);
     let x = person.x;

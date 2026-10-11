@@ -16,15 +16,21 @@
 // Costs are in "tiles of walking" (3 tiles a minute), set to match how
 // long each kind of travel *feels* (stress.js counts stairs and queueing
 // twice). A flight of stairs takes 2 minutes, so it feels like 4: 12 tiles.
-// An elevator costs a typical wait (counted twice) to board, plus the ride,
-// plus a little for every person already queueing at that shaft, since
-// they'll be served first. With these numbers people take nearby stairs for
-// a floor or two, more readily when the elevator has a queue, and the
-// elevator for anything further.
+// An elevator costs a typical wait (counted twice) to board, plus the ride.
+// On top of that comes the queue, judged the way someone at the call
+// button would: the people who'll fill the car before them (waiting on
+// their floor, or "upstream", where the car comes from, going the same
+// way, and riders in a car on its way to them who are going past). Up to a carload costs only a little (the car takes them all);
+// every full carload ahead means waiting out another round trip of the
+// shaft. Anyone else waiting adds a stop. With these numbers people take
+// nearby stairs for a floor or two, spread out across shafts at rush
+// hour, and walk to the stairs rather than wait out several full cars.
 const STAIRS_COST_PER_FLOOR = 12;
 const ELEVATOR_BOARD_COST = 15;
 const ELEVATOR_COST_PER_FLOOR = 1.5;
-const ELEVATOR_QUEUE_COST = 2; // per person already waiting for the car
+const TILES_PER_FELT_MINUTE = 6; // 3 tiles a minute, a queueing minute felt twice
+const ELEVATOR_AHEAD_COST = 2; // per person ahead, within the car's first load
+const ELEVATOR_STOP_COST = 2; // per other person waiting (another stop)
 
 const Routing = {
   _segmentsVersion: -1,
@@ -130,13 +136,15 @@ const Routing = {
       // Riding or climbing to the same transit's stops on other floors.
       if (node.transit) {
         const t = node.transit;
-        const boardCost = t.kind === "elevator" ? ELEVATOR_BOARD_COST + ELEVATOR_QUEUE_COST * this.queueAt(t) : 0;
+        const boardCost = t.kind === "elevator"
+          ? { up: this.boardCost(t, node.floor, 1), down: this.boardCost(t, node.floor, -1) }
+          : null;
         for (let floor = t.floorBottom; floor <= t.floorTop; floor++) {
           if (floor === node.floor) continue;
           const floors = Math.abs(floor - node.floor);
           const cost = t.kind === "stairs"
             ? STAIRS_COST_PER_FLOOR * floors
-            : boardCost + ELEVATOR_COST_PER_FLOOR * floors;
+            : (floor > node.floor ? boardCost.up : boardCost.down) + ELEVATOR_COST_PER_FLOOR * floors;
           const next = byFloor.get(floor).find((i) => nodes[i].transit === t);
           relax(next, cost);
         }
@@ -144,10 +152,26 @@ const Routing = {
     }
   },
 
-  // How many people are waiting for this elevator's car right now.
-  queueAt(transit) {
+  // What getting on this elevator at `floor`, going `direction`, costs
+  // right now (see the costs at the top).
+  boardCost(transit, floor, direction) {
     const car = Elevators.cars.get(transit.id);
-    return car ? car.waiting.length : 0;
+    if (!car) return ELEVATOR_BOARD_COST;
+    // Riders in a car still coming this way will fill seats first.
+    const coming = car.direction === direction && (car.floor - floor) * direction < 0;
+    let ahead = coming ? car.riders.filter((r) => (r.dest - floor) * direction > 0).length : 0;
+    let others = 0;
+    for (const w of car.waiting) {
+      if (w.direction === direction && (w.floor - floor) * direction <= 0) ahead++;
+      else others++;
+    }
+    const fullLoads = Math.floor(ahead / ELEVATOR_CAPACITY);
+    const firstLoad = ahead - fullLoads * ELEVATOR_CAPACITY;
+    // A round trip: down and back up the shaft, stopping on most floors.
+    const floors = transit.floorTop - transit.floorBottom;
+    const roundTrip = floors * (2 * ELEVATOR_MINUTES_PER_FLOOR + ELEVATOR_DOOR_MINUTES);
+    return ELEVATOR_BOARD_COST + fullLoads * roundTrip * TILES_PER_FELT_MINUTE +
+      firstLoad * ELEVATOR_AHEAD_COST + others * ELEVATOR_STOP_COST;
   },
 
   // Walk the `prev` links back from the goal and turn them into legs.

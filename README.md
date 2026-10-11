@@ -99,10 +99,18 @@ matter, because their staff have to get to the rooms they look after.
   "elevator waits".
 - **Stairs for short hops.** Routes are costed by how long the trip
   feels: a flight of stairs like 4 minutes, an elevator like a typical
-  wait plus the ride, plus a bit for everyone already queueing at that
-  shaft. So people take stairs that are on their way for a floor or
-  two, and further when the elevator has a queue, rather than walking
-  past them to wait for the car. Noise from the floor directly above or
+  wait plus the ride, plus the queue as someone at the call button
+  would judge it. Up to a carload of people ahead of them (on their
+  floor, or upstream going their way) costs a little; every full
+  carload ahead means waiting out another round trip of the shaft. So
+  people take stairs that are on their way for a floor or two, spread
+  out across shafts at rush hour, and walk to the stairs rather than
+  wait out several full cars. A full car only stops to let people off.
+  Someone who has queued for 10 minutes looks again from where they
+  stand, and switches to another shaft or the stairs if that's now
+  quicker (keeping their place if not). In a playtester's 242-person
+  tower this took the worst wait of a weekday from 97 minutes to 36, and
+  red rooms from about 20 to 13. Noise from the floor directly above or
   below counts as next door, and the warnings now say so.
 - **Save file** (top bar) copies your tower out as text, or downloads it
   as a `.json` file, to keep or to send (say, to Claude, to look at a
