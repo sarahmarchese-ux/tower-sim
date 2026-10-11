@@ -71,7 +71,7 @@ const SaveGame = {
         state: car.state,
         doorTimer: car.doorTimer,
         riders: car.riders.map((r) => ({ personId: r.person.id, dest: r.dest })),
-        waiting: car.waiting.map((w) => ({ personId: w.person.id, floor: w.floor, dest: w.dest, direction: w.direction })),
+        waiting: car.waiting.map((w) => ({ personId: w.person.id, floor: w.floor, dest: w.dest, direction: w.direction, since: w.since })),
       });
     }
 
@@ -245,7 +245,8 @@ const SaveGame = {
           state: saved.state,
           doorTimer: saved.doorTimer,
           riders: saved.riders.map((r) => ({ person: personById(r.personId), dest: r.dest })),
-          waiting: saved.waiting.map((w) => ({ person: personById(w.personId), floor: w.floor, dest: w.dest, direction: w.direction })),
+          waiting: saved.waiting.map((w) => ({ person: personById(w.personId), floor: w.floor, dest: w.dest, direction: w.direction, since: Number.isFinite(w.since) ? w.since : null })),
+          recentWaits: [],
         });
       }
       for (const transit of data.world.transit) {

@@ -18,6 +18,8 @@
 const ELEVATOR_CAPACITY = 8;
 const ELEVATOR_MINUTES_PER_FLOOR = 0.5;
 const ELEVATOR_DOOR_MINUTES = 1;
+const WAIT_HISTORY_MINUTES = 60; // how far back a shaft's tooltip looks at waits
+const BUSY_WAIT_MINUTES = 10; // an average wait this long gets a warning
 
 const Elevators = {
   cars: new Map(), // transit id -> car
@@ -28,7 +30,7 @@ const Elevators = {
     const car = this.cars.get(leg.transitId);
     const direction = Math.sign(leg.toFloor - leg.fromFloor);
     const queueSpot = car.waiting.filter((w) => w.floor === leg.fromFloor).length;
-    car.waiting.push({ person, floor: leg.fromFloor, dest: leg.toFloor, direction });
+    car.waiting.push({ person, floor: leg.fromFloor, dest: leg.toFloor, direction, since: Clock.totalMinutes });
     person.x = Routing.stopX(car.transit, leg.fromFloor) - 0.4 * queueSpot;
   },
 
@@ -119,10 +121,36 @@ const Elevators = {
     const boarding = here.filter((w) => w.direction === direction).slice(0, room);
     for (const w of boarding) {
       car.waiting.splice(car.waiting.indexOf(w), 1);
+      if (w.since != null) this.noteWait(car, Clock.totalMinutes - w.since);
       car.riders.push({ person: w.person, dest: w.dest });
       People.onBoard(w.person);
     }
     if (boarding.length > 0) car.direction = direction;
+  },
+
+  // Each boarding's wait, kept for the last WAIT_HISTORY_MINUTES so a
+  // shaft's tooltip can say how it's coping. Not saved: a loaded game
+  // starts the hour afresh.
+  noteWait(car, minutes) {
+    const now = Clock.totalMinutes;
+    car.recentWaits = (car.recentWaits || []).filter((w) => w.at > now - WAIT_HISTORY_MINUTES);
+    car.recentWaits.push({ at: now, minutes });
+  },
+
+  // How a shaft is coping: who's waiting now, and the waits of everyone
+  // who got on in the last hour.
+  report(car) {
+    const now = Clock.totalMinutes;
+    const waits = (car.recentWaits || []).filter((w) => w.at > now - WAIT_HISTORY_MINUTES).map((w) => w.minutes);
+    const byFloor = new Map();
+    for (const w of car.waiting) byFloor.set(w.floor, (byFloor.get(w.floor) || 0) + 1);
+    return {
+      waitingNow: car.waiting.length,
+      busiestFloors: [...byFloor.entries()].sort((a, b) => b[1] - a[1]),
+      boarded: waits.length,
+      averageWait: waits.length ? waits.reduce((a, b) => a + b, 0) / waits.length : null,
+      longestWait: waits.length ? Math.max(...waits) : null,
+    };
   },
 
   // Move the car forward by `minutes` of game time. The loop lets one call
@@ -204,7 +232,8 @@ World.subscribe((event, transit) => {
       state: "idle",
       doorTimer: 0,
       riders: [], // { person, dest }
-      waiting: [], // { person, floor, dest, direction }
+      waiting: [], // { person, floor, dest, direction, since (when they pressed the button) }
+      recentWaits: [], // { at, minutes }: see noteWait
     });
   }
   if (event === "transitRemoved") Elevators.cars.delete(transit.id);

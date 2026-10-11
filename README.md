@@ -112,6 +112,11 @@ matter, because their staff have to get to the rooms they look after.
   tower this took the worst wait of a weekday from 97 minutes to 36, and
   red rooms from about 20 to 13. Noise from the floor directly above or
   below counts as next door, and the warnings now say so.
+- **Hover an elevator shaft** to see how it's coping: where its car is
+  and how full, who's waiting now (and on which floors), and how many
+  got on in the last hour and how long they waited (average and
+  longest). An average of 10 minutes or more gets a warning, since
+  waiting counts double towards stress.
 - **Save file** (top bar) copies your tower out as text, or downloads it
   as a `.json` file, to keep or to send (say, to Claude, to look at a
   bug in your actual tower). Paste one in, or open its file, and press

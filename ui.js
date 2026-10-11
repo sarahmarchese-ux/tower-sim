@@ -19,10 +19,14 @@ const UI = {
   // Hovering a room with tenants shows a tooltip beside the mouse: who's
   // there, how stressed they are, and (for condos) how much noise reaches
   // it. A room nobody can reach (the red "!") also says how to fix that.
+  // Hovering an elevator shaft shows how it's coping: its queue now and
+  // the waits of the last hour.
   updateInspect() {
     const tip = document.getElementById("tooltip");
     const room = Pointer.floor !== null && World.roomAt(Pointer.floor, Pointer.tile);
     const tenanted = room && ROOM_TYPES[room.type].tenants > 0;
+    const transit = Pointer.floor !== null && World.transitAt(Pointer.floor, Pointer.tile);
+    const shaft = transit && transit.kind === "elevator" && Elevators.cars.get(transit.id);
     tip.textContent = "";
 
     if (tenanted && !Pointer.dragging) {
@@ -60,6 +64,8 @@ const UI = {
       this.addWarning(tip, Pointer.buildCheck.reason);
     } else if (Pointer.buildNote) {
       tip.textContent = Pointer.buildNote;
+    } else if (shaft && !Pointer.dragging) {
+      this.describeElevator(tip, shaft);
     } else {
       tip.classList.remove("shown");
       return;
@@ -85,6 +91,34 @@ const UI = {
     if (y + tip.offsetHeight > window.innerHeight - 4) y = Pointer.screenY - gap - tip.offsetHeight;
     tip.style.left = `${Math.max(4, x)}px`;
     tip.style.top = `${Math.max(4, y)}px`;
+  },
+
+  // "Elevator 1F–13F · car at 7F going up, 5 of 8 aboard", then the queue
+  // and the last hour's waits, with a warning when people wait long.
+  describeElevator(tip, car) {
+    const t = car.transit;
+    const at = floorLabel(Math.round(car.floor));
+    const heading = car.direction > 0 ? " going up" : car.direction < 0 ? " going down" : "";
+    tip.textContent = `Elevator ${floorLabel(t.floorBottom)}–${floorLabel(t.floorTop)} · car at ${at}${heading}, ${car.riders.length} of ${ELEVATOR_CAPACITY} aboard`;
+    const r = Elevators.report(car);
+    const lines = [];
+    if (r.waitingNow) {
+      const floors = r.busiestFloors.slice(0, 3).map(([floor, n]) => `${n} on ${floorLabel(floor)}`).join(", ");
+      lines.push(`Waiting now: ${r.waitingNow} (${floors}${r.busiestFloors.length > 3 ? ", …" : ""})`);
+    } else {
+      lines.push("Nobody waiting now");
+    }
+    lines.push(r.boarded
+      ? `Last hour: ${r.boarded} got on, waiting ${Math.round(r.averageWait)} min on average (longest ${Math.round(r.longestWait)})`
+      : "Last hour: nobody got on");
+    for (const line of lines) {
+      const div = document.createElement("div");
+      div.textContent = line;
+      tip.appendChild(div);
+    }
+    if (r.boarded && r.averageWait >= BUSY_WAIT_MINUTES) {
+      this.addWarning(tip, `Busy: waiting counts double towards stress. Add a shaft nearer the busiest rooms, or stairs for trips of a floor or two.`);
+    }
   },
 
   describeRoom(room) {
