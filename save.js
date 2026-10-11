@@ -9,6 +9,8 @@
 //
 // There is one save slot. It's written automatically at the start of every
 // game day and whenever you press Save, and read once when the page opens.
+// The Save file panel (ui.js) copies it out as text or a file, to keep or
+// to send, and loads one back in, replacing the tower being played.
 // A save carries a version number; a save from a different version of the
 // game is ignored rather than risking a half-restored tower.
 //
@@ -133,17 +135,52 @@ const SaveGame = {
     this.save();
   },
 
-  // Read the save and rebuild the game from it. Everything is built into
-  // local variables first and only swapped in at the end, so a damaged save
-  // can't leave the game half-restored. Returns true if a save was loaded.
-  load() {
-    const text = this._read();
-    if (text === null) return false;
+  // The game as text, for the Save file panel to copy or download.
+  exportText() {
+    return JSON.stringify(this.snapshot());
+  },
+
+  // A save pasted or opened in the Save file panel. It's checked first;
+  // if it's good, it becomes the stored save and the page reloads into it,
+  // just as if you'd closed the tab and come back. Returns null on success
+  // (the page is reloading), or why it couldn't be used, with nothing
+  // changed.
+  importText(text) {
+    const trimmed = text.trim();
+    if (!this.parse(trimmed, true)) {
+      return "That isn't a save this version of the game can load. Nothing was changed.";
+    }
+    if (!this._write(trimmed)) {
+      return "Your browser won't let the game store a save here (private browsing?), so it can't load one. Nothing was changed.";
+    }
+    this.discarded = true; // so leaving this page doesn't save the old tower over it
+    location.reload();
+    return null;
+  },
+
+  // Read a save (the one in storage, unless given another's text) and
+  // rebuild the game from it. Returns true if a save was loaded.
+  load(text = this._read()) {
+    const swapIn = this.parse(text);
+    if (!swapIn) return false;
+    swapIn();
+    return true;
+  },
+
+  // Check a save and build the game it holds, without touching the game
+  // being played. Everything is built into local variables first, and the
+  // function returned swaps them in, so a damaged save can't leave the game
+  // half-restored, and an imported one can be checked before anything is
+  // overwritten. Returns null if the save can't be used. `quiet`: a pasted
+  // save that isn't one is the player's mistake, not the game's, so it
+  // isn't logged as an error.
+  parse(text, quiet = false) {
+    if (typeof text !== "string") return null;
 
     let data;
     try {
       data = JSON.parse(text);
-      if (data.version !== SAVE_VERSION) return false;
+      if (!data || data.version !== SAVE_VERSION) return null;
 
       // A number that isn't one (missing, or damaged) would spread NaN
       // through the clock or the money, so it rejects the whole save.
@@ -232,37 +269,38 @@ const SaveGame = {
       const worldNextId = number(data.world.nextId);
       const peopleNextId = number(data.people.nextId);
 
-      // Everything parsed; now swap it in.
-      Clock.totalMinutes = totalMinutes;
-      World.money = money;
-      World.nextId = worldNextId;
-      World.floors = floors;
-      World.rooms = rooms;
-      World.transit = data.world.transit;
-      World.version++; // anything cached about the old building is now stale
-      People.list = people;
-      People.nextId = peopleNextId;
-      Elevators.cars = cars;
-      Economy.lastTallyDay = economy.lastTallyDay;
-      Economy.lastPayday = economy.lastPayday;
-      Economy.lastSales = economy.lastSales;
-      Economy.lastHotel = economy.lastHotel;
-      Economy.debtSince = economy.debtSince;
-      Economy.bankrupt = false;
-      Economy.popups = [];
-      Ratings.stars = stars;
-      Camera.x = camera.x;
-      Camera.y = camera.y;
-      Shops.refreshOpen(); // the game starts paused, so the shops' open/closed signs need this now...
-      Stress.refreshWorking(); // ...and the noise readout (which needs to know which cafés and restaurants are open)
-      this.lastSavedDay = Clock.day;
-      this.refundNote = refund
-        ? `Hotel rooms now come in two sizes, Single and Twin. Your ${oldHotelIds.size === 1 ? "old hotel room was" : `${oldHotelIds.size} old hotel rooms were`} taken down and refunded in full (${World.formatMoney(refund)}).`
-        : null;
-      return true;
+      // Everything parsed; the caller swaps it in.
+      return () => {
+        Clock.totalMinutes = totalMinutes;
+        World.money = money;
+        World.nextId = worldNextId;
+        World.floors = floors;
+        World.rooms = rooms;
+        World.transit = data.world.transit;
+        World.version++; // anything cached about the old building is now stale
+        People.list = people;
+        People.nextId = peopleNextId;
+        Elevators.cars = cars;
+        Economy.lastTallyDay = economy.lastTallyDay;
+        Economy.lastPayday = economy.lastPayday;
+        Economy.lastSales = economy.lastSales;
+        Economy.lastHotel = economy.lastHotel;
+        Economy.debtSince = economy.debtSince;
+        Economy.bankrupt = false;
+        Economy.popups = [];
+        Ratings.stars = stars;
+        Camera.x = camera.x;
+        Camera.y = camera.y;
+        Shops.refreshOpen(); // the game starts paused, so the shops' open/closed signs need this now...
+        Stress.refreshWorking(); // ...and the noise readout (which needs to know which cafés and restaurants are open)
+        this.lastSavedDay = Clock.day;
+        this.refundNote = refund
+          ? `Hotel rooms now come in two sizes, Single and Twin. Your ${oldHotelIds.size === 1 ? "old hotel room was" : `${oldHotelIds.size} old hotel rooms were`} taken down and refunded in full (${World.formatMoney(refund)}).`
+          : null;
+      };
     } catch (e) {
-      console.error("Couldn't load the saved game:", e);
-      return false;
+      if (!quiet) console.error("Couldn't load the saved game:", e);
+      return null;
     }
   },
 };

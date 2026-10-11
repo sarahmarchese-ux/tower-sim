@@ -61,6 +61,11 @@ Camera.pollKeys = function pollKeys() {
   if (dx !== 0 || dy !== 0) this.pan(dx, dy);
 };
 
+// Keys typed into a text box (the Save file panel's) aren't game keys.
+function isTyping(e) {
+  return e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+}
+
 function attachCameraControls(canvas) {
   let dragging = false;
   let lastX = 0;
@@ -93,6 +98,7 @@ function attachCameraControls(canvas) {
   // lets go of everything.
   window.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return; // a browser shortcut, not a scroll
+    if (isTyping(e)) return;
     heldKeys.add(e.key.toLowerCase());
   });
   window.addEventListener("keyup", (e) => heldKeys.delete(e.key.toLowerCase()));

@@ -509,5 +509,6 @@ UI.attachClockControls();
 UI.attachGameOver();
 UI.attachBanner();
 UI.attachSaveControls();
+UI.attachSaveFile();
 UI.showHint(null);
 resize();
