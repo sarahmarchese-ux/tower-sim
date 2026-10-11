@@ -92,8 +92,10 @@ matter, because their staff have to get to the rooms they look after.
   and break-ins. Hover a pink or red room to see its people's top one
   or two: "stress 96 (red): mostly elevator waits, then long trips".
   "Long trips" is time on the move (walking, and riding in the car,
-  stops for other people included); "elevator waits" is time queueing
-  for the car, and "stairs" time climbing.
+  stops for other people included) beyond a comfortable trip;
+  "elevator waits" is time queueing for the car, and "stairs" time
+  climbing. So a short hop pushed over by a long queue is all
+  "elevator waits".
 - **Stairs for short hops.** Routes are costed by how long the trip
   feels: a flight of stairs like 4 minutes, an elevator like a typical
   wait plus the ride, plus a bit for everyone already queueing at that

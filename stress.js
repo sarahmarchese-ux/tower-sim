@@ -34,7 +34,8 @@
 // day), so a room's tooltip can say what's getting to its people: "stress
 // 96 (red): mostly elevator waits, then long trips". A trip's stress is
 // shared between its causes by how much each added to how long it felt:
-// time on the move (long trips), and the extra for stairs and queueing.
+// time on the move beyond a comfortable trip (long trips), and the time
+// spent on stairs and queueing (counted twice).
 //
 // Each week (at the Sunday-night tally), every room checks its people's
 // average stress. If it's in the red, they move out (economy.js). Hotel
@@ -154,8 +155,13 @@ const Stress = {
       : Math.max(0, felt - COMFORTABLE_TRIP_MINUTES);
     if (amount > 0) {
       // Stairs and queueing count twice towards how long it felt; the rest
-      // is time on the move.
-      const shares = { trips: Math.max(0, tripMinutes - stairsMinutes - waitMinutes), stairs: 2 * stairsMinutes, waits: 2 * waitMinutes };
+      // is time on the move. The comfortable allowance goes on time on the
+      // move first, so "long trips" only takes a share when the journey
+      // itself is longer than comfortable, not whenever a long queue pushes
+      // a short hop over.
+      const comfortable = person.role === "guest" ? GUEST_COMFORTABLE_TRIP_MINUTES : COMFORTABLE_TRIP_MINUTES;
+      const moving = Math.max(0, tripMinutes - stairsMinutes - waitMinutes);
+      const shares = { trips: Math.max(0, moving - comfortable), stairs: 2 * stairsMinutes, waits: 2 * waitMinutes };
       const total = shares.trips + shares.stairs + shares.waits;
       for (const cause in shares) {
         if (shares[cause] > 0) this.add(person, (amount * shares[cause]) / total, cause);
