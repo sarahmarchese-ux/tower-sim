@@ -37,17 +37,17 @@ const UI = {
         const loudByDay = Stress.noiseAt(room, "working") >= 2;
         const loudAtNight = Stress.noiseAt(room, "evening") >= 2;
         if (loudByDay) {
-          this.addWarning(tip, "Noisy in working hours: guests are in by day, and studio noise stresses them fast. Keep hotel rooms a floor away from pottery and woodwork.");
+          this.addWarning(tip, "Noisy in working hours: guests are in by day, and studio noise stresses them fast. Rooms beside, above or below pottery and woodwork count as next door: leave a floor between them.");
         }
         if (loudAtNight) {
-          this.addWarning(tip, "Noisy in the evening: a restaurant next door keeps guests up. Keep hotel rooms a floor away from restaurants.");
+          this.addWarning(tip, "Noisy in the evening: a restaurant next door, above or below keeps guests up. Leave a floor between hotel rooms and restaurants.");
         }
         if (!loudByDay && !loudAtNight && Hotels.reviewsLabel(room) === "poor") {
           this.addWarning(tip, "Poor reviews mean fewer bookings. Guests mind long trips up from the lobby: bring the room nearer the lobby or the elevators.");
         }
       }
       if (room.type === "condo" && room.status === "occupied" && Stress.noiseAt(room, "evening") >= 2) {
-        this.addWarning(tip, "Noisy in the evening: residents are home to unwind, and a restaurant next door stresses them. Keep condos a floor away from restaurants.");
+        this.addWarning(tip, "Noisy in the evening: residents are home to unwind, and a restaurant next door, above or below stresses them. Leave a floor between condos and restaurants.");
       }
       if (isHotel(room) && room.needsCleaning && !Housekeeping.staffed()) {
         this.addWarning(tip, "Can't be booked until it's cleaned, and the tower has no housekeepers. Build Housekeeping, near the hotel rooms.");

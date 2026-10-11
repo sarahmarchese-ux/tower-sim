@@ -91,6 +91,16 @@ matter, because their staff have to get to the rooms they look after.
   elevator waits, stairs, noise by day, noise in the evening, no route,
   and break-ins. Hover a pink or red room to see its people's top one
   or two: "stress 96 (red): mostly elevator waits, then long trips".
+  "Long trips" is time on the move (walking, and riding in the car,
+  stops for other people included); "elevator waits" is time queueing
+  for the car, and "stairs" time climbing.
+- **Stairs for short hops.** Routes are costed by how long the trip
+  feels: a flight of stairs like 4 minutes, an elevator like a typical
+  wait plus the ride, plus a bit for everyone already queueing at that
+  shaft. So people take stairs that are on their way for a floor or
+  two, and further when the elevator has a queue, rather than walking
+  past them to wait for the car. Noise from the floor directly above or
+  below counts as next door, and the warnings now say so.
 - Both rooms together cost $1,300 a day, about $9,100 a week, so a tower
   needs steady income before it builds them.
 - Hotel rooms in an older save load clean.
