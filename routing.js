@@ -13,13 +13,18 @@
 // Positions along a floor (`x`) are in tiles and can be fractional — 3.5 is
 // the middle of tile 3.
 
-// Costs are in "tiles of walking". Stairs are tiring, so each floor of stairs
-// counts as a long walk; an elevator costs a fixed amount for the wait plus
-// a little per floor. With these numbers people take the stairs for one
-// floor when an elevator is far away, and the elevator otherwise.
-const STAIRS_COST_PER_FLOOR = 25;
-const ELEVATOR_BOARD_COST = 20;
-const ELEVATOR_COST_PER_FLOOR = 2;
+// Costs are in "tiles of walking" (3 tiles a minute), set to match how
+// long each kind of travel *feels* (stress.js counts stairs and queueing
+// twice). A flight of stairs takes 2 minutes, so it feels like 4: 12 tiles.
+// An elevator costs a typical wait (counted twice) to board, plus the ride,
+// plus a little for every person already queueing at that shaft, since
+// they'll be served first. With these numbers people take nearby stairs for
+// a floor or two, more readily when the elevator has a queue, and the
+// elevator for anything further.
+const STAIRS_COST_PER_FLOOR = 12;
+const ELEVATOR_BOARD_COST = 15;
+const ELEVATOR_COST_PER_FLOOR = 1.5;
+const ELEVATOR_QUEUE_COST = 2; // per person already waiting for the car
 
 const Routing = {
   _segmentsVersion: -1,
@@ -125,17 +130,24 @@ const Routing = {
       // Riding or climbing to the same transit's stops on other floors.
       if (node.transit) {
         const t = node.transit;
+        const boardCost = t.kind === "elevator" ? ELEVATOR_BOARD_COST + ELEVATOR_QUEUE_COST * this.queueAt(t) : 0;
         for (let floor = t.floorBottom; floor <= t.floorTop; floor++) {
           if (floor === node.floor) continue;
           const floors = Math.abs(floor - node.floor);
           const cost = t.kind === "stairs"
             ? STAIRS_COST_PER_FLOOR * floors
-            : ELEVATOR_BOARD_COST + ELEVATOR_COST_PER_FLOOR * floors;
+            : boardCost + ELEVATOR_COST_PER_FLOOR * floors;
           const next = byFloor.get(floor).find((i) => nodes[i].transit === t);
           relax(next, cost);
         }
       }
     }
+  },
+
+  // How many people are waiting for this elevator's car right now.
+  queueAt(transit) {
+    const car = Elevators.cars.get(transit.id);
+    return car ? car.waiting.length : 0;
   },
 
   // Walk the `prev` links back from the goal and turn them into legs.
