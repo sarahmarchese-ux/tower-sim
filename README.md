@@ -30,7 +30,8 @@ cleans a room after a checkout), forces a break-in at the unprotected
 shop (checking the money and the message) and two at the jewellery studio
 (checking its tooltip names the cause of its stress), builds a Security
 office and checks nothing under guard is ever robbed, hovers every room,
-saves and reloads, demolishes things and keeps running. It fails on any page error,
+saves and reloads, exports a save file and loads it back in (turning away
+one that isn't a save), demolishes things and keeps running. It fails on any page error,
 `console.error`, frozen game loop, or save that doesn't restore the same
 state. GitHub Actions runs it on every pull request
 (`.github/workflows/smoke.yml`). To run it yourself:
@@ -103,6 +104,12 @@ matter, because their staff have to get to the rooms they look after.
   two, and further when the elevator has a queue, rather than walking
   past them to wait for the car. Noise from the floor directly above or
   below counts as next door, and the warnings now say so.
+- **Save file** (top bar) copies your tower out as text, or downloads it
+  as a `.json` file, to keep or to send (say, to Claude, to look at a
+  bug in your actual tower). Paste one in, or open its file, and press
+  **Load** to play it instead: it's checked first, and a bad one changes
+  nothing. The game pauses while the panel is open. In the claude.ai
+  artifact, Download asks before saving the file.
 - Both rooms together cost $1,300 a day, about $9,100 a week, so a tower
   needs steady income before it builds them.
 - Hotel rooms in an older save load clean.

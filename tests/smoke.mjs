@@ -380,6 +380,60 @@ try {
     check((await page.evaluate(() => Clock.speed)) === 0, "a restored game should start paused");
   });
 
+  await step("Save file: export, then load it back in", async () => {
+    const before = await state();
+    await page.click("#savefile-btn");
+    check(await page.isVisible("#savefile-text"), "the Save file panel didn't open");
+    check((await page.evaluate(() => Clock.speed)) === 0, "the game should pause while the Save file panel is open");
+    const exported = await page.inputValue("#savefile-text");
+    let parsed = null;
+    try {
+      parsed = JSON.parse(exported);
+    } catch (e) {
+      fail("the exported save isn't JSON");
+    }
+    check(parsed && parsed.version === (await page.evaluate(() => SAVE_VERSION)), "the exported save has the wrong version");
+
+    // Typing in the box isn't playing: no scrolling, no speed change.
+    const cameraX = await page.evaluate(() => Camera.x);
+    await page.focus("#savefile-text");
+    await page.keyboard.press("End");
+    await page.keyboard.down("d");
+    await page.waitForTimeout(200);
+    await page.keyboard.up("d");
+    await page.keyboard.press("3");
+    check((await page.evaluate(() => Camera.x)) === cameraX, "typing D in the Save file box scrolled the tower");
+    check((await page.evaluate(() => Clock.speed)) === 0, "typing 3 in the Save file box changed the speed");
+
+    // An ordinary browser download, outside the claude.ai artifact.
+    const [download] = await Promise.all([page.waitForEvent("download"), page.click("#savefile-download")]);
+    check(download.suggestedFilename().endsWith(".json"), `the download is named ${download.suggestedFilename()}`);
+    const downloaded = fs.readFileSync(await download.path(), "utf8");
+    check(downloaded === exported + "d3", "the download doesn't hold the text in the box");
+
+    // Something that isn't a save is turned away, and nothing changes.
+    await page.evaluate(() => (window.__notReloaded = true));
+    await page.fill("#savefile-text", "not a save");
+    await page.click("#savefile-load");
+    await page.waitForTimeout(300);
+    check(await page.evaluate(() => window.__notReloaded === true), "loading a bad save reloaded the page");
+    check(await page.evaluate(() => document.getElementById("savefile-note").classList.contains("error")), "a bad save gave no error");
+    check((await state()).money === before.money, "loading a bad save changed the game");
+
+    // A good one (marked by a different bank balance) replaces the tower.
+    const marked = JSON.parse(exported);
+    marked.world.money += 12345;
+    await page.fill("#savefile-text", JSON.stringify(marked));
+    await Promise.all([page.waitForEvent("load"), page.click("#savefile-load")]);
+    await page.waitForSelector("#toolbar");
+    const after = await state();
+    check(after.money === before.money + 12345, `after loading a save file, money is ${after.money}, expected ${before.money + 12345}`);
+    for (const key of Object.keys(before)) {
+      if (key === "money") continue;
+      check(JSON.stringify(after[key]) === JSON.stringify(before[key]), `after loading a save file, ${key} is ${JSON.stringify(after[key])}, saved ${JSON.stringify(before[key])}`);
+    }
+  });
+
   await step("demolish, then keep running", async () => {
     await pickTool("demolish");
     await clickAt(0, 0); // the elevator, drawn over the lobby

@@ -180,7 +180,8 @@
 
     /* Full-screen notices: going bankrupt, and "start a new game?". */
     #gameover,
-    #newgame {
+    #newgame,
+    #savefile {
       position: fixed;
       inset: 0;
       display: none;
@@ -194,7 +195,8 @@
       z-index: 20;
     }
     #gameover.shown,
-    #newgame.shown {
+    #newgame.shown,
+    #savefile.shown {
       display: flex;
     }
     #gameover h1 {
@@ -202,19 +204,23 @@
       font-size: 40px;
       color: #ff9d9d;
     }
-    #newgame h1 {
+    #newgame h1,
+    #savefile h1 {
       margin: 0;
       font-size: 28px;
     }
-    #newgame .buttons {
+    #newgame .buttons,
+    #savefile .buttons {
       display: flex;
       gap: 10px;
     }
-    #newgame-no {
+    #newgame-no,
+    #savefile-close {
       background: #555 !important;
     }
     #gameover button,
-    #newgame button {
+    #newgame button,
+    #savefile button {
       padding: 8px 18px;
       border: none;
       border-radius: 6px;
@@ -222,6 +228,34 @@
       color: #fff;
       font-size: 16px;
       cursor: pointer;
+    }
+    #savefile {
+      padding: 16px;
+    }
+    #savefile .buttons {
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    #savefile textarea {
+      width: min(640px, 100%);
+      height: 30vh;
+      box-sizing: border-box;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: #111;
+      color: #ddd;
+      font: 11px monospace;
+    }
+    #savefile-note {
+      max-width: 640px;
+      margin: 0;
+    }
+    #savefile-note.error {
+      color: #ff9d9d;
+    }
+    #savefile-picker {
+      display: none;
     }
   </style>
 </head>
@@ -237,6 +271,7 @@
       <button class="speed-btn active" data-speed="1">1x</button>
       <button class="speed-btn" data-speed="3">3x</button>
       <button id="save-btn" title="The game also saves itself every morning">Save</button>
+      <button id="savefile-btn" title="Copy or download your tower, or load one in">Save file</button>
       <button id="new-btn">New game</button>
     </div>
     <span id="hint"></span>
@@ -263,6 +298,20 @@
       <button id="newgame-yes">Start over</button>
       <button id="newgame-no">Keep playing</button>
     </div>
+  </div>
+
+  <div id="savefile">
+    <h1>Save file</h1>
+    <textarea id="savefile-text" spellcheck="false" aria-label="Save file text"></textarea>
+    <p id="savefile-note"></p>
+    <div class="buttons">
+      <button id="savefile-copy">Copy</button>
+      <button id="savefile-download">Download</button>
+      <button id="savefile-open">Open file…</button>
+      <button id="savefile-load" title="Replaces the tower you're playing">Load</button>
+      <button id="savefile-close">Close</button>
+    </div>
+    <input type="file" id="savefile-picker" accept=".json,.txt,application/json,text/plain">
   </div>
 
   <div id="toolbar">

@@ -329,6 +329,88 @@ const UI = {
     document.getElementById("newgame-yes").addEventListener("click", () => this.startOver());
   },
 
+  // The Save file panel: copy the tower out as text or a file (to keep, or
+  // to send to someone who can load it and look), or load one in. The
+  // game pauses while it's open. In the claude.ai artifact a file is
+  // offered through the page's downloads capability, which asks before
+  // saving; opened straight from disk, an ordinary browser download.
+  attachSaveFile() {
+    const panel = document.getElementById("savefile");
+    const text = document.getElementById("savefile-text");
+    const note = document.getElementById("savefile-note");
+    const picker = document.getElementById("savefile-picker");
+    let speedBefore = 1;
+    const say = (message, isError = false) => {
+      note.textContent = message;
+      note.classList.toggle("error", isError);
+    };
+
+    document.getElementById("savefile-btn").addEventListener("click", () => {
+      speedBefore = Clock.speed;
+      this.setSpeed(0);
+      text.value = SaveGame.exportText();
+      say("This is your tower as it is right now. Copy it or download it to keep it or send it. To play a save from somewhere else, paste it in here (or open its file) and press Load.");
+      panel.classList.add("shown");
+    });
+    document.getElementById("savefile-close").addEventListener("click", () => {
+      panel.classList.remove("shown");
+      this.setSpeed(speedBefore);
+    });
+
+    document.getElementById("savefile-copy").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(text.value);
+        say("Copied.");
+        return;
+      } catch (e) {
+        // Embedded pages can be refused the clipboard; try the old way.
+      }
+      text.select();
+      let copied = false;
+      try {
+        copied = document.execCommand("copy");
+      } catch (e) {
+        copied = false;
+      }
+      say(copied ? "Copied." : "Couldn't copy here: the text is selected, so press Ctrl+C (or ⌘C) to copy it.", !copied);
+    });
+
+    document.getElementById("savefile-download").addEventListener("click", async () => {
+      const filename = `tower-sim-day-${Clock.day + 1}.json`;
+      const downloads = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+      if (downloads) {
+        try {
+          await downloads.save({ filename, data: text.value });
+          say(`Saved as ${filename}.`);
+        } catch (e) {
+          if (e && e.code === "declined") say("Download cancelled.");
+          else say("Couldn't download here. Use Copy instead.", true);
+        }
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([text.value], { type: "application/json" }));
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      say(`Downloading ${filename}. If nothing appears, use Copy instead.`);
+    });
+
+    document.getElementById("savefile-open").addEventListener("click", () => picker.click());
+    picker.addEventListener("change", async () => {
+      const file = picker.files[0];
+      picker.value = ""; // so picking the same file again still counts
+      if (!file) return;
+      text.value = await file.text();
+      say(`Opened ${file.name}. Press Load to play it instead of this tower.`);
+    });
+
+    document.getElementById("savefile-load").addEventListener("click", () => {
+      const problem = SaveGame.importText(text.value);
+      if (problem) say(problem, true);
+    });
+  },
+
   attachClockControls() {
     const pauseBtn = document.getElementById("pause-btn");
     pauseBtn.addEventListener("click", () => {
@@ -341,7 +423,7 @@ const UI = {
     });
 
     window.addEventListener("keydown", (e) => {
-      if (e.target.tagName === "INPUT" || Economy.bankrupt) return;
+      if (isTyping(e) || Economy.bankrupt) return;
       if (e.key === " ") {
         e.preventDefault();
         if (e.repeat) return; // holding Space would flick pause on and off
