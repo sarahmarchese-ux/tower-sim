@@ -95,6 +95,7 @@ const state = () =>
     floors: [...World.floors].map(([f, t]) => [f, [...t].sort((a, b) => a - b)]).sort((a, b) => a[0] - b[0]),
     rooms: World.rooms.map((r) => `${r.type}@${r.floor}:${r.tileStart}:${r.status}`).sort(),
     transit: World.transit.map((t) => `${t.kind}@${t.tileStart}:${t.floorBottom}-${t.floorTop}`).sort(),
+    drivers: People.list.filter((p) => p.parking).map((p) => `${p.parking.id}:${p.space}`).sort(),
   }));
 
 // Screen position of the middle of a tile on a floor, for real mouse input.
@@ -344,6 +345,98 @@ try {
     check((await page.evaluate(() => window.__robbed)) === 0, "a room under guard was broken into");
   });
 
+  await step("3★, basements and parking", async () => {
+    // The top bar lists what the next star needs; both service rooms are
+    // staffed by now.
+    const bar = await page.textContent("#population");
+    check(/^3★: \d+ \/ 300 people · Housekeeping ✓ · Security office ✓$/.test(bar), `the star checklist reads "${bar}"`);
+
+    // Before 3★: no digging, no car park.
+    await page.evaluate(() => (World.money += 100000));
+    const before = await page.evaluate(() => World.money);
+    await pickTool("floor");
+    await dragAcross([0, -1], [39, -1]);
+    check(!(await page.evaluate(() => World.floors.has(-1) && World.floors.get(-1).size > 0)), "a basement was dug before 3★");
+    check((await page.evaluate(() => World.money)) === before, "a refused basement cost money");
+    check(await page.evaluate(() => document.querySelector('#toolbar button[data-tool="parking"]').classList.contains("locked")), "Parking isn't locked before 3★");
+
+    // 300 people isn't enough without both service rooms staffed. (Reaching
+    // 300 would take too long here, so the head count is faked.)
+    const stars = await page.evaluate(() => {
+      const population = People.population;
+      People.population = () => 300;
+      const office = World.rooms.find((r) => r.type === "security");
+      office.status = "vacant";
+      Ratings.update();
+      const without = Ratings.stars;
+      office.status = "occupied";
+      Ratings.update();
+      People.population = population;
+      return { without, with: Ratings.stars, banner: document.getElementById("banner").textContent };
+    });
+    check(stars.without === 2, `3★ was given without a staffed Security office (${stars.without}★)`);
+    check(stars.with === 3, `300 people with both service rooms staffed didn't make 3★ (${stars.with}★)`);
+    check(/3-star!.*Basements and Parking unlock/.test(stars.banner), `no 3★ banner: "${stars.banner}"`);
+
+    // Dig B1 at $400 a tile, and run the elevator down to it.
+    const dug = await page.evaluate(() => World.money);
+    await dragAcross([0, -1], [39, -1]);
+    const cost = dug - (await page.evaluate(() => World.money));
+    check(cost === 40 * 400, `digging 40 tiles of basement cost ${cost}, expected $16,000`);
+    await pickTool("elevator");
+    await dragAcross([0, 0], [0, -1]);
+    const shaft = await page.evaluate(() => World.transit.find((t) => t.kind === "elevator").floorBottom);
+    check(shaft === -1, `the elevator wasn't extended down to B1 (bottom ${shaft})`);
+
+    // Studios, condos and hotel rooms stay above ground; Parking goes below.
+    for (const [tool, tile, floor] of [["sewing", 6, -1], ["single", 6, -1], ["parking", 20, 1]]) {
+      await pickTool(tool);
+      await clickAt(tile, floor);
+    }
+    check(!(await page.evaluate(() => World.rooms.some((r) => r.floor < 0 || r.type === "parking"))), "a studio or hotel room went underground, or Parking above ground");
+    await clickAt(20, -1); // still holding Parking
+    await page.keyboard.press("Escape");
+    check(await page.evaluate(() => World.rooms.some((r) => r.type === "parking" && r.floor === -1)), "no car park was built on B1");
+
+    // Drivers park, visit the shop, café and restaurant, and drive off.
+    await page.evaluate(() => {
+      window.__drivers = 0;
+      window.__driverSales = 0;
+      window.__mostParked = 0;
+      const arrived = Parking.onDriverArrived.bind(Parking);
+      Parking.onDriverArrived = (person) => {
+        if (person.parking) window.__drivers++;
+        return arrived(person);
+      };
+      const checkout = Shops.checkout.bind(Shops);
+      Shops.checkout = (person) => {
+        checkout(person);
+        if (person.parking) window.__driverSales += person.bought;
+      };
+    });
+    for (let hour = 0; hour < 48; hour++) {
+      await simulate(60);
+      await page.evaluate(() => {
+        const carPark = World.rooms.find((r) => r.type === "parking");
+        const spaces = Parking.drivers(carPark).map((p) => p.space);
+        window.__mostParked = Math.max(window.__mostParked, spaces.length);
+        if (new Set(spaces).size !== spaces.length) window.__mostParked = 999; // two cars in one space
+      });
+    }
+    const parked = await page.evaluate(() => ({ drivers: window.__drivers, sales: window.__driverSales, most: window.__mostParked }));
+    check(parked.drivers > 0, "no driver ever came");
+    check(parked.sales > 0, "drivers never bought anything");
+    check(parked.most <= 20, `the car park held ${parked.most} cars (20 spaces), or two in one space`);
+
+    // Hovering the car park says how full it is.
+    const p = await spot(22, -1);
+    await page.mouse.move(p.x, p.y);
+    await page.waitForFunction(() => document.getElementById("tooltip").classList.contains("shown"), null, { timeout: 2000 });
+    const tip = await page.textContent("#tooltip");
+    check(/^Parking · \d+ of 20 spaces taken · \d+ drivers? today$/.test(tip), `the car park's tooltip reads "${tip}"`);
+    await page.mouse.move(5, 5);
+  });
+
   await step("hover every tenanted room", async () => {
     const rooms = await page.evaluate(() =>
       World.rooms.filter((r) => ROOM_TYPES[r.type].tenants > 0).map((r) => ({ type: r.type, floor: r.floor, tile: r.tileStart })),
@@ -435,7 +528,24 @@ try {
   });
 
   await step("demolish, then keep running", async () => {
+    // Knock the car park down at a busy hour, with drivers about: they
+    // leave by the lobby instead, and nobody is left stranded.
+    await page.evaluate(() => {
+      while (Clock.hour < 19 || Clock.hour >= 20) advanceSimulation(15);
+    });
+    const drivers = await page.evaluate(() => People.list.filter((p) => p.parking).length);
+    check(drivers > 0, "no drivers were about at 7pm to test knocking the car park down");
     await pickTool("demolish");
+    await clickAt(22, -1);
+    check(!(await page.evaluate(() => World.rooms.some((r) => r.type === "parking"))), "the car park wasn't demolished");
+    await simulate(4 * 60);
+    const stranded = await page.evaluate(() =>
+      People.list
+        .filter((p) => p.role === "shopper" && (p.parking || (!p.route && !["inRoom", "offsite"].includes(p.state))))
+        .map((p) => `${p.state} at ${floorLabel(Math.round(p.floor))}`),
+    );
+    check(stranded.length === 0, `shoppers left stranded after the car park went: ${stranded.join(", ")}`);
+
     await clickAt(0, 0); // the elevator, drawn over the lobby
     await clickAt(34, 0); // the stairs
     await clickAt(14, 1); // the pottery studio

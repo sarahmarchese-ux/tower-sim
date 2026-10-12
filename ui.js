@@ -29,7 +29,11 @@ const UI = {
     const shaft = transit && transit.kind === "elevator" && Elevators.cars.get(transit.id);
     tip.textContent = "";
 
-    if (tenanted && !Pointer.dragging) {
+    if (room && room.type === "parking" && !Pointer.dragging) {
+      tip.textContent = Parking.describe(room);
+      const warning = Parking.warning(room);
+      if (warning) this.addWarning(tip, warning);
+    } else if (tenanted && !Pointer.dragging) {
       tip.textContent = this.describeRoom(room);
       if (!Routing.isReachable(room)) this.addWarning(tip, "! " + this.unreachableAdvice(room));
       if (isStorefront(room) && room.status === "occupied" && Shops.isQuiet(room)) {
@@ -314,11 +318,17 @@ const UI = {
         button.classList.toggle("locked", !!type && !!type.unlocksAt && Ratings.stars < type.unlocksAt);
       });
     }
+    // Progress to the next star, as a checklist: "3★: 214 / 300 people ·
+    // Housekeeping ✓ · Security office ✗".
     const next = Ratings.nextTarget();
     const population = People.population();
-    document.getElementById("population").textContent = next
-      ? `Pop ${population} / ${next.population} for ${next.stars}★`
-      : `Pop ${population}`;
+    if (!next) {
+      document.getElementById("population").textContent = `Pop ${population}`;
+      return;
+    }
+    const items = [`${next.stars}★: ${population} / ${next.population} people`];
+    for (const need of Ratings.checklist(next)) items.push(`${need.label} ${need.done ? "✓" : "✗"}`);
+    document.getElementById("population").textContent = items.join(" · ");
   },
 
   // Pause/play and speed buttons all need to agree on which one is

@@ -100,6 +100,8 @@ const SaveGame = {
           job: undefined,
           jobId: p.job ? p.job.id : null,
           cleaningAt: undefined, // the job, while they're at it (see load)
+          parking: undefined,
+          parkingId: p.parking ? p.parking.id : null,
         })),
       },
       elevators: cars,
@@ -207,9 +209,14 @@ const SaveGame = {
 
       const roomsById = new Map(rooms.map((room) => [room.id, room]));
       const people = data.people.list.map((saved) => {
-        const { roomId, lunchCafeId, dinnerRoomId, jobId, ...person } = saved;
+        const { roomId, lunchCafeId, dinnerRoomId, jobId, parkingId, ...person } = saved;
         person.room = roomsById.get(roomId);
         if (!person.room) throw new Error("a person's room is missing");
+        // A driver's car park (saves from before parking have none).
+        if (person.role === "shopper") {
+          person.parking = (parkingId != null && roomsById.get(parkingId)) || null;
+          if (!person.parking) person.space = null;
+        }
         // A maker's lunch café, if they're eating at or heading for one.
         // Makers from before lunch breaks get their times now.
         if (person.role === "maker") {
