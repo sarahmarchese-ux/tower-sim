@@ -107,10 +107,11 @@ const Shops = {
     }
   },
 
-  // No room for another visitor, walking in or (`byCar`) driving: as many
-  // as it takes are on their way or in (drivers have their own allowance,
-  // DRIVER_SHARE of the walk-ins', so they come on top), or (a café or
-  // restaurant) every seat is taken.
+  // No room for another visitor, walking in or (`byCar`) driving: its
+  // limit of visitors of that kind are already on their way or in, or (a
+  // café or restaurant) every seat is taken. Drivers have their own limit,
+  // DRIVER_SHARE of the walk-ins', so they come on top of them rather than
+  // taking their places.
   isFull(room, byCar) {
     const max = ROOM_TYPES[room.type].visitors.max;
     const coming = People.list.filter(

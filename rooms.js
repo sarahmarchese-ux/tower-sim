@@ -47,7 +47,7 @@
 //
 // Basements (milestone 13) can be dug from BASEMENTS_AT_STARS, down to
 // BASEMENT_FLOORS below ground, and digging costs DIG_COST_PER_TILE, twice
-// floor above ground. Studios, condos and hotel rooms need daylight
+// the cost of floor above ground. Studios, condos and hotel rooms need daylight
 // (`underground: false`); Parking (parking.js) goes nowhere else
 // (`basementOnly`). A car park has `spaces` for drivers' cars, and brings
 // them in on top of the walk-in visitors.

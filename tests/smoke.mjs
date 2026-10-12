@@ -528,7 +528,24 @@ try {
   });
 
   await step("demolish, then keep running", async () => {
+    // Knock the car park down at a busy hour, with drivers about: they
+    // leave by the lobby instead, and nobody is left stranded.
+    await page.evaluate(() => {
+      while (Clock.hour < 19 || Clock.hour >= 20) advanceSimulation(15);
+    });
+    const drivers = await page.evaluate(() => People.list.filter((p) => p.parking).length);
+    check(drivers > 0, "no drivers were about at 7pm to test knocking the car park down");
     await pickTool("demolish");
+    await clickAt(22, -1);
+    check(!(await page.evaluate(() => World.rooms.some((r) => r.type === "parking"))), "the car park wasn't demolished");
+    await simulate(4 * 60);
+    const stranded = await page.evaluate(() =>
+      People.list
+        .filter((p) => p.role === "shopper" && (p.parking || (!p.route && !["inRoom", "offsite"].includes(p.state))))
+        .map((p) => `${p.state} at ${floorLabel(Math.round(p.floor))}`),
+    );
+    check(stranded.length === 0, `shoppers left stranded after the car park went: ${stranded.join(", ")}`);
+
     await clickAt(0, 0); // the elevator, drawn over the lobby
     await clickAt(34, 0); // the stairs
     await clickAt(14, 1); // the pottery studio

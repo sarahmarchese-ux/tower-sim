@@ -36,7 +36,8 @@ studios and hotel rooms stay above ground and Parking below, builds a car
 park and runs 2 days (checking drivers come, buy something and never
 overfill it), hovers every room,
 saves and reloads, exports a save file and loads it back in (turning away
-one that isn't a save), demolishes things and keeps running. It fails on any page error,
+one that isn't a save), demolishes the car park with drivers about
+(checking none are left stranded) and other things, and keeps running. It fails on any page error,
 `console.error`, frozen game loop, or save that doesn't restore the same
 state. GitHub Actions runs it on every pull request
 (`.github/workflows/smoke.yml`). To run it yourself:
