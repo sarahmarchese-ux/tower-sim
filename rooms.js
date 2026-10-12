@@ -44,17 +44,27 @@
 // (housekeeping.js) cleans hotel rooms after their guests check out. A
 // Security office (security.js) stops break-ins on its own floor and the
 // `reach` floors above and below, while its guards are on duty.
+//
+// Basements (milestone 13) can be dug from BASEMENTS_AT_STARS, down to
+// BASEMENT_FLOORS below ground, and digging costs DIG_COST_PER_TILE, twice
+// floor above ground. Studios, condos and hotel rooms need daylight
+// (`underground: false`); Parking (parking.js) goes nowhere else
+// (`basementOnly`). A car park has `spaces` for drivers' cars, and brings
+// them in on top of the walk-in visitors.
 
 const STARTING_MONEY = 200000;
 const FLOOR_COST_PER_TILE = 200;
+const DIG_COST_PER_TILE = 400;
+const BASEMENT_FLOORS = 10; // B1 to B10
+const BASEMENTS_AT_STARS = 3;
 
 const ROOM_TYPES = {
   lobby: { name: "Lobby", width: 20, cost: 0, color: "#d8c9a3", groundOnly: true, allowsTransit: true, tenants: 0, noise: 0 },
-  sewing: { name: "Sewing Studio", width: 8, cost: 9000, color: "#c9a0dc", tenants: 2, role: "maker", noise: 1, rentPerWeek: 11200 },
-  pottery: { name: "Pottery Studio", width: 10, cost: 11000, color: "#d2965a", tenants: 2, role: "maker", noise: 2, rentPerWeek: 12600 },
-  woodwork: { name: "Woodwork Studio", width: 12, cost: 10000, color: "#8b5e34", tenants: 3, role: "maker", noise: 3, rentPerWeek: 9100 },
-  jewellery: { name: "Jewellery Studio", width: 6, cost: 15000, color: "#f4d35e", tenants: 1, role: "maker", noise: 0, rentPerWeek: 17500 },
-  condo: { name: "Condo", width: 16, cost: 20000, color: "#a3c9d8", tenants: 3, role: "resident", noise: 0, salePrice: 30000 },
+  sewing: { name: "Sewing Studio", width: 8, cost: 9000, color: "#c9a0dc", underground: false, tenants: 2, role: "maker", noise: 1, rentPerWeek: 11200 },
+  pottery: { name: "Pottery Studio", width: 10, cost: 11000, color: "#d2965a", underground: false, tenants: 2, role: "maker", noise: 2, rentPerWeek: 12600 },
+  woodwork: { name: "Woodwork Studio", width: 12, cost: 10000, color: "#8b5e34", underground: false, tenants: 3, role: "maker", noise: 3, rentPerWeek: 9100 },
+  jewellery: { name: "Jewellery Studio", width: 6, cost: 15000, color: "#f4d35e", underground: false, tenants: 1, role: "maker", noise: 0, rentPerWeek: 17500 },
+  condo: { name: "Condo", width: 16, cost: 20000, color: "#a3c9d8", underground: false, tenants: 3, role: "resident", noise: 0, salePrice: 30000 },
   shop: {
     name: "Craft Shop", width: 10, cost: 15000, color: "#8fd1a8", tenants: 1, role: "shopkeeper", noise: 0, unlocksAt: 2,
     keeperHours: [[9, 10], [20, 21]], // arrives 9–10am, leaves 8–9pm
@@ -81,8 +91,8 @@ const ROOM_TYPES = {
     },
     dinnerHours: [18, 23], // when it's busy (and noisy), every day
   },
-  single: { name: "Single Room", width: 6, cost: 10000, color: "#e9a6a6", tenants: 1, role: "guest", noise: 0, ratePerNight: 2000, parties: ["buyer"], unlocksAt: 2 },
-  twin: { name: "Twin Room", width: 10, cost: 17000, color: "#e08f9a", tenants: 2, role: "guest", noise: 0, ratePerNight: 2800, parties: ["tourists", "buyer"], unlocksAt: 2 },
+  single: { name: "Single Room", width: 6, cost: 10000, color: "#e9a6a6", underground: false, tenants: 1, role: "guest", noise: 0, ratePerNight: 2000, parties: ["buyer"], unlocksAt: 2 },
+  twin: { name: "Twin Room", width: 10, cost: 17000, color: "#e08f9a", underground: false, tenants: 2, role: "guest", noise: 0, ratePerNight: 2800, parties: ["tourists", "buyer"], unlocksAt: 2 },
   housekeeping: {
     name: "Housekeeping", plural: "Housekeeping rooms", width: 8, cost: 12000, color: "#b8d8d0", tenants: 2, role: "housekeeper", noise: 0, unlocksAt: 2,
     shiftHours: [[8.75, 9.25], [16.75, 17.25]], // 9am–5pm, every day
@@ -94,6 +104,7 @@ const ROOM_TYPES = {
     wagesPerDay: 800,
     reach: 5, // floors above and below it protects
   },
+  parking: { name: "Parking", plural: "Car parks", width: 16, cost: 20000, color: "#9a9a92", tenants: 0, noise: 0, unlocksAt: 3, basementOnly: true, spaces: 20 },
 };
 
 // Stairs always join exactly two neighbouring floors. An elevator shaft can
@@ -113,6 +124,11 @@ function isStorefront(room) {
 // Single and Twin rooms are both hotel rooms.
 function isHotel(room) {
   return ROOM_TYPES[room.type].role === "guest";
+}
+
+// What a tile of floor costs to build: dug out below ground, more.
+function floorTileCost(floor) {
+  return floor < 0 ? DIG_COST_PER_TILE : FLOOR_COST_PER_TILE;
 }
 
 function transitCost(kind, floorBottom, floorTop) {

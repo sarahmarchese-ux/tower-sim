@@ -29,7 +29,12 @@ restaurant sells dinners, some to residents or guests, and a housekeeper
 cleans a room after a checkout), forces a break-in at the unprotected
 shop (checking the money and the message) and two at the jewellery studio
 (checking its tooltip names the cause of its stress), builds a Security
-office and checks nothing under guard is ever robbed, hovers every room,
+office and checks nothing under guard is ever robbed, checks the 3★
+checklist and that basements and Parking stay locked until 3★ (and 3★
+itself until both service rooms are staffed), digs a basement, checks
+studios and hotel rooms stay above ground and Parking below, builds a car
+park and runs 2 days (checking drivers come, buy something and never
+overfill it), hovers every room,
 saves and reloads, exports a save file and loads it back in (turning away
 one that isn't a save), demolishes things and keeps running. It fails on any page error,
 `console.error`, frozen game loop, or save that doesn't restore the same
@@ -45,6 +50,50 @@ npm run smoke
 (The game itself still needs no install; `package.json` is only for this test.)
 
 ## Status
+
+**Milestone 13: 3★, basements and parking.** Stars become a tech tree
+again: 3★ asks for more than a head count, and it opens up the ground
+beneath the tower, with a second way in for visitors.
+
+- **3★ needs 300 people, plus a Housekeeping room and a Security office
+  with their staff hired** (whether or not they're on shift). The top bar
+  shows the progress as a checklist: "3★: 214 / 300 people · Housekeeping
+  ✓ · Security office ✗". As with 2★, the star is never lost, and a
+  banner says what it unlocks.
+- **Basements unlock at 3★.** Drag the Floor tool below ground to dig,
+  for $400 a tile (twice floor above ground) at any depth, down to B10.
+  Demolishing refunds half. Stairs and elevators go down into basements
+  as they go up. Basement floor built in an older save stays as it is.
+- **What goes underground:** shops, cafés, restaurants, Housekeeping,
+  Security offices and Parking. Studios, condos and hotel rooms need
+  daylight, and the red outline says so.
+- **Parking** goes in a basement only. It's 16 tiles wide, costs $20,000
+  and has 20 spaces. There's no fee and nothing to pay to run it: it pays
+  off through the drivers it brings.
+- **Drivers come on top of the walk-ins.** Every shop, café and
+  restaurant gets half as many visitors again by car, on the same rushes,
+  as long as a car park has a free space and a way through to it. Drivers
+  park, ride or climb up from the car park, and go back to their car when
+  they're done, taking a space the whole time. Like other visitors they
+  spend less after a long trip, give up after one that feels like an
+  hour, and don't count towards the population. A driver goes to the car
+  park with the easiest trip.
+- In a test tower with a Craft Shop and Café by the lobby, a Restaurant on
+  the 2nd floor and one car park on B1, drivers came at half the rate of
+  walk-ins (663 to 1,349 in two weeks). They took up to 17 of the 20
+  spaces: up to 12 for the restaurant on weeknights and 15 on Fridays and
+  Saturdays, 7 for the café's lunch crowd and 2–3 for the shop. Takings
+  rose by about half: the shop from $13,600 to $20,300 a week, the café
+  from $4,100 to $6,300 and the restaurant from $17,400 to $25,400. So
+  that car park paid for itself in under ten days. A second car park
+  added nothing for those three, and a shop on the 11th floor took
+  $17,800, against $20,300 by the lobby.
+- **Hover a car park** to see how many spaces are taken and how many
+  drivers came today. It warns if no shop, café or restaurant can be
+  reached from it. Parked cars are drawn in their spaces.
+
+<details>
+<summary>Milestone 12: service rooms</summary>
 
 **Milestone 12: service rooms.** The tower's first rooms that cost money
 and earn nothing: Housekeeping and the Security office. Both unlock at
@@ -126,6 +175,7 @@ matter, because their staff have to get to the rooms they look after.
 - Both rooms together cost $1,300 a day, about $9,100 a week, so a tower
   needs steady income before it builds them.
 - Hotel rooms in an older save load clean.
+</details>
 
 <details>
 <summary>Milestone 11: the Restaurant</summary>
@@ -423,7 +473,7 @@ or visiting a GitHub Pages link.
   weekly rent, nightly shop takings, hotel nights, upkeep and wages, and
   bankruptcy.
 - `shops.js` — shops, cafés and restaurants: when they're open, sending
-  shoppers (and the lunch crowd, and diners) in, what each spends (less
+  shoppers (and the lunch crowd, and diners, and drivers) in, what each spends (less
   after a long trip), the day's takings, and closing quiet ones.
 - `cafes.js` — makers' lunch: which café (if any) each maker eats at, what
   they pay, and when a café is serving lunch (and noisy).
@@ -436,11 +486,14 @@ or visiting a GitHub Pages link.
   housekeeper takes which room, and the 45 minutes it takes.
 - `security.js` — night-time break-ins, and the Security offices whose
   guards stop them within 5 floors.
+- `parking.js` — car parks: which one a driver uses, their spaces, and
+  the car park's tooltip.
+- `ratings.js` — the star rating, its population targets and the rooms
+  each star needs (2★ unlocks shops, hotel rooms, restaurants and service
+  rooms; 3★ unlocks basements and Parking).
 - `stress.js` — each person's stress: trips, noise, break-ins, rest, what
   caused it over the last week, and the weekly review that decides who
   moves out.
-- `ratings.js` — the star rating and its population targets (2★ unlocks
-  shops, hotel rooms, restaurants and service rooms).
 - `save.js` — saving the whole game to the browser and loading it back,
   turning pointers between objects into ids and back.
 - `input.js` — turns mouse events into grid coordinates and tool actions

@@ -7,7 +7,8 @@
 // which shops are open and who's carrying a shopping bag (milestone 8), and
 // which hotel rooms have guests and who's carrying a suitcase (milestone 9),
 // and which hotel rooms need cleaning, whether the guards are on duty and
-// which floors they cover (milestone 12).
+// which floors they cover (milestone 12), and the cars parked in each car
+// park (milestone 13).
 // This file only draws; World (world.js), Elevators and People decide what's
 // true, and input.js decides what the player is doing.
 
@@ -220,6 +221,8 @@ function drawRooms(w, h) {
       ctx.textAlign = "left";
       ctx.fillText(Security.onDuty(room) ? "On duty" : "Off duty", box.left + 5, box.top + 22, box.width - 10);
       ctx.textAlign = "center";
+    } else if (room.type === "parking") {
+      drawParkedCars(room, box);
     }
 
     // A pink or red dot on rooms whose people are getting stressed, so
@@ -426,6 +429,34 @@ function drawSecurityCoverage(w, h) {
   }
 }
 
+// A car park's spaces, marked along its floor, and a car in each one
+// that's taken, in one of a few colours (by driver, so it stays put).
+const CAR_COLORS = ["#c94444", "#3b6fb6", "#e0c341", "#f4f4f4", "#3a3a3a", "#4f9a5b"];
+
+function drawParkedCars(room, box) {
+  const spaces = ROOM_TYPES.parking.spaces;
+  const spaceWidth = box.width / spaces;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < spaces; i++) {
+    const x = box.left + i * spaceWidth;
+    ctx.beginPath();
+    ctx.moveTo(x, box.bottom - 9);
+    ctx.lineTo(x, box.bottom);
+    ctx.stroke();
+  }
+  for (const driver of Parking.drivers(room)) {
+    const left = box.left + driver.space * spaceWidth + 2;
+    const width = spaceWidth - 4;
+    ctx.fillStyle = CAR_COLORS[driver.id % CAR_COLORS.length];
+    ctx.fillRect(left, box.bottom - 10, width, 6); // body
+    ctx.fillRect(left + width * 0.2, box.bottom - 14, width * 0.6, 4); // cabin
+    ctx.fillStyle = "#1e1e1e";
+    ctx.fillRect(left + 1, box.bottom - 4, 3, 3); // wheels
+    ctx.fillRect(left + width - 4, box.bottom - 4, 3, 3);
+  }
+}
+
 function roomScreenBox(room, type) {
   const tileEnd = room.tileStart + type.width - 1;
   const left = Camera.worldToScreenX(Grid.tileToX(room.tileStart));
@@ -447,9 +478,11 @@ function drawHoverPreview(w, h) {
     const floor = Pointer.dragging ? Pointer.dragStartFloor : Pointer.floor;
     const start = Pointer.dragging ? Math.min(Pointer.dragStartTile, Pointer.tile) : Pointer.tile;
     const end = Pointer.dragging ? Math.max(Pointer.dragStartTile, Pointer.tile) : Pointer.tile;
-    const affordable = World.floorRunCost(floor, start, end) <= World.money;
-    if (!affordable) Pointer.buildCheck = { ok: false, reason: "Not enough money to build that floor" };
-    drawAreaPreview(floor, floor, start, end, affordable);
+    const check = World.canBuildFloorRun(floor, start, end);
+    Pointer.buildCheck = check;
+    const dug = check.ok && floor < 0 ? check.cost / DIG_COST_PER_TILE : 0;
+    if (dug > 0) Pointer.buildNote = `Dig ${dug} tile${dug === 1 ? "" : "s"} of basement: ${World.formatMoney(check.cost)}`;
+    drawAreaPreview(floor, floor, start, end, check.ok);
     return;
   }
 

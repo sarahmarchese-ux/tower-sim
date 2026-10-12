@@ -25,7 +25,9 @@
 //     11pm (rooms.js: `keeperHours`).
 //   - Shoppers (milestone 8) are visitors, not tenants. shops.js sends them
 //     in from the lobby while a shop is open; each one walks to the shop,
-//     browses, buys (or doesn't; see shops.js) and leaves for good.
+//     browses, buys (or doesn't; see shops.js) and leaves for good. From
+//     milestone 13 some come by car: they start and finish at their car,
+//     in a car park in the basement (`parking`, `space`; parking.js).
 //   - Hotel guests (milestone 9) are visitors too. hotels.js checks a
 //     party in at a lobby; they stay in their room for a night or a few,
 //     apart from the odd daytime outing (and dinner at a restaurant, if
@@ -168,10 +170,13 @@ const People = {
 
   // A shopper turns up at a lobby and heads for this shop. `browseX` is
   // where in the shop they'll stand, and `budget` what they'd spend after
-  // an easy trip (shops.js).
-  addShopper(room, budget) {
+  // an easy trip (shops.js). A driver (`parked`: the car park and space
+  // Parking.pickFor chose) turns up at their car instead.
+  addShopper(room, budget, parked = null) {
     const width = ROOM_TYPES[room.type].width;
     this.list.push({
+      parking: parked ? parked.carPark : null,
+      space: parked ? parked.space : null,
       id: this.nextId++,
       role: "shopper",
       room,
@@ -277,12 +282,14 @@ const People = {
     return "offsite";
   },
 
-  // The spots that count as being at a place (any lobby, for "offsite").
+  // The spots that count as being at a place (any lobby, for "offsite";
+  // a driver's car, for theirs).
   pointsFor(person, place) {
     if (place === "room") return [{ floor: person.room.floor, x: this.homeX(person) }];
     if (place === "cafe") return person.lunchCafe ? [{ floor: person.lunchCafe.floor, x: person.seatX }] : [];
     if (place === "restaurant") return person.dinnerRoom ? [{ floor: person.dinnerRoom.floor, x: person.seatX }] : [];
     if (place === "cleaning") return person.job ? [{ floor: person.job.floor, x: person.workX }] : [];
+    if (person.parking) return [Parking.carPoint(person)]; // a driver comes and goes by car
     return Routing.lobbyPoints();
   },
 
@@ -499,7 +506,10 @@ const People = {
     if (person.target === "room") {
       person.floor = person.room.floor;
       person.x = this.homeX(person);
-      if (person.role === "shopper") Shops.onShopperArrived(person, felt);
+      if (person.role === "shopper") {
+        Shops.onShopperArrived(person, felt);
+        Parking.onDriverArrived(person);
+      }
       if (person.role === "guest") Hotels.onGuestArrived(person);
       if (person.movingIn) {
         person.movingIn = false;

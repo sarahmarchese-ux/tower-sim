@@ -82,19 +82,38 @@ const World = {
 
   // Only tiles that aren't already built cost money — re-dragging over
   // existing floor is free, which makes the drag gesture forgiving to use.
+  // Below ground, each tile is dug out, for more (rooms.js: floorTileCost).
   floorRunCost(floor, tileStart, tileEnd) {
     let newTiles = 0;
     for (let tile = tileStart; tile <= tileEnd; tile++) {
       if (!this.isFloorBuilt(floor, tile)) newTiles++;
     }
-    return newTiles * FLOOR_COST_PER_TILE;
+    return newTiles * floorTileCost(floor);
+  },
+
+  // Like canPlaceRoom, for a drag of floor. Basements can only be dug from
+  // 3★, and only so deep. (Floor already dug, in a save from before
+  // basements had rules, can still be dragged over: it costs nothing.)
+  canBuildFloorRun(floor, tileStart, tileEnd) {
+    const cost = this.floorRunCost(floor, tileStart, tileEnd);
+    if (floor < 0 && cost > 0) {
+      if (Ratings.stars < BASEMENTS_AT_STARS) {
+        return { ok: false, reason: `Basements unlock at ${BASEMENTS_AT_STARS}★: ${howToReach(starTarget(BASEMENTS_AT_STARS))}` };
+      }
+      if (floor < -BASEMENT_FLOORS) {
+        return { ok: false, reason: `Basements go down to B${BASEMENT_FLOORS}` };
+      }
+    }
+    if (cost > this.money) {
+      return { ok: false, reason: floor < 0 ? "Not enough money to dig that floor" : "Not enough money to build that floor" };
+    }
+    return { ok: true, cost };
   },
 
   buildFloorRun(floor, tileStart, tileEnd) {
-    const cost = this.floorRunCost(floor, tileStart, tileEnd);
-    if (cost > this.money) {
-      return { ok: false, reason: "Not enough money to build that floor" };
-    }
+    const check = this.canBuildFloorRun(floor, tileStart, tileEnd);
+    if (!check.ok) return check;
+    const cost = check.cost;
     if (!this.floors.has(floor)) this.floors.set(floor, new Set());
     const tiles = this.floors.get(floor);
     for (let tile = tileStart; tile <= tileEnd; tile++) tiles.add(tile);
@@ -113,12 +132,18 @@ const World = {
     // New room types are the reward for each star (ratings.js).
     if (type.unlocksAt && Ratings.stars < type.unlocksAt) {
       const target = starTarget(type.unlocksAt);
-      const how = target ? `: grow the tower to ${target.population} people first` : "";
+      const how = target ? `: ${howToReach(target)}` : "";
       return { ok: false, reason: `${type.plural || `${type.name}s`} unlock at ${type.unlocksAt}★${how}` };
     }
 
     if (type.groundOnly && floor !== 0) {
       return { ok: false, reason: "The lobby has to be on the ground floor" };
+    }
+    if (type.basementOnly && floor >= 0) {
+      return { ok: false, reason: `${type.name} goes underground: build it on a basement floor` };
+    }
+    if (type.underground === false && floor < 0) {
+      return { ok: false, reason: "Studios, condos and hotel rooms need daylight: they can't go underground" };
     }
 
     const tileEnd = tileStart + type.width - 1;
@@ -299,7 +324,7 @@ const World = {
         return { ok: false, reason: "Stairs land here: demolish the stairs first" };
       }
       this.floors.get(floor).delete(tile);
-      this.money += FLOOR_COST_PER_TILE / 2;
+      this.money += floorTileCost(floor) / 2;
       this.emit("floorsChanged", { floor });
       return { ok: true };
     }

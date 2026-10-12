@@ -40,6 +40,11 @@
 // under its `quietPerDay` (rooms.js) closes: its shopkeeper leaves and it goes back
 // on the market, and the next shopkeeper starts with a fresh name.
 //
+// Drivers (milestone 13) come on top of the shoppers who walk in from the
+// lobby: half as many again, from a car park in the basement, when one has
+// a free space and a way through (parking.js). They keep their own
+// schedule (`room.nextDriverAt`), on the same rushes.
+//
 // Takings go into the shop's till (`room.till`) as the day goes on, and
 // economy.js banks every till at midnight. Like rent owed, the till lives
 // on the room, so it's saved with it and lost if the shop is demolished.
@@ -83,18 +88,37 @@ const Shops = {
       const inHours = hour >= visitors.hours[0] && hour < visitors.hours[1];
       if (!inHours || !this.isOpen(room)) {
         room.nextShopperAt = null; // the first shopper comes a while after opening
+        room.nextDriverAt = null;
         continue;
       }
       if (room.nextShopperAt == null) {
         room.nextShopperAt = now + this.gapMinutes(room);
       } else if (now >= room.nextShopperAt) {
-        const full = this.shoppersFor(room) >= visitors.max ||
-          (room.type === "cafe" && Cafes.seated(room) >= CAFE_SEATS) ||
-          (room.type === "restaurant" && Restaurants.seated(room) >= RESTAURANT_SEATS);
-        if (!full) People.addShopper(room, randomBetween(visitors.spend));
+        if (!this.isFull(room, false)) People.addShopper(room, randomBetween(visitors.spend));
         room.nextShopperAt = now + this.gapMinutes(room);
       }
+      if (room.nextDriverAt == null) {
+        room.nextDriverAt = now + this.gapMinutes(room) / DRIVER_SHARE;
+      } else if (now >= room.nextDriverAt) {
+        const parked = this.isFull(room, true) ? null : Parking.pickFor(room);
+        if (parked) People.addShopper(room, randomBetween(visitors.spend), parked);
+        room.nextDriverAt = now + this.gapMinutes(room) / DRIVER_SHARE;
+      }
     }
+  },
+
+  // No room for another visitor, walking in or (`byCar`) driving: as many
+  // as it takes are on their way or in (drivers have their own allowance,
+  // DRIVER_SHARE of the walk-ins', so they come on top), or (a café or
+  // restaurant) every seat is taken.
+  isFull(room, byCar) {
+    const max = ROOM_TYPES[room.type].visitors.max;
+    const coming = People.list.filter(
+      (p) => p.role === "shopper" && p.room === room && p.state !== "offsite" && !!p.parking === byCar,
+    ).length;
+    return coming >= (byCar ? Math.ceil(max * DRIVER_SHARE) : max) ||
+      (room.type === "cafe" && Cafes.seated(room) >= CAFE_SEATS) ||
+      (room.type === "restaurant" && Restaurants.seated(room) >= RESTAURANT_SEATS);
   },
 
   // Minutes until the next shopper, around an average that shrinks when
