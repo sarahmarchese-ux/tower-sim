@@ -12,7 +12,11 @@
 // The Save file panel (ui.js) copies it out as text or a file, to keep or
 // to send, and loads one back in, replacing the tower being played.
 // A save carries a version number; a save from a different version of the
-// game is ignored rather than risking a half-restored tower.
+// game is ignored rather than risking a half-restored tower. A save is also
+// checked from end to end before it's used (every room and shaft a known
+// kind, everyone riding or queueing in exactly one car, and so on), since
+// a pasted one may have been edited or damaged, and one bad value would
+// otherwise stop the game on every reload.
 //
 // Hotel rooms used to come in one size, 8 tiles wide (type "hotel"). They
 // now come as Singles and Twins, so a save from before that has its old
@@ -24,6 +28,14 @@ const OLD_HOTEL = { type: "hotel", cost: 14000 };
 
 const SAVE_KEY = "tower-sim-save";
 const SAVE_VERSION = 1;
+
+// What a saved person or elevator car can be doing (see people.js and
+// elevators.js), and the most game time a save can hold (about 190
+// years), so a damaged clock can't make the game tally a million midnights.
+const PERSON_STATES = ["offsite", "inRoom", "eating", "cleaning", "walking", "onStairs", "waitingForElevator", "riding"];
+const TRAVELLING_STATES = ["walking", "onStairs", "waitingForElevator", "riding"];
+const CAR_STATES = ["idle", "moving", "doors"];
+const MAX_SAVED_MINUTES = 1e8;
 
 const SaveGame = {
   lastSavedDay: null,
@@ -195,6 +207,16 @@ const SaveGame = {
         if (!found) throw new Error("an elevator rider is missing");
         return found;
       };
+      const check = (ok, problem) => {
+        if (!ok) throw new Error(problem);
+      };
+      const isInt = Number.isInteger;
+      const known = (table, key) => typeof key === "string" && Object.hasOwn(table, key);
+      const ids = new Set(); // rooms and shafts share World.nextId
+      const uniqueId = (id, ofWhat) => {
+        check(isInt(id) && id > 0 && !ids.has(id), `${ofWhat} has a missing or repeated id`);
+        ids.add(id);
+      };
 
       // Old one-size hotel rooms are knocked down and refunded (see top).
       const oldHotelIds = new Set(data.world.rooms.filter((r) => r.type === OLD_HOTEL.type).map((r) => r.id));
@@ -207,11 +229,36 @@ const SaveGame = {
       }
       const refund = oldHotelIds.size * OLD_HOTEL.cost;
 
+      for (const room of rooms) {
+        uniqueId(room.id, "a room");
+        check(known(ROOM_TYPES, room.type), "a room is of an unknown kind");
+        check(isInt(room.floor) && isInt(room.tileStart), "a room's place is damaged");
+      }
+      for (const transit of data.world.transit) {
+        uniqueId(transit.id, "a shaft or stairway");
+        check(known(TRANSIT_TYPES, transit.kind), "a shaft or stairway is of an unknown kind");
+        check(isInt(transit.tileStart) && isInt(transit.floorBottom) && isInt(transit.floorTop) &&
+          transit.floorBottom <= transit.floorTop, "a shaft's or stairway's place is damaged");
+      }
       const roomsById = new Map(rooms.map((room) => [room.id, room]));
+      const transitById = new Map(data.world.transit.map((t) => [t.id, t]));
+      const personIds = new Set();
       const people = data.people.list.map((saved) => {
         const { roomId, lunchCafeId, dinnerRoomId, jobId, parkingId, ...person } = saved;
         person.room = roomsById.get(roomId);
         if (!person.room) throw new Error("a person's room is missing");
+        check(isInt(person.id) && person.id > 0 && !personIds.has(person.id), "a person has a missing or repeated id");
+        personIds.add(person.id);
+        check(PERSON_STATES.includes(person.state), "a person is doing something unknown");
+        check([person.floor, person.x, person.stress].every(Number.isFinite), "a person's numbers are damaged");
+        // Someone on their way somewhere needs a route, along shafts and
+        // stairs that exist.
+        const legs = person.route && person.route.legs;
+        if (person.route != null || TRAVELLING_STATES.includes(person.state)) {
+          check(Array.isArray(legs) && isInt(person.legIndex) && person.legIndex >= 0 &&
+            person.legIndex <= legs.length, "a person's route is damaged");
+          check(legs.every((leg) => leg && (leg.type === "walk" || transitById.has(leg.transitId))), "a person's route uses a missing shaft or stairway");
+        }
         // A driver's car park (saves from before parking have none).
         if (person.role === "shopper") {
           person.parking = (parkingId != null && roomsById.get(parkingId)) || null;
@@ -239,12 +286,27 @@ const SaveGame = {
         return person;
       });
       const peopleById = new Map(people.map((p) => [p.id, p]));
-      const transitById = new Map(data.world.transit.map((t) => [t.id, t]));
 
       const cars = new Map();
+      const inCars = new Map(); // person -> how many cars they're riding or queueing for
       for (const saved of data.elevators) {
         const transit = transitById.get(saved.transitId);
         if (!transit) throw new Error("an elevator's shaft is missing");
+        check(transit.kind === "elevator" && !cars.has(transit.id), "an elevator's car is in the wrong place");
+        const inShaft = (floor) => Number.isFinite(floor) && floor >= transit.floorBottom && floor <= transit.floorTop;
+        const stop = (floor) => isInt(floor) && inShaft(floor);
+        check(inShaft(saved.floor) && CAR_STATES.includes(saved.state) && [-1, 0, 1].includes(saved.direction) &&
+          Number.isFinite(saved.doorTimer), "an elevator's car is damaged");
+        check(saved.riders.length <= ELEVATOR_CAPACITY && saved.riders.every((r) => stop(r.dest)) &&
+          saved.waiting.every((w) => stop(w.floor) && stop(w.dest) && w.dest !== w.floor && w.direction === Math.sign(w.dest - w.floor)),
+          "an elevator's riders or queue are damaged");
+        for (const { personId } of [...saved.riders, ...saved.waiting]) {
+          const person = personById(personId);
+          inCars.set(person, (inCars.get(person) || 0) + 1);
+        }
+        const rides = (r) => personById(r.personId).state === "riding";
+        const queues = (w) => personById(w.personId).state === "waitingForElevator";
+        check(saved.riders.every(rides) && saved.waiting.every(queues), "an elevator holds someone who isn't riding or queueing");
         cars.set(transit.id, {
           transit,
           floor: saved.floor,
@@ -259,23 +321,36 @@ const SaveGame = {
       for (const transit of data.world.transit) {
         if (transit.kind === "elevator" && !cars.has(transit.id)) throw new Error("an elevator's car is missing");
       }
+      for (const person of people) {
+        const expected = person.state === "riding" || person.state === "waitingForElevator" ? 1 : 0;
+        check((inCars.get(person) || 0) === expected, "someone riding or queueing isn't in exactly one elevator");
+      }
 
       // Everything else is read here too, before anything is swapped in, so
       // a damaged save can't leave the game half old and half new.
       const totalMinutes = number(data.clock.totalMinutes);
+      check(totalMinutes >= 0 && totalMinutes <= MAX_SAVED_MINUTES, "the clock is out of range");
       const money = number(data.world.money) + refund;
+      check(Math.abs(money) < 1e15, "the money is out of range");
+      check(data.world.floors.every(([floor, tiles]) => isInt(floor) && Array.isArray(tiles) && tiles.every(isInt)), "a floor is damaged");
       const floors = new Map(data.world.floors.map(([floor, tiles]) => [floor, new Set(tiles)]));
       const economy = {
         lastTallyDay: number(data.economy.lastTallyDay),
-        lastPayday: data.economy.lastPayday,
+        lastPayday: data.economy.lastPayday == null ? null : number(data.economy.lastPayday),
         lastSales: data.economy.lastSales == null ? null : number(data.economy.lastSales), // saves from before shops have none
         lastHotel: data.economy.lastHotel == null ? null : number(data.economy.lastHotel), // ...or hotels
         debtSince: data.economy.debtSince === null ? null : number(data.economy.debtSince),
       };
+      // The day's takings are settled at midnight, so the last tally is
+      // today's (or, in a save from mid-step, yesterday's).
+      const daysUntallied = Math.floor(totalMinutes / MINUTES_PER_DAY) - economy.lastTallyDay;
+      check(daysUntallied === 0 || daysUntallied === 1, "the clock and the books disagree");
       const stars = number(data.ratings.stars);
+      check(isInt(stars) && stars >= 1 && stars <= STAR_TARGETS[STAR_TARGETS.length - 1].stars, "the star rating is out of range");
       const camera = { x: number(data.camera.x), y: number(data.camera.y) };
-      const worldNextId = number(data.world.nextId);
-      const peopleNextId = number(data.people.nextId);
+      // New rooms, shafts and people get ids past every one in use.
+      const worldNextId = Math.max(number(data.world.nextId), Math.max(0, ...ids) + 1);
+      const peopleNextId = Math.max(number(data.people.nextId), Math.max(0, ...personIds) + 1);
 
       // Everything parsed; the caller swaps it in.
       return () => {
