@@ -15,11 +15,15 @@ const Camera = {
   x: 0,
   y: 0,
 
-  // Call once, when we know the canvas size, to center the view sensibly:
-  // ground a little below the middle of the screen, tile 0 in the middle.
-  reset(canvasWidth, canvasHeight) {
-    this.x = -canvasWidth / 2;
-    this.y = -canvasHeight * 0.75;
+  // Call once, when we know the canvas size and where the top bar and the
+  // toolbar sit over it, to center the view sensibly: tile 0 in the middle,
+  // and the ground three-quarters of the way down the part of the screen
+  // between the two bars. (Three-quarters of the whole screen would put the
+  // ground under the toolbar in a short window, or on a phone, where the
+  // toolbar wraps to many rows.)
+  reset(width, top, bottom) {
+    this.x = -width / 2;
+    this.y = -(top + (bottom - top) * 0.75);
   },
 
   // World-space (grid pixel) -> screen pixel.
@@ -37,11 +41,14 @@ const Camera = {
 };
 
 // --- Input handling -------------------------------------------------------
-// Two ways to scroll: right-click drag, or hold an arrow key / WASD. The
-// left button is reserved for building (see input.js) — splitting them this
-// way means a drag never has to guess whether you meant to pan or build.
+// Ways to scroll: right-click drag, the mouse wheel (or a trackpad's
+// two-finger scroll), or hold an arrow key / WASD. The left button is
+// reserved for building (see input.js) — splitting them this way means a
+// drag never has to guess whether you meant to pan or build. Touch screens
+// scroll by dragging a finger; input.js handles touch, since it has to tell
+// a scroll from a tap or a build drag.
 // Camera itself knows nothing about input devices, which keeps it easy to
-// test or swap out later (e.g. touch drag).
+// test or swap out later.
 //
 // Held keys are just recorded here; Camera.pollKeys() is called once per
 // frame by the main loop (main.js), alongside the clock tick and the redraw
@@ -97,6 +104,14 @@ function attachCameraControls(canvas) {
     lastX = e.clientX;
     lastY = e.clientY;
   });
+
+  // The wheel scrolls the way a page would: down shows lower floors. Some
+  // mice report whole lines or pages rather than pixels.
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault(); // or the browser zooms or bounces the page instead
+    const scale = e.deltaMode === 1 ? FLOOR_HEIGHT : e.deltaMode === 2 ? canvas.height : 1;
+    Camera.pan(e.deltaX * scale, e.deltaY * scale);
+  }, { passive: false });
 
   // Keys are stored lower-case: with Shift or Caps Lock, "w" can go down
   // and come back up as "W", which would leave it held forever. Keys let go

@@ -4,7 +4,7 @@
 // reason to reinvent them in canvas drawing code.
 
 const UI = {
-  defaultHint: "Pick something to build below (Esc or right-click puts it down). Right-drag or WASD/arrows to scroll. Hover a room for details.",
+  defaultHint: "Pick something to build below (Esc or right-click puts it down). Right-drag, the wheel, WASD/arrows or a finger scrolls. Hover (or tap) a room for details.",
 
   // An error (e.g. "Build the floor here first") shows for a few seconds,
   // then the hint goes back to the default or to the room being hovered.

@@ -1,10 +1,14 @@
-// Turns raw mouse events into grid coordinates and tool actions. This is the
-// only file that converts a screen pixel back into a (tile, floor) pair —
-// everywhere else works in grid units already.
+// Turns raw mouse and touch events into grid coordinates and tool actions.
+// This is the only file that converts a screen pixel back into a (tile,
+// floor) pair — everywhere else works in grid units already.
 //
 // Left button = build (this file). Right button = pan the camera (see
 // camera.js). Splitting them this way means dragging never accidentally
 // scrolls the tower when you meant to lay a floor, or vice versa.
+//
+// On a touch screen a tap is a click, and dragging a finger builds with
+// Floor or Elevator in hand (as a left-drag does) and scrolls otherwise.
+// Two fingers always scroll.
 //
 // Two tools use a drag: Floor drags sideways along one level, and Elevator
 // drags up or down along one column (from an existing shaft's end, that
@@ -20,6 +24,8 @@ const Tool = {
 
 // A right-click that moves less than this many pixels is a click, not a pan.
 const RIGHT_CLICK_SLOP = 4;
+// ...and a finger that moves less than this is a tap (fingers wobble more).
+const TAP_SLOP = 10;
 
 const Pointer = {
   tile: null,
@@ -96,13 +102,69 @@ function updatePointer(canvas) {
   Pointer.floor = floor;
 }
 
+// Aim at a point on screen, as the mouse being there would.
+function aimAt(canvas, clientX, clientY) {
+  Pointer.overCanvas = true;
+  Pointer.screenX = clientX;
+  Pointer.screenY = clientY;
+  updatePointer(canvas);
+}
+
+// Floor and Elevator are built by dragging: from where the button (or
+// finger) goes down, to where it comes up.
+function startBuildDrag() {
+  if (Tool.current !== "floor" && Tool.current !== "elevator") return;
+  Pointer.dragging = true;
+  Pointer.dragStartTile = Pointer.tile;
+  Pointer.dragStartFloor = Pointer.floor;
+}
+
+function finishBuildDrag() {
+  if (Tool.current === "floor" && Pointer.dragging) {
+    const start = Math.min(Pointer.dragStartTile, Pointer.tile);
+    const end = Math.max(Pointer.dragStartTile, Pointer.tile);
+    UI.reportResult(World.buildFloorRun(Pointer.dragStartFloor, start, end));
+  }
+
+  if (Tool.current === "elevator" && Pointer.dragging) {
+    const plan = elevatorPlan();
+    UI.reportResult(
+      plan.extend
+        ? World.extendElevator(plan.extend, plan.bottom, plan.top)
+        : World.placeTransit("elevator", plan.tile, plan.bottom, plan.top),
+    );
+  }
+  cancelBuildDrag();
+}
+
+function cancelBuildDrag() {
+  Pointer.dragging = false;
+  Pointer.dragStartTile = null;
+  Pointer.dragStartFloor = null;
+  if (!Pointer.overCanvas) {
+    Pointer.tile = null;
+    Pointer.floor = null;
+  }
+}
+
+// A plain click (no drag) handles everything except the two drag tools.
+function clickBuild() {
+  if (!Tool.current || Tool.current === "floor" || Tool.current === "elevator") return;
+  if (Pointer.tile === null || Pointer.floor === null) return;
+
+  let result;
+  if (Tool.current === "demolish") {
+    result = World.demolishAt(Pointer.floor, Pointer.tile);
+  } else if (Tool.current === "stairs") {
+    result = World.placeTransit("stairs", stairsTileAt(Pointer.floor, Pointer.tile), Pointer.floor, Pointer.floor + 1);
+  } else {
+    result = World.placeRoom(Tool.current, Pointer.floor, Pointer.tile);
+  }
+  UI.reportResult(result);
+}
+
 function attachBuildControls(canvas) {
-  canvas.addEventListener("mousemove", (e) => {
-    Pointer.overCanvas = true;
-    Pointer.screenX = e.clientX;
-    Pointer.screenY = e.clientY;
-    updatePointer(canvas);
-  });
+  canvas.addEventListener("mousemove", (e) => aimAt(canvas, e.clientX, e.clientY));
 
   // Off the canvas (over the toolbar, or out of the window) nothing is
   // hovered, so the tooltip goes away. Mid-drag, the drag keeps the last
@@ -129,58 +191,79 @@ function attachBuildControls(canvas) {
 
   canvas.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return; // right button pans; see camera.js
-    Pointer.overCanvas = true;
-    Pointer.screenX = e.clientX;
-    Pointer.screenY = e.clientY;
-    updatePointer(canvas);
-    if (Tool.current === "floor" || Tool.current === "elevator") {
-      Pointer.dragging = true;
-      Pointer.dragStartTile = Pointer.tile;
-      Pointer.dragStartFloor = Pointer.floor;
-    }
+    aimAt(canvas, e.clientX, e.clientY);
+    startBuildDrag();
   });
 
   window.addEventListener("mouseup", (e) => {
-    if (e.button !== 0) return;
-
-    if (Tool.current === "floor" && Pointer.dragging) {
-      const start = Math.min(Pointer.dragStartTile, Pointer.tile);
-      const end = Math.max(Pointer.dragStartTile, Pointer.tile);
-      UI.reportResult(World.buildFloorRun(Pointer.dragStartFloor, start, end));
-    }
-
-    if (Tool.current === "elevator" && Pointer.dragging) {
-      const plan = elevatorPlan();
-      UI.reportResult(
-        plan.extend
-          ? World.extendElevator(plan.extend, plan.bottom, plan.top)
-          : World.placeTransit("elevator", plan.tile, plan.bottom, plan.top),
-      );
-    }
-
-    Pointer.dragging = false;
-    Pointer.dragStartTile = null;
-    Pointer.dragStartFloor = null;
-    if (!Pointer.overCanvas) {
-      Pointer.tile = null;
-      Pointer.floor = null;
-    }
+    if (e.button === 0) finishBuildDrag();
   });
 
-  // A plain click (no drag) handles everything except the two drag tools,
-  // which were already handled on mouseup above.
-  canvas.addEventListener("click", () => {
-    if (!Tool.current || Tool.current === "floor" || Tool.current === "elevator") return;
-    if (Pointer.tile === null || Pointer.floor === null) return;
+  // The two drag tools were already handled on mouseup above.
+  canvas.addEventListener("click", clickBuild);
 
-    let result;
-    if (Tool.current === "demolish") {
-      result = World.demolishAt(Pointer.floor, Pointer.tile);
-    } else if (Tool.current === "stairs") {
-      result = World.placeTransit("stairs", stairsTileAt(Pointer.floor, Pointer.tile), Pointer.floor, Pointer.floor + 1);
-    } else {
-      result = World.placeRoom(Tool.current, Pointer.floor, Pointer.tile);
+  // Touch. The page's own scrolling and zooming are off over the canvas
+  // (touch-action in index.html), and each handler calls preventDefault,
+  // so the browser doesn't also send its pretend mouse events afterwards
+  // and build everything twice. `touch` follows the gesture: where its
+  // fingers were last (their middle, with two), whether it has moved far
+  // enough not to be a tap, and whether it's a build drag.
+  let touch = null;
+  const middle = (touches) => {
+    let x = 0;
+    let y = 0;
+    for (const t of touches) {
+      x += t.clientX;
+      y += t.clientY;
     }
-    UI.reportResult(result);
+    return { x: x / touches.length, y: y / touches.length };
+  };
+
+  canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    const at = middle(e.touches);
+    if (e.touches.length === 1) {
+      aimAt(canvas, at.x, at.y);
+      startBuildDrag();
+      touch = { ...at, startX: at.x, startY: at.y, moved: false, build: Pointer.dragging };
+    } else {
+      // A second finger: the gesture is a scroll now, and builds nothing.
+      cancelBuildDrag();
+      touch = { ...at, startX: at.x, startY: at.y, moved: true, build: false };
+    }
+  }, { passive: false });
+
+  canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    if (!touch) return;
+    const at = middle(e.touches);
+    if (Math.hypot(at.x - touch.startX, at.y - touch.startY) >= TAP_SLOP) touch.moved = true;
+    if (touch.build) {
+      aimAt(canvas, at.x, at.y);
+    } else if (touch.moved) {
+      Camera.pan(-(at.x - touch.x), -(at.y - touch.y)); // as with the right button
+    }
+    touch.x = at.x;
+    touch.y = at.y;
+  }, { passive: false });
+
+  canvas.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    if (!touch) return;
+    if (e.touches.length > 0) {
+      // One of two fingers lifted: carry on scrolling from the other.
+      Object.assign(touch, middle(e.touches));
+      return;
+    }
+    // A tap with nothing in hand leaves the room under it hovered, so its
+    // tooltip shows.
+    if (touch.build) finishBuildDrag();
+    else if (!touch.moved) clickBuild();
+    touch = null;
+  }, { passive: false });
+
+  canvas.addEventListener("touchcancel", () => {
+    cancelBuildDrag();
+    touch = null;
   });
 }

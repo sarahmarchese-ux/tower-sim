@@ -18,6 +18,18 @@ python3 -m http.server
 
 Then visit `http://localhost:8000`.
 
+## Controls
+
+Pick something from the toolbar along the bottom, then click to build (drag
+for Floor and Elevator). Esc, a right-click, or clicking its button again
+puts it down. Scroll around with a right-drag, the mouse wheel (or a
+trackpad), or the arrow keys / WASD. Hover a room or an elevator shaft for
+details. Space pauses, and 1 and 3 set the speed.
+
+On a touch screen, tap to build, and drag a finger to scroll (or, with Floor
+or Elevator picked, to build along the drag; two fingers still scroll). Tap
+a room for its details.
+
 ## Smoke test
 
 `tests/smoke.mjs` opens the game in headless Chromium, builds a small tower

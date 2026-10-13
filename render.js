@@ -534,7 +534,11 @@ function drawAreaPreview(floorBottom, floorTop, tileStart, tileEnd, valid) {
 }
 
 window.addEventListener("resize", resize);
-Camera.reset(window.innerWidth, window.innerHeight);
+Camera.reset(
+  window.innerWidth,
+  document.getElementById("topbar").getBoundingClientRect().bottom,
+  document.getElementById("toolbar").getBoundingClientRect().top,
+);
 attachCameraControls(canvas);
 attachBuildControls(canvas);
 UI.attachToolbar();
