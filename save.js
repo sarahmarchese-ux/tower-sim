@@ -30,6 +30,16 @@ const OLD_HOTEL = { type: "hotel", cost: 14000 };
 
 const SAVE_KEY = "tower-sim-save";
 const SAVE_VERSION = 1;
+// A stored save that couldn't be loaded is copied here before the new game
+// that replaces it saves over it, so it can still be copied out (Save file).
+const UNLOADABLE_KEY = "tower-sim-save-unloadable";
+// Which tab last changed the save, so a tab can tell another tab's save
+// from its own (a page saves as it closes, which reaches the page reloading
+// in its place). A tab's id lives in sessionStorage, which a reload keeps
+// and every other tab has its own of (a duplicated tab copies it, so it
+// can't tell itself from its copy).
+const SAVED_BY_KEY = "tower-sim-saved-by";
+const TAB_ID_KEY = "tower-sim-tab";
 
 // What a saved person or elevator car can be doing (see people.js and
 // elevators.js), and the most game time a save can hold (about 190
@@ -42,24 +52,56 @@ const MAX_SAVED_MINUTES = 1e8;
 const SaveGame = {
   lastSavedDay: null,
   discarded: false, // set by "New game" so closing the tab doesn't re-save
+  otherTab: false, // set (main.js) when another tab changed the save: this tab's tower is out of date
   refundNote: null, // set by load() when it refunded old hotel rooms
 
   // localStorage can be missing or full (private browsing, blocked cookies),
   // so every use goes through these two, which fail quietly.
-  _read() {
+  _read(key = SAVE_KEY) {
     try {
-      return localStorage.getItem(SAVE_KEY);
+      return localStorage.getItem(key);
     } catch (e) {
       return null;
     }
   },
-  _write(text) {
+  _write(text, key = SAVE_KEY) {
     try {
-      localStorage.setItem(SAVE_KEY, text);
+      if (key === SAVE_KEY) localStorage.setItem(SAVED_BY_KEY, this.tabId());
+      localStorage.setItem(key, text);
       return true;
     } catch (e) {
       return false;
     }
+  },
+
+  tabId() {
+    try {
+      let id = sessionStorage.getItem(TAB_ID_KEY);
+      if (!id) {
+        id = Math.random().toString(36).slice(2);
+        sessionStorage.setItem(TAB_ID_KEY, id);
+      }
+      return id;
+    } catch (e) {
+      return "";
+    }
+  },
+
+  // Was the save last changed by another tab?
+  changedElsewhere() {
+    return this._read(SAVED_BY_KEY) !== this.tabId();
+  },
+
+  // The stored save couldn't be loaded (from a newer version of the game,
+  // say, or damaged): keep a copy aside before this new game saves over it.
+  // Returns true if there was one to keep.
+  keepUnloadable() {
+    const text = this._read();
+    return text !== null && this._write(text, UNLOADABLE_KEY);
+  },
+
+  unloadableText() {
+    return this._read(UNLOADABLE_KEY);
   },
 
   hasSave() {
@@ -68,6 +110,7 @@ const SaveGame = {
 
   clear() {
     try {
+      localStorage.setItem(SAVED_BY_KEY, this.tabId());
       localStorage.removeItem(SAVE_KEY);
     } catch (e) {
       // nothing to do
@@ -132,8 +175,9 @@ const SaveGame = {
 
   save() {
     // A finished game, or one the player just threw away, has nothing to
-    // come back to.
-    if (Economy.bankrupt || this.discarded) return false;
+    // come back to; and a tab whose save another tab has replaced mustn't
+    // put its older tower back over it.
+    if (Economy.bankrupt || this.discarded || this.otherTab) return false;
     try {
       return this._write(JSON.stringify(this.snapshot()));
     } catch (e) {

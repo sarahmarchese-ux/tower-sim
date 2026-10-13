@@ -198,6 +198,10 @@ function attachBuildControls(canvas) {
   window.addEventListener("mouseup", (e) => {
     if (e.button === 0) finishBuildDrag();
   });
+  // A button let go in another window never reports its mouseup here, so
+  // losing focus mid-drag drops the drag (builds nothing) rather than
+  // leaving it stuck to the mouse.
+  window.addEventListener("blur", cancelBuildDrag);
 
   // The two drag tools were already handled on mouseup above.
   canvas.addEventListener("click", clickBuild);
