@@ -11,7 +11,8 @@
 // four for a resident (one in two on Fridays and Saturdays), one in two
 // for a guest. If they do, they go to the nearest restaurant that's open,
 // has a seat, and isn't too far (MAX_DINNER_TRIP_COST, in the route
-// planner's "tiles of walking"; a flight of stairs is 25). Without one,
+// planner's "tiles of walking"; a flight of stairs is 12, so that's about
+// four flights with a short walk). Without one,
 // they eat at home: unlike makers at lunch, nobody leaves the building for
 // dinner, so a tower without a restaurant has quiet evenings.
 //

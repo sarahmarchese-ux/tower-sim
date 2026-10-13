@@ -114,9 +114,7 @@ const Shops = {
   // taking their places.
   isFull(room, byCar) {
     const max = ROOM_TYPES[room.type].visitors.max;
-    const coming = People.list.filter(
-      (p) => p.role === "shopper" && p.room === room && p.state !== "offsite" && !!p.parking === byCar,
-    ).length;
+    const coming = People.list.filter((p) => p.role === "shopper" && p.room === room && !!p.parking === byCar).length;
     return coming >= (byCar ? Math.ceil(max * DRIVER_SHARE) : max) ||
       (room.type === "cafe" && Cafes.seated(room) >= CAFE_SEATS) ||
       (room.type === "restaurant" && Restaurants.seated(room) >= RESTAURANT_SEATS);
@@ -163,10 +161,17 @@ const Shops = {
     Economy.popupOverRoom(person.room, "Gave up: too far", "#d0d0d0");
   },
 
-  // Shoppers in the building for this shop: on their way, browsing, or
-  // leaving.
+  // Shoppers for this shop: on their way, browsing, or leaving. (Counting
+  // one only once they'd set off let two arrive in the same moment for the
+  // last seat; finished shoppers are gone from the list.)
   shoppersFor(room) {
-    return People.list.filter((p) => p.role === "shopper" && p.room === room && p.state !== "offsite").length;
+    return People.list.filter((p) => p.role === "shopper" && p.room === room).length;
+  },
+
+  // Is anyone still browsing (or eating) here, not yet at the till? Its
+  // keeper doesn't lock up on them.
+  hasBrowsers(room) {
+    return People.list.some((p) => p.role === "shopper" && p.room === room && p.state === "inRoom" && p.bought === null);
   },
 
   // How much of their budget a shopper will spend, from how long the trip

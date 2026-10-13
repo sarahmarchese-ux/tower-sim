@@ -241,17 +241,33 @@ const People = {
     if (room.type === "cafe") Cafes.onClosed(room);
     if (room.type === "restaurant") Restaurants.onClosed(room);
     if (isHotel(room)) Housekeeping.onRoomGone(room);
+    if (room.type === "lobby") this.onLobbyRemoved();
+  },
+
+  // A lobby was demolished. Anyone on their way out of the building (not a
+  // driver, who leaves by car) may have been heading for it, so they work
+  // out the way to whichever lobby is left.
+  onLobbyRemoved() {
+    for (const person of this.list) {
+      if (person.route && person.target === "offsite" && !person.parking) this.reroute(person);
+    }
   },
 
   // A room's tenants are leaving for good. Anyone already out of the
   // building is simply gone; everyone else heads for the lobby (after a
-  // few minutes to pack) and is gone when they get there.
+  // few minutes to pack) and is gone when they get there. A shop's
+  // visitors on their way in turn back now (or, mid-ride or mid-climb, at
+  // the next floor; see finishTrip).
   moveOut(room) {
     for (const person of this.list.filter((p) => p.room === room)) {
       person.movingOut = true;
       if (person.job) Housekeeping.dropJob(person); // a housekeeper leaving doesn't go and clean first
       if (person.state === "offsite") this.remove(person);
       else if (person.state === "inRoom" || person.state === "cleaning") person.idleUntil = Clock.totalMinutes + randomBetween(MOVER_GAP_MINUTES);
+      else if (person.role === "shopper" && person.target === "room" && (person.state === "walking" || person.state === "waitingForElevator")) {
+        person.target = "offsite";
+        this.reroute(person);
+      }
     }
   },
 
@@ -321,7 +337,9 @@ const People = {
       return "room";
     }
     if (person.role === "shopkeeper") {
-      return minute >= person.arriveAt && minute < person.leaveAt ? "room" : "offsite";
+      // Past closing time, they stay until the last shopper has paid.
+      if (minute < person.arriveAt) return "offsite";
+      return minute < person.leaveAt || Shops.hasBrowsers(person.room) ? "room" : "offsite";
     }
     if (person.role === "housekeeper") {
       // Once started, a room gets finished, even past five o'clock.
@@ -507,7 +525,9 @@ const People = {
     if (person.target === "room") {
       person.floor = person.room.floor;
       person.x = this.homeX(person);
-      if (person.role === "shopper") {
+      // A shopper whose shop closed while they were on their way finds it
+      // shut, and heads straight back out.
+      if (person.role === "shopper" && !person.movingOut) {
         Shops.onShopperArrived(person, felt);
         Parking.onDriverArrived(person);
       }

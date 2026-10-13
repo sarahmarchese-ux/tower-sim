@@ -395,7 +395,15 @@ const UI = {
       this.setSpeed(0);
       text.value = SaveGame.exportText();
       say("This is your tower as it is right now. Copy it or download it to keep it or send it. To play a save from somewhere else, paste it in here (or open its file) and press Load.");
+      document.getElementById("savefile-old").hidden = SaveGame.unloadableText() === null;
       panel.classList.add("shown");
+    });
+
+    // A save that couldn't be loaded when the game opened (see main.js),
+    // to copy out and keep, or send.
+    document.getElementById("savefile-old").addEventListener("click", () => {
+      text.value = SaveGame.unloadableText() || "";
+      say("This is the save that couldn't be loaded when the game opened. Copy it or download it to keep it, or to send it (say, to Claude) to see what's wrong.");
     });
     document.getElementById("savefile-close").addEventListener("click", () => {
       panel.classList.remove("shown");
@@ -422,7 +430,12 @@ const UI = {
 
     document.getElementById("savefile-download").addEventListener("click", async () => {
       const filename = `tower-sim-day-${Clock.day + 1}.json`;
-      const downloads = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+      let downloads = null;
+      try {
+        downloads = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+      } catch (e) {
+        downloads = null; // not offered here: fall back to an ordinary download
+      }
       if (downloads) {
         try {
           await downloads.save({ filename, data: text.value });

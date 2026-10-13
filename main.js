@@ -72,7 +72,19 @@ if (SaveGame.load()) {
   UI.announce(`Welcome back! Your tower is as you left it.${note} Press Play (or space) to carry on.`);
 } else {
   SaveGame.lastSavedDay = Clock.day;
+  if (SaveGame.keepUnloadable()) {
+    UI.announce("Your saved tower couldn't be loaded (it may be from a newer version of the game, or damaged), so this is a new game. The old save is kept: Save file → Old save copies it out.");
+  }
 }
+
+// There's one save slot for every tab. When another tab saves (or starts a
+// new game), this tab's tower is out of date, so it stops saving over the
+// newer one and says so.
+window.addEventListener("storage", (e) => {
+  if (e.key !== SAVE_KEY || SaveGame.otherTab || !SaveGame.changedElsewhere()) return;
+  SaveGame.otherTab = true;
+  UI.announce("Your tower was saved from another tab, so this tab won't save over it. Reload to carry on from that save.");
+});
 
 // Closing or switching away from the tab saves too, so you never lose more
 // than you'd expect. (Not after "New game" or bankruptcy: SaveGame.save
