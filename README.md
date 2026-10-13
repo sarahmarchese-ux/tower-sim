@@ -30,29 +30,51 @@ On a touch screen, tap to build, and drag a finger to scroll (or, with Floor
 or Elevator picked, to build along the drag; two fingers still scroll). Tap
 a room for its details.
 
-## Smoke test
+## Tests
 
-`tests/smoke.mjs` opens the game in headless Chromium, builds a small tower
-with real mouse clicks (checking shops, hotel rooms, restaurants and
-service rooms stay locked until 2★, then adding one of each, plus a café
-and Housekeeping), runs 8 game days (checking the shop sells something,
-the hotel rooms earn a night, makers have lunch at the café, the
-restaurant sells dinners, some to residents or guests, and a housekeeper
-cleans a room after a checkout), forces a break-in at the unprotected
-shop (checking the money and the message) and two at the jewellery studio
-(checking its tooltip names the cause of its stress), builds a Security
-office and checks nothing under guard is ever robbed, checks the 3★
-checklist and that basements and Parking stay locked until 3★ (and 3★
-itself until both service rooms are staffed), digs a basement, checks
-studios and hotel rooms stay above ground and Parking below, builds a car
-park and runs 2 days (checking drivers come, buy something and never
-overfill it), hovers every room with people in it,
-saves and reloads, exports a save file and loads it back in (turning away
-one that isn't a save), demolishes the car park with drivers about
-(checking none are left stranded) and other things, and keeps running. It fails on any page error,
-`console.error`, frozen game loop, or save that doesn't restore the same
-state. GitHub Actions runs it on every pull request
-(`.github/workflows/smoke.yml`). To run it yourself:
+Two test files, both run by GitHub Actions on every pull request
+(`.github/workflows/smoke.yml`), and both with `npm test`.
+
+**`tests/sim.mjs`** checks the game's rules without a browser, in about two
+seconds, with nothing to install (`npm run sim`). It loads the game's logic
+into a sandbox with seeded dice, builds towers through the game's own
+functions, and checks: someone at the front of an elevator queue keeps their
+place while someone at the back of a long one switches; each full carload
+ahead costs a round trip; a full car stops only to let people off; people
+take stairs for a floor or two (and into a basement) and really climb them;
+midnight rent, payday, upkeep and wages; condo sales and refunds; the weekly
+review (red studios move out, quiet shops close); hotel stays of 1–3 nights
+(1–2 from a Friday or Saturday); break-ins only at night from 2★ and never
+under guard, and the warning when guards can't reach their office; a keeper
+staying for a late shopper; seats held by diners on their way; visitors
+turning back from a shop that closes; people rerouting when a lobby is
+demolished; basements (3★, B10, which rooms, half back); the car park's
+warnings; a save reloading to the very same game, which then plays on the
+same; and a save that won't load being kept.
+
+**`tests/smoke.mjs`** plays the game in headless Chromium. It builds a
+small tower with real mouse clicks (checking shops, hotel rooms,
+restaurants and service rooms stay locked until 2★, and that building cost
+exactly what it should), runs 8 game days (checking the shop sells
+something, the hotel rooms earn a night, makers sit down to lunch at the
+café, the restaurant sells dinners, some to residents or guests, and a
+housekeeper cleans a room after a checkout), forces break-ins (checking the
+money, the message and the stress tooltip), builds a Security office and
+runs three nights with every valuable room tried every night (nothing is
+taken), checks the 3★ checklist and the basement and Parking locks, digs a
+basement, runs a car park for 2 days, hovers every room with people in it
+and the elevator shaft, and tries the controls: Space, 1 and 3, WASD and
+the arrows, a right-drag, the wheel, Esc and a right-click to put a tool
+down, losing focus mid-drag, and the Save file panel and New game question
+(keys off behind them, Space and Esc). It saves and reloads (checking the
+whole save comes back the same), exports a save file and loads it back in
+(turning away one that isn't a save, or is from a newer version),
+demolishes the car park with drivers about, checks a second tab's save
+stops the first from saving over it, that a save that won't load is kept
+for Save file's Old save, that New game starts over, and, on a phone-sized
+touch screen, that the lobby starts in view, a tap builds and a drag
+scrolls. It fails on any page error, `console.error` or frozen game loop.
+To run it yourself:
 
 ```
 npm install
@@ -60,7 +82,7 @@ npx playwright install chromium   # first time only
 npm run smoke
 ```
 
-(The game itself still needs no install; `package.json` is only for this test.)
+(The game itself still needs no install; `package.json` is only for the tests.)
 
 ## Status
 

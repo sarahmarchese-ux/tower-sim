@@ -47,8 +47,16 @@ function check(condition, message) {
   if (!condition) fail(message);
 }
 
+// A step that times out may still be running in the page (page.evaluate
+// can't be cancelled), so the steps after it are skipped rather than run
+// beside it and fail for its reasons.
+let timedOut = false;
 async function step(name, fn) {
   console.log(`- ${name}`);
+  if (timedOut) {
+    fail(`${name}: skipped, after a step timed out`);
+    return;
+  }
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error(`timed out after ${STEP_TIMEOUT_MS / 1000}s`)), STEP_TIMEOUT_MS);
@@ -56,6 +64,7 @@ async function step(name, fn) {
   try {
     await Promise.race([fn(), timeout]);
   } catch (e) {
+    if (/^timed out/.test(e.message)) timedOut = true;
     fail(`${name}: ${e.message}`);
   } finally {
     clearTimeout(timer);
@@ -67,7 +76,9 @@ const url = `http://127.0.0.1:${server.address().port}/`;
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH || undefined,
 });
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+// A context of its own, so a second tab can share the page's storage.
+const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const page = await context.newPage();
 
 page.on("pageerror", (e) => fail(`page error: ${e.message}`));
 page.on("console", (m) => {
@@ -84,6 +95,12 @@ await page.addInitScript(() => {
 });
 
 const frames = () => page.evaluate(() => window.__frames);
+// Let the frames already in flight finish (rather than sleeping for a
+// fixed time and hoping).
+async function settle(count = 3) {
+  const now = await frames();
+  await page.waitForFunction((n) => window.__frames >= n, now + count, { timeout: 5000 });
+}
 const state = () =>
   page.evaluate(() => ({
     money: World.money,
@@ -215,7 +232,14 @@ try {
       check(s.rooms.some((r) => r.startsWith(`${type}@`)), `no ${type} was built: ${s.rooms}`);
     }
     check(s.transit.length === 2, `expected stairs and an elevator, got ${s.transit}`);
-    check(s.money < 250000, "building should have cost money");
+    // $200,000 to start and $50,000 handed over at 2★, less 5 floors of 40
+    // tiles at $200, every room, the stairs and the elevator.
+    const spent = await page.evaluate(() =>
+      5 * 40 * FLOOR_COST_PER_TILE +
+      World.rooms.reduce((sum, r) => sum + ROOM_TYPES[r.type].cost, 0) +
+      World.transit.reduce((sum, t) => sum + transitCost(t.kind, t.floorBottom, t.floorTop), 0),
+    );
+    check(s.money === 250000 - spent, `money is ${s.money} after building, expected ${250000 - spent}`);
   });
 
   await step(`run ${SIM_DAYS} game days`, async () => {
@@ -229,6 +253,12 @@ try {
     // Count residents and guests sitting down to dinner at an open
     // restaurant, and hotel rooms cleaned after their guests checked out.
     await page.evaluate(() => {
+      window.__makersAte = 0;
+      const sat = Cafes.onMakerArrived.bind(Cafes);
+      Cafes.onMakerArrived = (person) => {
+        if (Shops.isOpen(person.lunchCafe)) window.__makersAte++;
+        return sat(person);
+      };
       window.__dinedIn = 0;
       const arrived = Restaurants.onDinerArrived.bind(Restaurants);
       Restaurants.onDinerArrived = (person) => {
@@ -270,14 +300,10 @@ try {
     check(badCleans.length === 0, `rooms marked clean without a housekeeper there for 45 minutes: ${badCleans.join("; ")}`);
     check((await page.evaluate(() => window.__dinedIn)) > 0, "no resident or hotel guest ever had dinner at the restaurant");
     check(lunches > 0, "the café never sold a lunch");
-    check(
-      await page.evaluate(() => People.list.some((p) => p.role === "maker" && p.lunchCafe)),
-      "no maker ever had lunch at the café",
-    );
+    check((await page.evaluate(() => window.__makersAte)) > 0, "no maker ever sat down to lunch at the café");
     const after = await state();
     check(sales > 0, "the shop never sold anything");
     check(nights > 0, "the hotel rooms never earned a night");
-    check(after.minutes - before.minutes >= SIM_DAYS * 24 * 60 - 1, "the clock did not advance");
     check(after.people > 0, "nobody moved in");
     check(after.rooms.some((r) => r.endsWith(":occupied")), "no room became occupied");
     check(Number.isFinite(after.money), `money is ${after.money}`);
@@ -331,18 +357,37 @@ try {
     });
     check(guarded.status === "occupied" && guarded.onDuty, `the Security office's guards aren't on duty at 2am (${guarded.status})`);
     check(guarded.robbed === 0 && guarded.lost === 0, `a protected shop was robbed ${guarded.robbed} times`);
-    // And over three more nights, nothing in the tower is broken into.
+    // And over three more nights, with the dice loaded so that every
+    // valuable room is tried every night, nothing is taken.
     await page.evaluate(() => {
+      window.__tried = 0;
       window.__robbed = 0;
       const breakIn = Security.breakIn.bind(Security);
       Security.breakIn = (room) => {
+        window.__tried++;
         const message = breakIn(room);
         if (message) window.__robbed++;
         return message;
       };
+      const update = Security.update.bind(Security);
+      Security.update = () => {
+        const random = Math.random;
+        Math.random = () => 0;
+        try {
+          update();
+        } finally {
+          Math.random = random;
+        }
+      };
+      window.__unloadDice = () => (Security.update = update);
     });
     await simulate(3 * 24 * 60);
-    check((await page.evaluate(() => window.__robbed)) === 0, "a room under guard was broken into");
+    const nights = await page.evaluate(() => {
+      window.__unloadDice();
+      return { tried: window.__tried, robbed: window.__robbed };
+    });
+    check(nights.tried >= 3, `only ${nights.tried} break-ins were tried over three loaded nights`);
+    check(nights.robbed === 0, `a room under guard was broken into (${nights.robbed} of ${nights.tried} tries)`);
   });
 
   await step("3★, basements and parking", async () => {
@@ -437,7 +482,7 @@ try {
     await page.mouse.move(5, 5);
   });
 
-  await step("hover every tenanted room", async () => {
+  await step("hover every room with people in it, and the elevator shaft", async () => {
     const rooms = await page.evaluate(() =>
       World.rooms.filter((r) => ROOM_TYPES[r.type].tenants > 0).map((r) => ({ type: r.type, floor: r.floor, tile: r.tileStart })),
     );
@@ -453,15 +498,105 @@ try {
       const text = await page.textContent("#tooltip");
       check(text.trim().length > 0 && !/NaN|undefined/.test(text), `bad tooltip for ${room.type}: "${text}"`);
     }
+    // The shaft runs B1–5F at tile 0, drawn over the lobby.
+    const p = await spot(1, 2);
+    await page.mouse.move(p.x, p.y);
+    await page.waitForFunction(() => document.getElementById("tooltip").classList.contains("shown"), null, { timeout: 2000 });
+    const shaft = await page.textContent("#tooltip");
+    check(/^Elevator B1–5F · car at (B1|\dF)( going (up|down))?, \d of 8 aboard/.test(shaft), `the shaft's tooltip reads "${shaft}"`);
+    check(/(Waiting now: \d+|Nobody waiting now)/.test(shaft) && /Last hour: /.test(shaft), `the shaft's tooltip has no queue or last hour: "${shaft}"`);
+    check(!/NaN|undefined/.test(shaft), `bad shaft tooltip: "${shaft}"`);
     await page.mouse.move(5, 5);
+  });
+
+  await step("keys, mouse and dialogs", async () => {
+    // Space pauses and resumes; 1 and 3 set the speed.
+    await page.mouse.click(640, 300); // focus the page, not a button
+    await page.keyboard.press("Escape");
+    await page.click('.speed-btn[data-speed="1"]');
+    await page.mouse.click(640, 300);
+    const speeds = [];
+    for (const key of ["Space", "Space", "3", "1"]) {
+      await page.keyboard.press(key);
+      speeds.push(await page.evaluate(() => Clock.speed));
+    }
+    check(speeds.join(",") === "0,1,3,1", `Space, Space, 3, 1 set the speed to ${speeds}`);
+
+    // WASD and the arrows scroll; so do a right-drag and the wheel.
+    const camera = () => page.evaluate(() => ({ x: Camera.x, y: Camera.y }));
+    const home = await camera(); // put back at the end, for the steps after
+    let c = home;
+    await page.keyboard.down("d");
+    await page.waitForFunction((x) => Camera.x > x + 20, c.x, { timeout: 2000 }).catch(() => fail("holding D didn't scroll right"));
+    await page.keyboard.up("d");
+    c = await camera();
+    await page.keyboard.down("ArrowUp");
+    await page.waitForFunction((y) => Camera.y < y - 20, c.y, { timeout: 2000 }).catch(() => fail("holding the up arrow didn't scroll up"));
+    await page.keyboard.up("ArrowUp");
+    c = await camera();
+    await page.mouse.move(640, 300);
+    await page.mouse.down({ button: "right" });
+    await page.mouse.move(540, 350, { steps: 4 });
+    await page.mouse.up({ button: "right" });
+    let after = await camera();
+    check(after.x === c.x + 100 && after.y === c.y - 50, `a right-drag of (-100, +50) moved the camera by (${after.x - c.x}, ${after.y - c.y})`);
+    c = after;
+    await page.mouse.wheel(0, 120);
+    await page.waitForFunction((y) => Camera.y > y, c.y, { timeout: 2000 }).catch(() => fail("the mouse wheel didn't scroll"));
+
+    // Esc, or a right-click, puts the tool down; losing focus drops a drag.
+    await pickTool("floor");
+    await page.mouse.click(640, 300, { button: "right" });
+    check((await page.evaluate(() => Tool.current)) === null, "a right-click didn't put the tool down");
+    await pickTool("floor");
+    await page.mouse.move(640, 300);
+    await page.mouse.down();
+    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    check(!(await page.evaluate(() => Pointer.dragging)), "losing focus mid-drag left the drag stuck");
+    await page.mouse.up();
+    await page.keyboard.press("Escape");
+    check((await page.evaluate(() => Tool.current)) === null, "Esc didn't put the tool down");
+
+    // Behind the Save file panel the game's keys do nothing. Space presses
+    // the panel's own focused button (Close), and so does Esc; either way
+    // the game goes back to the speed it had.
+    c = await camera();
+    await page.click("#savefile-btn");
+    await page.keyboard.press("3");
+    await page.keyboard.down("a");
+    await settle(5);
+    await page.keyboard.up("a");
+    check((await page.evaluate(() => Clock.speed)) === 0, "a key behind the Save file panel changed the speed");
+    check((await camera()).x === c.x, "A behind the Save file panel scrolled the tower");
+    await page.keyboard.press("Space");
+    check(!(await page.isVisible("#savefile")), "Space didn't press the panel's Close button");
+    check((await page.evaluate(() => Clock.speed)) === 1, "closing the panel didn't go back to the speed before");
+    await page.click("#savefile-btn");
+    await page.keyboard.press("Escape");
+    check(!(await page.isVisible("#savefile")), "Esc didn't close the Save file panel");
+    check((await page.evaluate(() => Clock.speed)) === 1, "closing the panel with Esc didn't go back to the speed before");
+
+    // New game asks first; Esc means "Keep playing".
+    await page.click("#new-btn");
+    check(await page.isVisible("#newgame"), "New game didn't ask first");
+    await page.keyboard.press("Escape");
+    check(!(await page.isVisible("#newgame")), "Esc didn't close New game's question");
+    check((await page.evaluate(() => World.rooms.length)) > 0, "Esc on New game's question started over");
+    await page.evaluate((home) => Object.assign(Camera, home), home);
   });
 
   await step("save and reload", async () => {
     // Reloading saves and restores the game paused, so it may already be.
     if ((await page.evaluate(() => Clock.speed)) !== 0) await page.click("#pause-btn");
     check((await page.evaluate(() => Clock.speed)) === 0, "Pause did not pause the game");
-    await page.waitForTimeout(300); // let any frame already in flight finish
+    await settle();
     const before = await state();
+    const wholeSave = () => page.evaluate(() => {
+      const data = SaveGame.snapshot();
+      delete data.savedAt;
+      return JSON.stringify(data);
+    });
+    const saved = await wholeSave();
     await page.click("#save-btn");
     check(await page.evaluate(() => SaveGame.hasSave()), "pressing Save stored nothing");
     await page.reload();
@@ -471,6 +606,9 @@ try {
       check(JSON.stringify(after[key]) === JSON.stringify(before[key]), `after reloading, ${key} is ${JSON.stringify(after[key])}, saved ${JSON.stringify(before[key])}`);
     }
     check((await page.evaluate(() => Clock.speed)) === 0, "a restored game should start paused");
+    // Everything else too: stress, rent owed, tills, cars, queues, where
+    // everyone stands.
+    check((await wholeSave()) === saved, "the reloaded game doesn't save the same as the one saved");
   });
 
   await step("Save file: export, then load it back in", async () => {
@@ -508,10 +646,19 @@ try {
     await page.evaluate(() => (window.__notReloaded = true));
     await page.fill("#savefile-text", "not a save");
     await page.click("#savefile-load");
-    await page.waitForTimeout(300);
+    await settle();
     check(await page.evaluate(() => window.__notReloaded === true), "loading a bad save reloaded the page");
     check(await page.evaluate(() => document.getElementById("savefile-note").classList.contains("error")), "a bad save gave no error");
     check((await state()).money === before.money, "loading a bad save changed the game");
+
+    // So is a save from a newer version of the game.
+    const newer = JSON.parse(exported);
+    newer.version = 99;
+    await page.fill("#savefile-text", JSON.stringify(newer));
+    await page.click("#savefile-load");
+    await settle();
+    check(await page.evaluate(() => window.__notReloaded === true), "loading a save from a newer version reloaded the page");
+    check(/isn't a save this version/.test(await page.textContent("#savefile-note")), "a newer version's save gave no error");
 
     // A good one (marked by a different bank balance) replaces the tower.
     const marked = JSON.parse(exported);
@@ -558,9 +705,9 @@ try {
     await page.click('.speed-btn[data-speed="3"]'); // also resumes a paused game
     const f0 = await frames();
     const t0 = (await state()).minutes;
-    await page.waitForTimeout(1500);
-    check((await frames()) > f0 + 10, "the game loop stopped");
-    check((await state()).minutes > t0, "the clock stopped at 3x speed");
+    await settle(10).catch(() => fail("the game loop stopped"));
+    await page.waitForFunction((t) => Clock.totalMinutes > t, t0, { timeout: 5000 }).catch(() => fail("the clock stopped at 3x speed"));
+    check((await frames()) > f0, "the game loop stopped");
   });
 
   await step("an old save's one-size hotel rooms are refunded on load", async () => {
@@ -591,6 +738,91 @@ try {
     check(after.strays === 0, "someone was left behind in a removed hotel room");
     check(/refunded/.test(after.banner), `the welcome-back note doesn't mention the refund: "${after.banner}"`);
     await simulate(24 * 60);
+  });
+
+  await step("two tabs: the one whose save is replaced stops saving", async () => {
+    const other = await context.newPage();
+    other.on("pageerror", (e) => fail(`page error in the second tab: ${e.message}`));
+    await other.goto(url);
+    await other.waitForSelector("#toolbar");
+    await other.evaluate(() => (World.money = 424242));
+    await other.click("#save-btn");
+    await page.waitForFunction(() => SaveGame.otherTab, null, { timeout: 5000 }).catch(() => {});
+    check(await page.evaluate(() => SaveGame.otherTab), "the first tab didn't notice the second tab's save");
+    check(/saved from another tab/.test(await page.textContent("#banner")), "the first tab didn't say its save was replaced");
+    await page.click("#save-btn");
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem(SAVE_KEY)).world.money);
+    check(stored === 424242, `the first tab saved over the second tab's save (money ${stored})`);
+    await other.close();
+    await page.reload(); // carries on from the second tab's save
+    await page.waitForSelector("#toolbar");
+    check(!(await page.evaluate(() => SaveGame.otherTab)) && (await page.evaluate(() => World.money)) === 424242, "reloading didn't pick up the second tab's save");
+  });
+
+  await step("a save that won't load is kept, and Save file shows it", async () => {
+    await page.evaluate(() => {
+      SaveGame.discarded = true; // so reloading doesn't save over it
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 99, from: "a newer game" }));
+    });
+    await page.reload();
+    await page.waitForSelector("#toolbar");
+    check((await page.evaluate(() => World.rooms.length)) === 0, "a save from a newer version loaded");
+    check(/couldn't be loaded/.test(await page.textContent("#banner")), "no word that the save couldn't be loaded");
+    await page.click("#savefile-btn");
+    check(await page.isVisible("#savefile-old"), "no Old save button");
+    await page.click("#savefile-old");
+    check(JSON.parse(await page.inputValue("#savefile-text")).from === "a newer game", "Old save doesn't show the save that wouldn't load");
+    await page.keyboard.press("Escape");
+  });
+
+  await step("New game starts over", async () => {
+    await page.evaluate(() => {
+      World.money = 1;
+      SaveGame.save();
+    });
+    await page.click("#new-btn");
+    await Promise.all([page.waitForEvent("load"), page.click("#newgame-yes")]);
+    await page.waitForSelector("#toolbar");
+    const fresh = await page.evaluate(() => ({ rooms: World.rooms.length, money: World.money }));
+    check(fresh.rooms === 0 && fresh.money === 200000, `New game left ${fresh.rooms} rooms and $${fresh.money}`);
+  });
+
+  await step("on a phone: the lobby in view, tap to build, drag to scroll", async () => {
+    const phone = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true });
+    const tab = await phone.newPage();
+    tab.on("pageerror", (e) => fail(`page error on the phone: ${e.message}`));
+    await tab.goto(url);
+    await tab.waitForSelector("#toolbar");
+    const at = (tile, floor) =>
+      tab.evaluate(([t, f]) => ({ x: Camera.worldToScreenX(Grid.tileToX(t) + 12), y: Camera.worldToScreenY(Grid.floorToY(f) - 16) }), [tile, floor]);
+    const ground = await at(0, 0);
+    const under = await tab.evaluate(({ x, y }) => document.elementFromPoint(x, y).tagName, ground);
+    check(under === "CANVAS", `on a phone the ground floor starts under the ${under}, not on the canvas`);
+    const cdp = await phone.newCDPSession(tab);
+    const touch = (type, points) =>
+      cdp.send("Input.dispatchTouchEvent", { type, touchPoints: points.map((p, id) => ({ x: p.x, y: p.y, id })) });
+    // A finger drag with Floor picked builds along it...
+    await tab.tap('#toolbar button[data-tool="floor"]');
+    const a = await at(-5, 0);
+    const b = await at(20, 0);
+    await touch("touchStart", [a]);
+    for (let i = 1; i <= 5; i++) await touch("touchMove", [{ x: a.x + ((b.x - a.x) * i) / 5, y: a.y }]);
+    await touch("touchEnd", []);
+    check((await tab.evaluate(() => World.floors.get(0)?.size || 0)) === 26, "a finger drag with Floor didn't build 26 tiles");
+    // ...a tap places a room...
+    await tab.tap('#toolbar button[data-tool="lobby"]');
+    const l = await at(-5, 0);
+    await tab.touchscreen.tap(l.x, l.y);
+    check(await tab.evaluate(() => World.rooms.some((r) => r.type === "lobby")), "a tap didn't place the lobby");
+    // ...and with nothing picked, a drag scrolls and builds nothing.
+    await tab.tap('#toolbar button[data-tool="lobby"]');
+    const before = await tab.evaluate(() => ({ x: Camera.x, rooms: World.rooms.length }));
+    await touch("touchStart", [{ x: 200, y: 300 }]);
+    for (let i = 1; i <= 5; i++) await touch("touchMove", [{ x: 200 + 20 * i, y: 300 }]);
+    await touch("touchEnd", []);
+    const after = await tab.evaluate(() => ({ x: Camera.x, rooms: World.rooms.length }));
+    check(after.x === before.x - 100 && after.rooms === before.rooms, `a finger drag moved the camera by ${after.x - before.x} and built ${after.rooms - before.rooms}`);
+    await phone.close();
   });
 } finally {
   await browser.close();

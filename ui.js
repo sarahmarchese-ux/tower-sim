@@ -368,7 +368,10 @@ const UI = {
     // confirm() is silently refused where the game is embedded in a
     // sandboxed frame, which made the button do nothing.
     const ask = document.getElementById("newgame");
-    document.getElementById("new-btn").addEventListener("click", () => ask.classList.add("shown"));
+    document.getElementById("new-btn").addEventListener("click", () => {
+      ask.classList.add("shown");
+      document.getElementById("newgame-no").focus(); // Space or Enter keeps playing
+    });
     document.getElementById("newgame-no").addEventListener("click", () => ask.classList.remove("shown"));
     document.getElementById("newgame-yes").addEventListener("click", () => this.startOver());
   },
@@ -397,6 +400,9 @@ const UI = {
       say("This is your tower as it is right now. Copy it or download it to keep it or send it. To play a save from somewhere else, paste it in here (or open its file) and press Load.");
       document.getElementById("savefile-old").hidden = SaveGame.unloadableText() === null;
       panel.classList.add("shown");
+      // Keys go to the panel, not the Save file button left behind it
+      // (Space would press that again).
+      document.getElementById("savefile-close").focus();
     });
 
     // A save that couldn't be loaded when the game opened (see main.js),

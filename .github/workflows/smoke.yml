@@ -1,11 +1,11 @@
-name: Smoke test
+name: Tests
 
 on:
   pull_request:
   push:
     branches: [main]
 
-# The test only reads the code.
+# The tests only read the code.
 permissions:
   contents: read
 
@@ -20,5 +20,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run sim
       - run: npx playwright install --with-deps chromium
       - run: npm run smoke
