@@ -10,7 +10,9 @@
 // There is one save slot. It's written automatically at the start of every
 // game day and whenever you press Save, and read once when the page opens.
 // The Save file panel (ui.js) copies it out as text or a file, to keep or
-// to send, and loads one back in, replacing the tower being played.
+// to send, and loads one back in, replacing the tower being played. (So a
+// tower can still be loaded, and copied out again, where storage is
+// blocked; see importText.)
 // A save carries a version number; a save from a different version of the
 // game is ignored rather than risking a half-restored tower. A save is also
 // checked from end to end before it's used (every room and shaft a known
@@ -156,20 +158,25 @@ const SaveGame = {
 
   // A save pasted or opened in the Save file panel. It's checked first;
   // if it's good, it becomes the stored save and the page reloads into it,
-  // just as if you'd closed the tab and come back. Returns null on success
-  // (the page is reloading), or why it couldn't be used, with nothing
-  // changed.
+  // just as if you'd closed the tab and come back. Where the browser won't
+  // let the game store a save (private browsing, or an embedded page with
+  // storage blocked), there'd be nothing to reload into, so it's swapped
+  // in on this page instead. Returns { ok, reason } like World's actions,
+  // with `inPlace` when it was swapped in here (the caller tidies up the
+  // page); on a reason, nothing was changed.
   importText(text) {
     const trimmed = text.trim();
-    if (!this.parse(trimmed, true)) {
-      return "That isn't a save this version of the game can load. Nothing was changed.";
+    const swapIn = this.parse(trimmed, true);
+    if (!swapIn) {
+      return { ok: false, reason: "That isn't a save this version of the game can load. Nothing was changed." };
     }
     if (!this._write(trimmed)) {
-      return "Your browser won't let the game store a save here (private browsing?), so it can't load one. Nothing was changed.";
+      swapIn();
+      return { ok: true, inPlace: true };
     }
     this.discarded = true; // so leaving this page doesn't save the old tower over it
     location.reload();
-    return null;
+    return { ok: true };
   },
 
   // Read a save (the one in storage, unless given another's text) and
