@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+# The test only reads the code.
+permissions:
+  contents: read
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -15,6 +19,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run smoke

@@ -46,7 +46,7 @@ checklist and that basements and Parking stay locked until 3★ (and 3★
 itself until both service rooms are staffed), digs a basement, checks
 studios and hotel rooms stay above ground and Parking below, builds a car
 park and runs 2 days (checking drivers come, buy something and never
-overfill it), hovers every room,
+overfill it), hovers every room with people in it,
 saves and reloads, exports a save file and loads it back in (turning away
 one that isn't a save), demolishes the car park with drivers about
 (checking none are left stranded) and other things, and keeps running. It fails on any page error,
@@ -146,7 +146,8 @@ matter, because their staff have to get to the rooms they look after.
   stock and gains 25 stress; hotel guests are robbed, and the stay gets
   the worst review. A message says what happened ("Break-in at the Craft
   Shop on 4F: $2,100 of stock taken"). Protected rooms are never robbed,
-  and an unprotected one's tooltip warns "No security within 5 floors".
+  and an unprotected one's tooltip warns "No security within 5 floors"
+  (or that the office nearby has no guards, or that they can't get to it).
   In a test with four shops, a jewellery studio and a Single, there were
   10–11 break-ins in four weeks; with an office in reach, none.
 - **Stress names its cause.** Everyone keeps a running total of the
@@ -186,8 +187,11 @@ matter, because their staff have to get to the rooms they look after.
   **Load** to play it instead: it's checked first, and a bad one changes
   nothing. Where the browser won't let the game keep a save (private
   browsing, or storage blocked), Load still works, and the tower lasts
-  while the page is open. The game pauses while the panel is open, and its keys do
-  nothing behind it. Esc closes the panel (or New game's question). In
+  while the page is open. A saved tower that can't be loaded when the
+  game opens (from a newer version, say) is kept aside, and **Old save**
+  in this panel copies it out. With the game open in two tabs, a tab
+  whose save the other one has replaced stops saving and says so. The
+  game pauses while the panel is open, and its keys do nothing behind it. Esc closes the panel (or New game's question). In
   the claude.ai artifact, Download asks before saving the file.
 - Both rooms together cost $1,300 a day, about $9,100 a week, so a tower
   needs steady income before it builds them.
@@ -213,8 +217,8 @@ rush to the elevators.
 - **Residents and hotel guests** eat there some evenings, at 7–9pm:
   residents about one night in four (one in two on Fridays and
   Saturdays), guests one in two. They go to the nearest restaurant
-  that's open, has a seat, and isn't too far (about three flights of
-  stairs, or an elevator ride); otherwise they eat at home. Nobody leaves
+  that's open, has a seat, and isn't too far (about four flights of
+  stairs with a short walk, or an elevator ride); otherwise they eat at home. Nobody leaves
   the building for dinner, so a tower without a restaurant has quiet
   evenings.
 - **It's noisy at dinner.** While it's serving, a restaurant gives off
@@ -295,7 +299,8 @@ loads.
 - **Bookings.** Each afternoon an empty room may get a booking, and the
   guests turn up at the lobby between 2pm and 9pm. Buyers come mostly in
   the week and tourists mostly on Fridays and Saturdays, so a tower needs
-  both sizes to stay full all week. They stay 1–3 nights and check out
+  both sizes to stay full all week. They stay 1–3 nights (1–2 if they
+  arrive on a Friday or Saturday) and check out
   between 8 and 11 in the morning. Guests wheel a suitcase in and out.
   They're visitors, so they don't count towards the population. Nobody
   books a room they can't reach.
@@ -438,7 +443,8 @@ Pick a tool from the bottom toolbar:
   it isn't (missing floor, overlapping another room, or — for the lobby —
   not the ground floor). The reason for a red outline shows in the top bar.
 - **Demolish** — click a room or floor tile to remove it, for half its cost
-  back.
+  back (from milestone 5, nothing for a condo that's been sold: it belongs
+  to its owners).
 
 Left-click (or drag) builds. Right-click drag, or arrow keys / WASD, still
 scrolls the camera. Nothing walks around the building yet — that starts at

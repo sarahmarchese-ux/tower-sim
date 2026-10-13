@@ -8,8 +8,8 @@
 // takes a pair of tourists, who mostly come on Fridays and Saturdays; on a
 // night no tourists book it, it takes a lone buyer if every Single in the
 // tower is taken, at the Single rate. So a tower needs both sizes to stay
-// full all week. A party stays 1 to 3 nights, and checks
-// out between 8 and 11 in the morning. While they're staying, the room
+// full all week. A party stays 1 to 3 nights (1 or 2 if it arrives on a
+// Friday or Saturday), and checks out between 8 and 11 in the morning. While they're staying, the room
 // earns its nightly rate at every midnight tally (economy.js).
 //
 // Guests spend their days in the room, apart from the odd outing (tourists

@@ -7,7 +7,7 @@
 // `lunchMinutes`). When it comes round, they decide where to eat, once a
 // day: the nearest café that's open and has a free seat, unless it's a lot
 // further than going out (more than LUNCH_DETOUR_COST further, in the route
-// planner's "tiles of walking"; a flight of stairs is 25). With no such
+// planner's "tiles of walking"; a flight of stairs is 12). With no such
 // café they go out of the building and come back, as in SimTower, which
 // brings a lunchtime rush to the lobby and elevators. A café saves them the
 // trip down, and they pay for their meal. But a café high up the tower
