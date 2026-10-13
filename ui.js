@@ -4,7 +4,7 @@
 // reason to reinvent them in canvas drawing code.
 
 const UI = {
-  defaultHint: "Pick something to build below (Esc or right-click puts it down). Right-drag or WASD/arrows to scroll. Hover a room for details.",
+  defaultHint: "Pick something to build below (Esc or right-click puts it down). Right-drag, the wheel, WASD/arrows or a finger scrolls. Hover (or tap) a room for details.",
 
   // An error (e.g. "Build the floor here first") shows for a few seconds,
   // then the hint goes back to the default or to the room being hovered.
@@ -451,8 +451,19 @@ const UI = {
     });
 
     document.getElementById("savefile-load").addEventListener("click", () => {
-      const problem = SaveGame.importText(text.value);
-      if (problem) say(problem, true);
+      const result = SaveGame.importText(text.value);
+      if (!result.ok) {
+        say(result.reason, true);
+        return;
+      }
+      if (!result.inPlace) return; // the page is reloading into it
+      // Loaded on this page, as a fresh page would: paused, nothing in hand.
+      panel.classList.remove("shown");
+      this.setSpeed(0);
+      this.selectTool(null);
+      Pointer.dragging = false;
+      const note = SaveGame.refundNote ? ` ${SaveGame.refundNote}` : "";
+      this.announce(`Loaded.${note} Your browser won't let the game keep a save here, so this tower lasts only while the page is open: use Save file to keep a copy. Press Play (or space) to carry on.`);
     });
   },
 
