@@ -39,18 +39,29 @@ function advanceSimulation(minutes) {
 }
 
 let lastFrameTime = performance.now();
+let frameFailed = false;
 
+// The next frame is asked for first, so a problem in this one (a bug, or a
+// save that slipped past save.js's checks) can't stop every frame after
+// it. The first one pauses the game and says so.
 function frame(now) {
+  requestAnimationFrame(frame);
   const deltaMs = Math.min(now - lastFrameTime, MAX_FRAME_MS);
   lastFrameTime = now;
 
-  Camera.pollKeys();
-  updatePointer(canvas); // the camera may have moved under a still mouse
-  advanceSimulation(Clock.gameMinutesFor(deltaMs));
-  SaveGame.autosave();
-  draw();
-
-  requestAnimationFrame(frame);
+  try {
+    Camera.pollKeys();
+    updatePointer(canvas); // the camera may have moved under a still mouse
+    advanceSimulation(Clock.gameMinutesFor(deltaMs));
+    SaveGame.autosave();
+    draw();
+  } catch (e) {
+    if (frameFailed) return;
+    frameFailed = true;
+    console.error("Something went wrong in the game:", e);
+    UI.setSpeed(0);
+    UI.announce("Something went wrong, so the game has paused. If it keeps happening, Save file → Copy keeps a copy of your tower (to send to Claude, say), and New game starts over.");
+  }
 }
 
 // Pick up where the last session left off. A restored game starts paused,
