@@ -106,8 +106,12 @@ const Security = {
     if (!offices.length) {
       return `No security within ${reach} floors: break-ins happen at night. Build a Security office no more than ${reach} floors above or below.`;
     }
-    if (!offices.some((office) => office.status === "occupied")) {
+    const staffed = offices.filter((office) => office.status === "occupied");
+    if (!staffed.length) {
       return "The Security office nearby has no guards yet, so nothing stops a break-in.";
+    }
+    if (!staffed.some((office) => Routing.isReachable(office))) {
+      return "The guards can't get to the Security office nearby from a Lobby, so nothing stops a break-in. Connect it with floor, stairs or an elevator.";
     }
     return null;
   },
