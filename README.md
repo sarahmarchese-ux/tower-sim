@@ -172,8 +172,9 @@ matter, because their staff have to get to the rooms they look after.
   as a `.json` file, to keep or to send (say, to Claude, to look at a
   bug in your actual tower). Paste one in, or open its file, and press
   **Load** to play it instead: it's checked first, and a bad one changes
-  nothing. The game pauses while the panel is open. In the claude.ai
-  artifact, Download asks before saving the file.
+  nothing. The game pauses while the panel is open, and its keys do
+  nothing behind it. Esc closes the panel (or New game's question). In
+  the claude.ai artifact, Download asks before saving the file.
 - Both rooms together cost $1,300 a day, about $9,100 a week, so a tower
   needs steady income before it builds them.
 - Hotel rooms in an older save load clean.

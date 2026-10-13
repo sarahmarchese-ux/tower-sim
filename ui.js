@@ -375,9 +375,10 @@ const UI = {
 
   // The Save file panel: copy the tower out as text or a file (to keep, or
   // to send to someone who can load it and look), or load one in. The
-  // game pauses while it's open. In the claude.ai artifact a file is
-  // offered through the page's downloads capability, which asks before
-  // saving; opened straight from disk, an ordinary browser download.
+  // game pauses while it's open (and the game's keys are off; Esc closes
+  // it). In the claude.ai artifact a file is offered through the page's
+  // downloads capability, which asks before saving; opened straight from
+  // disk, an ordinary browser download.
   attachSaveFile() {
     const panel = document.getElementById("savefile");
     const text = document.getElementById("savefile-text");
@@ -467,7 +468,17 @@ const UI = {
     });
 
     window.addEventListener("keydown", (e) => {
-      if (isTyping(e) || Economy.bankrupt) return;
+      if (Economy.bankrupt) return;
+      if (dialogOpen()) {
+        // Keys belong to the dialog (Space presses its focused button, as
+        // usual), and Esc closes it the way its own close button would.
+        if (e.key === "Escape") {
+          const close = document.querySelector("#savefile.shown #savefile-close, #newgame.shown #newgame-no");
+          if (close) close.click();
+        }
+        return;
+      }
+      if (isTyping(e)) return;
       if (e.key === " ") {
         e.preventDefault();
         if (e.repeat) return; // holding Space would flick pause on and off

@@ -66,6 +66,12 @@ function isTyping(e) {
   return e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
 }
 
+// Is a dialog (New game, Save file, game over) up? While one is, the
+// game's keys are off: nothing should scroll, pause or speed up behind it.
+function dialogOpen() {
+  return document.querySelector("#newgame.shown, #savefile.shown, #gameover.shown") !== null;
+}
+
 function attachCameraControls(canvas) {
   let dragging = false;
   let lastX = 0;
@@ -98,7 +104,7 @@ function attachCameraControls(canvas) {
   // lets go of everything.
   window.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return; // a browser shortcut, not a scroll
-    if (isTyping(e)) return;
+    if (isTyping(e) || dialogOpen()) return;
     heldKeys.add(e.key.toLowerCase());
   });
   window.addEventListener("keyup", (e) => heldKeys.delete(e.key.toLowerCase()));
