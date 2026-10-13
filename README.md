@@ -158,7 +158,8 @@ matter, because their staff have to get to the rooms they look after.
   wait out several full cars. A full car only stops to let people off.
   Someone who has queued for 10 minutes looks again from where they
   stand, and switches to another shaft or the stairs if that's now
-  quicker (keeping their place if not). In a playtester's 242-person
+  clearly quicker (keeping their place if not: those who queued behind
+  them don't count as being in their way). In a playtester's 242-person
   tower this took the worst wait of a weekday from 97 minutes to 36, and
   red rooms from about 20 to 13. Noise from the floor directly above or
   below counts as next door, and the warnings now say so.

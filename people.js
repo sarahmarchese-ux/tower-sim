@@ -69,6 +69,7 @@
 const WALK_TILES_PER_MINUTE = 3;
 const STAIRS_MINUTES_PER_FLOOR = 2;
 const REPLAN_MINUTES = 10; // queueing this long, people look again for a quicker way
+const SWITCH_MARGIN = 30; // ...and switch only if it saves this much (in routing.js's tiles: 5 queueing minutes)
 const RETRY_MINUTES = 30; // how long to wait before trying again if there's no route
 const MOVER_GAP_MINUTES = [3, 8]; // movers arrive a few minutes apart
 const UNPACK_MINUTES = [20, 40]; // a new arrival stays put this long
@@ -593,25 +594,39 @@ const People = {
   // the new route starts from scratch. `removed` is the transit just
   // demolished, if that's why, since it's no longer in World.transit.
   // Someone who has queued for REPLAN_MINUTES looks again: if, from where
-  // they stand, another shaft or the stairs now looks quicker than waiting
-  // on, they go that way (the trip's clock keeps running). If not, they
-  // keep their place and look again later.
+  // they stand, another shaft or the stairs now looks clearly quicker
+  // (by SWITCH_MARGIN) than waiting on, they go that way (the trip's clock
+  // keeps running). If not, they keep their place and look again later.
   reconsiderQueue(person) {
     person.queuedSince = Clock.totalMinutes;
     const leg = person.route.legs[person.legIndex];
     const car = Elevators.cars.get(leg.transitId);
     const spot = car ? car.waiting.findIndex((w) => w.person === person) : -1;
     if (spot < 0) return;
-    const here = { floor: Math.round(person.floor), x: Routing.stopX(car.transit, leg.fromFloor) };
     const goals = this.pointsFor(person, person.target);
-    // Planned as if they'd stepped out of the queue, so they don't count
-    // themselves as being in their own way.
-    const [mine] = car.waiting.splice(spot, 1);
-    const route = goals.length ? Routing.plan([here], goals) : null;
-    car.waiting.splice(spot, 0, mine);
+    if (goals.length === 0) return;
+    const here = { floor: leg.fromFloor, x: Routing.stopX(car.transit, leg.fromFloor) };
+    const direction = Math.sign(leg.toFloor - leg.fromFloor);
+    // Planned from their real place in the queue: they step out, and so
+    // does everyone who queued here after them going their way, since
+    // those people board after them and aren't in their way. (Left in,
+    // staying would be costed as if they'd just joined at the back.)
+    const kept = car.waiting;
+    car.waiting = kept.filter((w, i) => i < spot || w.floor !== leg.fromFloor || w.direction !== direction);
+    const route = Routing.plan([here], goals);
     const first = route && route.legs.find((l) => l.type !== "walk");
-    if (!route || (first && first.transitId === leg.transitId)) return;
-    this.reroute(person);
+    let switchTo = route && !(first && first.transitId === leg.transitId);
+    if (switchTo) {
+      // Another way looks quicker: is it quicker than waiting on by enough
+      // to be worth giving up their place?
+      const exit = { floor: leg.toFloor, x: Routing.stopX(car.transit, leg.toFloor) };
+      const rest = Routing.plan([exit], goals);
+      const stay = rest ? Routing.boardCost(car.transit, leg.fromFloor, direction) +
+        ELEVATOR_COST_PER_FLOOR * Math.abs(leg.toFloor - leg.fromFloor) + rest.cost : Infinity;
+      switchTo = route.cost + SWITCH_MARGIN < stay;
+    }
+    car.waiting = kept;
+    if (switchTo) this.reroute(person);
   },
 
   reroute(person, removed) {
