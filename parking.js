@@ -1,8 +1,12 @@
 // Parking (milestone 13): a second way in, below ground.
 //
-// A car park goes in a basement (rooms.js: `basementOnly`) and has
-// `spaces` for cars. It has no staff, charges no fee and costs nothing to
-// run: it pays off only through the drivers it brings.
+// A car park goes in a basement (rooms.js: `basementOnly`) and has spaces
+// for cars. It has no staff, charges no fee and costs nothing to run: it
+// pays off only through the drivers it brings. From milestone 14b it's
+// dragged along the floor in bays of 4 tiles and 5 spaces, at $25,000 a
+// bay ($5,000 a space), so it can be sized to the drivers it gets; one
+// from an older save stays as it was, 16 tiles and 20 spaces, and refunds
+// half the $20,000 it cost (rooms.js: parkingSpaces, roomCost).
 //
 // Drivers are visitors like shoppers, the lunch crowd and diners (shops.js
 // sends them), and come on top of them: every shop, café, restaurant and
@@ -34,8 +38,12 @@ const Parking = {
 
   // Where space `space` is, along the car park.
   spaceX(carPark, space) {
-    const type = ROOM_TYPES.parking;
-    return carPark.tileStart + ((space + 0.5) * type.width) / type.spaces;
+    return carPark.tileStart + ((space + 0.5) * roomWidth(carPark)) / parkingSpaces(carPark);
+  },
+
+  // The middle of a car park, where the trip from it is costed.
+  middle(carPark) {
+    return { floor: carPark.floor, x: carPark.tileStart + roomWidth(carPark) / 2 };
   },
 
   // A driver's car, where they start and finish their visit.
@@ -46,14 +54,14 @@ const Parking = {
   // A driver for this storefront: the car park with a free space that's
   // the easiest trip from, and the space they'll take there; null if none.
   pickFor(room) {
-    const goal = [{ floor: room.floor, x: room.tileStart + ROOM_TYPES[room.type].width / 2 }];
+    const goal = [{ floor: room.floor, x: room.tileStart + roomWidth(room) / 2 }];
     let best = null;
     let bestCost = Infinity;
     for (const carPark of World.rooms) {
       if (carPark.type !== "parking") continue;
       const taken = new Set(this.drivers(carPark).map((p) => p.space));
-      if (taken.size >= ROOM_TYPES.parking.spaces) continue;
-      const route = Routing.plan([{ floor: carPark.floor, x: carPark.tileStart + ROOM_TYPES.parking.width / 2 }], goal);
+      if (taken.size >= parkingSpaces(carPark)) continue;
+      const route = Routing.plan([this.middle(carPark)], goal);
       if (route && route.cost < bestCost) {
         let space = 0;
         while (taken.has(space)) space++;
@@ -91,8 +99,8 @@ const Parking = {
     if (!this._reaches.has(carPark.id)) {
       const goals = World.rooms
         .filter((room) => isStorefront(room))
-        .map((room) => ({ floor: room.floor, x: room.tileStart + ROOM_TYPES[room.type].width / 2 }));
-      const start = [{ floor: carPark.floor, x: carPark.tileStart + ROOM_TYPES.parking.width / 2 }];
+        .map((room) => ({ floor: room.floor, x: room.tileStart + roomWidth(room) / 2 }));
+      const start = [this.middle(carPark)];
       this._reaches.set(carPark.id, goals.length > 0 && Routing.plan(start, goals) !== null);
     }
     return this._reaches.get(carPark.id);
@@ -100,7 +108,7 @@ const Parking = {
 
   // "Parking · 12 of 20 spaces taken · 31 drivers today"
   describe(carPark) {
-    const spaces = ROOM_TYPES.parking.spaces;
+    const spaces = parkingSpaces(carPark);
     const drivers = this.driversToday(carPark);
     return `Parking · ${this.spacesTaken(carPark)} of ${spaces} spaces taken · ${drivers} driver${drivers === 1 ? "" : "s"} today`;
   },

@@ -55,6 +55,22 @@
 // (`underground: false`); Parking (parking.js) goes nowhere else
 // (`basementOnly`). A car park has `spaces` for drivers' cars, and brings
 // them in on top of the walk-in visitors.
+//
+// From milestone 14b a car park is dragged along a basement floor in bays
+// of `bayWidth` tiles, `spacesPerBay` spaces and `costPerBay` each, so it
+// can be any size. Its `width` and `cost` are what a car park was before
+// then (16 tiles, 20 spaces, $20,000), which a car park in an older save
+// still is. Rooms that can be any width (`sized`) keep their own `width`,
+// and what was paid for them (`paid`), on the room: see roomWidth and
+// roomCost below.
+//
+// Decorations (milestone 14b) are just for looks: planters, benches, murals
+// and fountains, unlocked from the start, on any floor above ground. They
+// have no tenants, make no noise and pass none (noise on a floor only
+// travels between rooms that touch, so one between two rooms keeps them
+// apart, as a gap does), and stairs and elevators can go through them, as
+// through the lobby. A Planter Strip is dragged along a floor, any width,
+// at `costPerTile`; the rest are clicked, like rooms.
 
 const STARTING_MONEY = 200000;
 const FLOOR_COST_PER_TILE = 200;
@@ -117,15 +133,50 @@ const ROOM_TYPES = {
     wagesPerDay: 800,
     reach: 5, // floors above and below it protects
   },
-  parking: { name: "Parking", plural: "Car parks", width: 16, cost: 20000, color: "#9a9a92", tenants: 0, noise: 0, unlocksAt: 3, basementOnly: true, spaces: 20 },
+  parking: {
+    name: "Parking", plural: "Car parks", width: 16, cost: 20000, color: "#9a9a92", tenants: 0, noise: 0, unlocksAt: 3, basementOnly: true,
+    sized: true, bayWidth: 4, spacesPerBay: 5, costPerBay: 25000,
+  },
+  planterStrip: { name: "Planter Strip", plural: "Planter strips", width: 1, cost: 5000, costPerTile: 5000, sized: true, color: "#7fb069", decoration: true, allowsTransit: true, underground: false, tenants: 0, noise: 0 },
+  planter: { name: "Planter", width: 2, cost: 10000, color: "#6a9f58", decoration: true, allowsTransit: true, underground: false, tenants: 0, noise: 0 },
+  bench: { name: "Bench", plural: "Benches", width: 4, cost: 20000, color: "#b98b5e", decoration: true, allowsTransit: true, underground: false, tenants: 0, noise: 0 },
+  mural: { name: "Mural", width: 6, cost: 30000, color: "#d98bb0", decoration: true, allowsTransit: true, underground: false, tenants: 0, noise: 0 },
+  fountain: { name: "Fountain", width: 8, cost: 40000, color: "#8cc7e8", decoration: true, allowsTransit: true, underground: false, tenants: 0, noise: 0 },
 };
 
 // Stairs always join exactly two neighbouring floors. An elevator shaft can
 // span up to `maxFloors`, and costs more the taller it is. Elevators also
 // cost `upkeepPerDay` to run, taken at the nightly tally; stairs are free.
+// Anything with a car (`capacity`, the most it holds) is a lift, run by
+// elevators.js. A Staff Lift (milestone 14b) is a narrow, cheaper lift with
+// a small car that only housekeepers and guards ride (`staffOnly`), so
+// they don't queue with everyone else; it unlocks with them, at 2★.
 const TRANSIT_TYPES = {
   stairs: { name: "Stairs", width: 4, cost: 5000, upkeepPerDay: 0 },
-  elevator: { name: "Elevator", width: 4, baseCost: 20000, costPerFloor: 1000, maxFloors: 30, upkeepPerDay: 1000 },
+  elevator: { name: "Elevator", width: 4, baseCost: 20000, costPerFloor: 1000, maxFloors: 30, upkeepPerDay: 1000, capacity: 8 },
+  staffLift: {
+    name: "Staff Lift", plural: "Staff lifts", width: 2, baseCost: 10000, costPerFloor: 500, maxFloors: 30, upkeepPerDay: 500, capacity: 4,
+    staffOnly: true, unlocksAt: 2,
+  },
+};
+
+// Rent levels (milestone 14b), set room by room on studios, condos and
+// hotel rooms (`room.rentLevel`; none means Normal). A level scales a
+// studio's rent, a condo's price and a hotel room's nightly rate
+// (`factor`), and moves the stress at which tenants give up (`line`): a
+// studio's makers move out at the weekly review, and hotel guests leave
+// early, at or above it. Rooms still turn pink and red at the usual
+// stress, so a layout problem still shows. Cheaper rooms also fill faster
+// (`letSpeed`: new tenants arrive that many times as fast) and get booked
+// more (`bookings`), and a hotel stay's review bands move with the line
+// (stress.js, hotels.js). A condo's price, and the line its residents
+// keep, are fixed when it sells (`room.soldAtLevel`); a hotel stay's when
+// it's booked (`room.stayLevel`).
+const RENT_LEVELS = {
+  high: { name: "High", factor: 1.25, line: 55, letSpeed: 0.5, bookings: 0.75 },
+  normal: { name: "Normal", factor: 1, line: 65, letSpeed: 1, bookings: 1 },
+  low: { name: "Low", factor: 0.8, line: 75, letSpeed: 2, bookings: 1.25 },
+  veryLow: { name: "Very low", factor: 0.6, line: 85, letSpeed: 4, bookings: 1.5 },
 };
 
 // Shops, cafés, restaurants and Snack Bars: rooms with a keeper that sell
@@ -144,6 +195,51 @@ function floorTileCost(floor) {
   return floor < 0 ? DIG_COST_PER_TILE : FLOOR_COST_PER_TILE;
 }
 
+// Does this kind of transit have a car (an elevator or a staff lift)?
+function isLift(kind) {
+  return TRANSIT_TYPES[kind].capacity !== undefined;
+}
+
+// How many tiles wide a room is: its own width, for a room that can be any
+// size, or its type's.
+function roomWidth(room) {
+  return room.width ?? ROOM_TYPES[room.type].width;
+}
+
+// What a room cost to build: what was paid, for one that can be any size,
+// or its type's price. (A car park from before they were priced per space
+// cost $20,000, its type's old price.)
+function roomCost(room) {
+  return room.paid ?? ROOM_TYPES[room.type].cost;
+}
+
+// What a room of this type and width would cost.
+function sizedCost(typeKey, width) {
+  const type = ROOM_TYPES[typeKey];
+  if (type.costPerTile) return type.costPerTile * width;
+  if (type.costPerBay) return type.costPerBay * (width / type.bayWidth);
+  return type.cost;
+}
+
+// A car park's spaces: 5 a bay, so 20 in an old 16-tile one.
+function parkingSpaces(carPark) {
+  const type = ROOM_TYPES.parking;
+  return (roomWidth(carPark) / type.bayWidth) * type.spacesPerBay;
+}
+
+// Studios, condos and hotel rooms have a rent level; shops, cafés,
+// restaurants and Snack Bars pay no rent and have none.
+function hasRentLevel(room) {
+  const role = ROOM_TYPES[room.type].role;
+  return role === "maker" || role === "resident" || role === "guest";
+}
+
+// A room's rent level, as set now (for a condo, its next sale's; for a
+// hotel room, its next booking's).
+function rentLevel(room) {
+  return RENT_LEVELS[room.rentLevel] ? room.rentLevel : "normal";
+}
+
 function transitCost(kind, floorBottom, floorTop) {
   const type = TRANSIT_TYPES[kind];
   if (kind === "stairs") return type.cost;
@@ -157,5 +253,5 @@ function transitCost(kind, floorBottom, floorTop) {
 function roomRefund(room) {
   const type = ROOM_TYPES[room.type];
   if (type.salePrice && room.status === "occupied") return 0;
-  return type.cost / 2;
+  return roomCost(room) / 2;
 }

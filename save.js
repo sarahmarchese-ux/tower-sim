@@ -20,6 +20,12 @@
 // a pasted one may have been edited or damaged, and one bad value would
 // otherwise stop the game on every reload.
 //
+// Milestone 14b's additions live on the rooms and shafts themselves, so they
+// save with them: a car park's or planter strip's `width` and `paid`, a
+// room's `rentLevel` (and a condo's `soldFor`/`soldAtLevel`, a hotel
+// stay's `stayLevel`, and `hardToLet`), and a staff lift's `usedToday`. A
+// save from before has none of them, and loads (and saves back) as it was.
+//
 // Hotel rooms used to come in one size, 8 tiles wide (type "hotel"). They
 // now come as Singles and Twins, so a save from before that has its old
 // hotel rooms knocked down on load, their guests sent home and their full
@@ -288,6 +294,9 @@ const SaveGame = {
         uniqueId(room.id, "a room");
         check(known(ROOM_TYPES, room.type), "a room is of an unknown kind");
         check(isInt(room.floor) && isInt(room.tileStart), "a room's place is damaged");
+        check(room.width === undefined || (isInt(room.width) && room.width >= 1), "a room's width is damaged");
+        check(room.paid === undefined || Number.isFinite(room.paid), "what a room cost is damaged");
+        check(room.rentLevel === undefined || known(RENT_LEVELS, room.rentLevel), "a room's rent level is unknown");
       }
       for (const transit of data.world.transit) {
         uniqueId(transit.id, "a shaft or stairway");
@@ -352,12 +361,12 @@ const SaveGame = {
       for (const saved of data.elevators) {
         const transit = transitById.get(saved.transitId);
         if (!transit) throw new Error("an elevator's shaft is missing");
-        check(transit.kind === "elevator" && !cars.has(transit.id), "an elevator's car is in the wrong place");
+        check(isLift(transit.kind) && !cars.has(transit.id), "an elevator's car is in the wrong place");
         const inShaft = (floor) => Number.isFinite(floor) && floor >= transit.floorBottom && floor <= transit.floorTop;
         const stop = (floor) => isInt(floor) && inShaft(floor);
         check(inShaft(saved.floor) && CAR_STATES.includes(saved.state) && [-1, 0, 1].includes(saved.direction) &&
           Number.isFinite(saved.doorTimer), "an elevator's car is damaged");
-        check(saved.riders.length <= ELEVATOR_CAPACITY && saved.riders.every((r) => stop(r.dest)) &&
+        check(saved.riders.length <= TRANSIT_TYPES[transit.kind].capacity && saved.riders.every((r) => stop(r.dest)) &&
           saved.waiting.every((w) => stop(w.floor) && stop(w.dest) && w.dest !== w.floor && w.direction === Math.sign(w.dest - w.floor)),
           "an elevator's riders or queue are damaged");
         for (const { personId } of [...saved.riders, ...saved.waiting]) {
@@ -379,7 +388,7 @@ const SaveGame = {
         });
       }
       for (const transit of data.world.transit) {
-        if (transit.kind === "elevator" && !cars.has(transit.id)) throw new Error("an elevator's car is missing");
+        if (isLift(transit.kind) && !cars.has(transit.id)) throw new Error("an elevator's car is missing");
       }
       for (const person of people) {
         const expected = person.state === "riding" || person.state === "waitingForElevator" ? 1 : 0;

@@ -24,11 +24,13 @@ Pick something from the toolbar along the bottom, then click to build (drag
 for Floor and Elevator). Esc, a right-click, or clicking its button again
 puts it down. Scroll around with a right-drag, the mouse wheel (or a
 trackpad), or the arrow keys / WASD. Hover a room or an elevator shaft for
-details. Space pauses, and 1 and 3 set the speed.
+details. With nothing picked, click a studio, condo or hotel room to set its
+rent level. Space pauses, and 1 and 3 set the speed.
 
 On a touch screen, tap to build, and drag a finger to scroll (or, with Floor
 or Elevator picked, to build along the drag; two fingers still scroll). Tap
-a room for its details.
+a room for its details (and, for a studio, condo or hotel room, its rent
+level).
 
 ## Tests
 
@@ -55,12 +57,25 @@ not after one three floors down, drivers coming too, makers eating there
 only when the café is full and heading back to work before their break
 is over, residents at weekends and guests any day coming down at
 lunchtime, its noise from 10am to 9pm, a quiet one closing, and a save
-reloading with someone mid-snack; a save reloading to the very same game,
+reloading with someone mid-snack; decorations (a bench between a woodwork
+studio and a condo keeps the noise out, one above doesn't, shafts go
+through them, none in a basement, half back); staff lifts (housekeepers and
+guards ride one and nobody else does, staff still take a public elevator
+when it's quicker, at most 4 aboard, 2★, prices and upkeep, and the warning
+when no staff can reach one); car parks by the bay, and an old one keeping
+its 20 spaces and $10,000 refund; rent levels (a studio at Low pays 80% and
+keeps makers at stress 70, at High loses them at 60, a condo sells and
+refunds at its level and its owners keep their line, a Very low hotel room
+books more often, earns less and keeps its guests at 70); a studio whose
+makers left stressed sitting empty for days, and a rebuilt one re-letting in
+hours; a save reloading to the very same game,
 which then plays on the same; and a save that won't load being kept. It also loads a real player's
 tower, `tests/saves/day-85.json` (a 3★ game on day 85: 14 floors, about 300
 people, nine elevators and four car parks), checks it saves back the same,
 and plays it for a day: drivers come, shops sell, money goes up, and it
-keeps its people and its third star. That one takes most of the time.
+keeps its people and its third star. Then it loads it again, adds a staff
+lift, a planter strip, a 2-bay car park and rent levels, checks that saves
+and reloads the same, and plays on. Those two take most of the time.
 
 **`tests/smoke.mjs`** plays the game in headless Chromium. It builds a
 small tower with real mouse clicks (checking shops, hotel rooms,
@@ -72,8 +87,12 @@ housekeeper cleans a room after a checkout), forces break-ins (checking the
 money, the message and the stress tooltip), builds a Security office and
 runs three nights with every valuable room tried every night (nothing is
 taken), checks the 3★ checklist and the basement, Parking and Snack Bar locks,
-digs a basement, builds a Snack Bar on B1, runs a car park (and the Snack
-Bar) for 2 days, hovers every room with people in it
+digs a basement, builds a Snack Bar on B1, drags out a 4-bay car park
+($100,000, 20 spaces), runs it (and the Snack Bar) for 2 days, builds a
+bench and a planter strip from the Decor button (and not a fountain in the
+basement) and a staff lift (locked before 2★; hovering it says it's staff
+only), clicks a studio with no tool to open its rent panel and sets its
+floor to Low, demolishes the bench and staff lift for half back, hovers every room with people in it
 and the elevator shaft, and tries the controls: Space, 1 and 3, WASD and
 the arrows, a right-drag, the wheel, Esc and a right-click to put a tool
 down, losing focus mid-drag, and the Save file panel and New game question
@@ -96,6 +115,84 @@ npm run smoke
 (The game itself still needs no install; `package.json` is only for the tests.)
 
 ## Status
+
+**Milestone 14b: decorations, staff lifts and rent.** Things for a rich
+tower to spend on, and new levers against stress.
+
+- **Decorations** are unlocked from the start, under the toolbar's
+  **Decor** button: a **Planter Strip** dragged along a floor ($5,000 a
+  tile, any width), a **Planter** (2 tiles, $10,000), a **Bench** (4,
+  $20,000), a **Mural** (6, $30,000) and a **Fountain** (8, $40,000).
+  They go on any floor above ground, the ground floor included, but not
+  in basements. They're just for looks: no effect on stress, takings or
+  reviews. They don't pass noise: on a floor, noise only travels between
+  rooms that touch, so one between two rooms keeps them apart, as a gap
+  does. (Noise to the floors above and below is as before.) Stairs and
+  elevators can be built through them, as through a lobby, and
+  demolishing one refunds half.
+- **The Staff Lift** unlocks at 2★, with Housekeeping and Security. It's
+  2 tiles wide with a car for 4, costs $10,000 + $500 a floor and $500 a
+  day, spans up to 30 floors, and runs like an elevator (0.5 min a floor,
+  1 min a stop). It's built and extended by dragging, as elevators are.
+  Only housekeepers and guards ride it. They take whichever way is
+  quickest: a staff lift, an elevator or the stairs. Everyone else plans
+  as if it weren't there. Its shaft is drawn brown. Hover it to see how
+  it's coping, plus who used it today ("Staff only: 2 housekeepers and 1
+  guard used it today"). It warns when no Housekeeping or Security
+  office's staff can get to it.
+- In a test tower with Housekeeping on the 13th floor, hotel rooms on the
+  2nd to 4th, and 104 makers sharing one elevator, both housekeeping
+  crews were at stress 84–97 by Sunday and quit at the first weekly
+  review, in each of three runs. With a staff lift beside them, they
+  stayed at 0–65 and nobody quit. A staff lift spares staff the queues,
+  not the distance: Housekeeping 20 floors from the hotel rooms still
+  means waits of 10–20 minutes for its one car.
+- **Parking is priced per space.** A car park is dragged along a basement
+  floor in bays of 4 tiles and 5 spaces, at $25,000 a bay ($5,000 a
+  space). One bay is the smallest; the old 16-tile car park is now 4
+  bays, 20 spaces, $100,000. There's still no fee and no upkeep. Car
+  parks in an older save keep their 20 spaces, and demolishing one
+  refunds half of the $20,000 it cost.
+- **Rent levels.** Click a studio, condo or hotel room with no tool picked
+  (or tap it) to set its level, or press **Set for this floor** to give
+  every studio, condo and hotel room on its floor the same one:
+
+  | Level | Rent, price, rate | Moves out (or leaves early) at stress | New tenants or bookings |
+  | --- | --- | --- | --- |
+  | High | 125% | 55 | half as fast; bookings ×0.75 |
+  | Normal | 100% | 65 | as before |
+  | Low | 80% | 75 | twice as fast; bookings ×1.25 |
+  | Very low | 60% | 85 | four times as fast; bookings ×1.5 |
+
+  A level moves where tenants draw the line, not how fast they get
+  stressed: rooms still turn pink at 35 and red at 65, so a layout
+  problem still shows. A studio's level applies at once, rent and line
+  alike, so raising the rent on a stressed studio can push its makers out
+  at the next review. A condo's price is fixed when it sells, its owners
+  keep the line that price gave them, and a refund pays back what they
+  paid. A hotel room's level applies from the next booking, and a stay
+  keeps the rate, the early-checkout line and the review bands (moved by
+  the same 10 points a level) it was booked at. Shops, cafés,
+  restaurants and Snack Bars pay no rent and have no level. A small tag
+  ("−20%", "+25%") marks a room at another level, and its tooltip says
+  "Low rent (80%): moves out at stress 75".
+- **Moving out stressed now costs something.** A studio or condo whose
+  tenants moved out stressed is hard to let: nobody moves in for 1–3 game
+  days (half that at Low, double at High), and it says so ("Hard to let:
+  last tenants left stressed"). A room that empties for any other reason,
+  or is knocked down and rebuilt, re-lets in hours, as before.
+- In a test with 12 Singles beside Housekeeping over two weeks, Singles at
+  Low were booked 5–5⅓ nights in the second week against 3½ at Normal,
+  and earned a little more ($16,000–17,100 a room over the two weeks,
+  against $14,000–15,700). Very low filled them more (4⅔–5 nights) but
+  earned less ($12,000–12,800), and High emptied them (2–2⅓ nights, about
+  $12,000–12,500). So a lower rate pays only where it fills rooms that
+  would sit empty.
+- The day-85 save, and any save from before, loads and saves back
+  unchanged; its four car parks keep 20 spaces each.
+
+<details>
+<summary>Milestone 14: the Snack Bar</summary>
 
 **Milestone 14: the Snack Bar.** Cheap, quick food, open all day, every
 day, and the first room where one visit leads into another: shoppers stop
@@ -144,6 +241,7 @@ for a snack on their way out of a shop.
   tower at about 265 people.
 - The day-85 save, and any save from before Snack Bars, loads and saves
   back unchanged.
+</details>
 
 <details>
 <summary>Milestone 13: 3★, basements and parking</summary>
@@ -566,20 +664,23 @@ or visiting a GitHub Pages link.
 - `camera.js` — what part of the grid is on screen, and the right-click-drag
   / keyboard controls that scroll it.
 - `rooms.js` — the room and transit catalogue: widths, costs, colors, tenant
-  counts, rent, sale prices and upkeep (starting numbers, for tuning).
+  counts, rent, sale prices and upkeep (starting numbers, for tuning),
+  decorations, the staff lift, car parks by the bay, and rent levels.
 - `world.js` — the building's actual state (floors, rooms, stairs,
   elevators, money) and the placement rules. Announces every change so
   people and elevators can react. Knows nothing about pixels or the mouse.
 - `routing.js` — plans a route through the building (walk / stairs /
   elevator legs) and works out which rooms can be reached from a lobby.
-- `elevators.js` — self-running elevator cars ("collective control").
+  Only housekeepers' and guards' routes use staff lifts.
+- `elevators.js` — self-running elevator cars ("collective control"),
+  staff lifts' included, and who rode a staff lift today.
 - `people.js` — every tenant, shopper and hotel guest: moving in, their
   daily schedule (makers' lunch breaks, residents' and guests' snacks and dinners,
   housekeepers' and guards' shifts included), and how they work through a
   route.
 - `economy.js` — who moves in (and out) when, condo sales and refunds,
   weekly rent, nightly shop takings, hotel nights, upkeep and wages, and
-  bankruptcy.
+  bankruptcy; rent levels, and rooms that are hard to let.
 - `shops.js` — shops, cafés, restaurants and Snack Bars: when they're open, sending
   shoppers (and the lunch crowd, and diners, and drivers) in, what each spends (less
   after a long trip), the day's takings, and closing quiet ones.
@@ -593,26 +694,29 @@ or visiting a GitHub Pages link.
   and residents and guests at lunchtime; what they pay, and when it's
   serving (and noisy).
 - `hotels.js` — hotel rooms: bookings, checking guests in and out (early,
-  if they're too stressed), reviews and occupancy, and nightly takings.
+  if they're too stressed), reviews and occupancy, and nightly takings, at
+  the rent level each stay was booked at.
 - `housekeeping.js` — cleaning hotel rooms after their guests leave: which
   housekeeper takes which room, and the 45 minutes it takes.
 - `security.js` — night-time break-ins, and the Security offices whose
   guards stop them within 5 floors.
-- `parking.js` — car parks: which one a driver uses, their spaces, and
-  the car park's tooltip.
+- `parking.js` — car parks: which one a driver uses, their spaces (5 a
+  bay), and the car park's tooltip.
 - `ratings.js` — the star rating, its population targets and the rooms
   each star needs (2★ unlocks shops, hotel rooms, restaurants and service
   rooms; 3★ unlocks basements, Parking and the Snack Bar).
 - `stress.js` — each person's stress: trips, noise, break-ins, rest, what
   caused it over the last week, and the weekly review that decides who
-  moves out.
+  moves out (at the line their rent level sets).
 - `save.js` — saving the whole game to the browser and loading it back,
   turning pointers between objects into ids and back.
 - `input.js` — turns mouse events into grid coordinates and tool actions
-  (left-click/drag builds; see camera.js for the right-click pan split).
+  (left-click/drag builds; see camera.js for the right-click pan split;
+  with no tool, a click opens a room's rent panel).
 - `clock.js` — game time as one number (minutes elapsed), and the pause/speed
   controls on top of it.
-- `ui.js` — the HTML toolbar, money display, clock controls and status hint.
+- `ui.js` — the HTML toolbar (and its Decor row), money display, clock
+  controls, status hint, tooltips and the rent panel.
 - `render.js` — draws everything each frame: the sky (colored by time of
   day), the grid, built floors, rooms, and a live green/red placement preview.
 - `main.js` — the game loop: once per animation frame, poll held keys for

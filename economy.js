@@ -23,11 +23,21 @@
 // money can dip below zero between paydays. Stay in the red for a full game
 // week and the game is over.
 //
+// Rent levels (milestone 14b; rooms.js: RENT_LEVELS) set what a studio pays
+// and what a condo sells for, and how fast a new tenant turns up. A
+// studio's level applies at once, to the rent it owes from then on. A
+// condo's price is fixed when it sells (`soldFor`, `soldAtLevel`), and a
+// refund pays back what its owners paid. A studio or condo whose tenants
+// moved out stressed gets a bad name (`hardToLet`): nobody moves in for
+// HARD_TO_LET_DAYS, rather than the usual few hours, and less at a lower
+// rent. One that empties for any other reason re-lets as usual.
+//
 // State lives in two places: each room's `status` / `moveInAt` / `rentOwed`
 // (so it disappears with the room if it's demolished), and the few totals
 // below. Hotel rooms don't take tenants: hotels.js books guests into them.
 
-const MOVE_IN_DELAY_MINUTES = [60, 240]; // after placing: 1–4 game hours
+const MOVE_IN_DELAY_MINUTES = [60, 240]; // after placing: 1–4 game hours (at Normal rent)
+const HARD_TO_LET_DAYS = [1, 3]; // after tenants leave stressed (at Normal rent)
 const MOVE_IN_RETRY_MINUTES = [30, 90]; // unreachable: look again this soon
 // When movers turn up. Makers come to see a studio during working hours
 // (weekdays, 8am–4pm); condo buyers can come any day until the evening,
@@ -86,6 +96,7 @@ const Economy = {
       room.moveInAt = Clock.totalMinutes + randomBetween(MOVE_IN_RETRY_MINUTES);
       return;
     }
+    delete room.hardToLet;
     World.setRoomStatus(room, "movingIn");
     People.moveIn(room);
   },
@@ -103,7 +114,8 @@ const Economy = {
     }
   },
 
-  // Called by people.js when a mover reaches their new room.
+  // Called by people.js when a mover reaches their new room. A condo sells
+  // at its rent level's price, and its owners keep that level's line.
   onArrived(room) {
     if (room.status !== "movingIn") return;
     World.setRoomStatus(room, "occupied");
@@ -111,8 +123,39 @@ const Economy = {
     room.rentOwed = room.rentOwed || 0;
     const salePrice = ROOM_TYPES[room.type].salePrice;
     if (salePrice) {
-      World.money += salePrice;
-      this.popupOverRoom(room, `Sold +${World.formatMoney(salePrice)}`, "#7dffa0");
+      const level = rentLevel(room);
+      const price = Math.round(salePrice * RENT_LEVELS[level].factor);
+      room.soldFor = price;
+      room.soldAtLevel = level;
+      World.money += price;
+      this.popupOverRoom(room, `Sold +${World.formatMoney(price)}`, "#7dffa0");
+    }
+  },
+
+  // What a condo's owners paid for it (a condo sold before rent levels:
+  // the full price).
+  soldFor(room) {
+    return room.soldFor ?? ROOM_TYPES[room.type].salePrice;
+  },
+
+  // How long until a vacant room's next tenants turn up, in minutes: a few
+  // hours, or days if it has a bad name, and quicker at a lower rent.
+  reletMinutes(room, hardToLet = false) {
+    const wait = hardToLet ? randomBetween(HARD_TO_LET_DAYS) * MINUTES_PER_DAY : randomBetween(MOVE_IN_DELAY_MINUTES);
+    return wait / RENT_LEVELS[rentLevel(room)].letSpeed;
+  },
+
+  // A new rent level for a studio, condo or hotel room. A vacant studio or
+  // condo waiting for tenants gets them sooner (or later) to match.
+  setRentLevel(room, level) {
+    if (!hasRentLevel(room) || !RENT_LEVELS[level]) return;
+    const before = RENT_LEVELS[rentLevel(room)].letSpeed;
+    if (level === "normal") delete room.rentLevel;
+    else room.rentLevel = level;
+    const after = RENT_LEVELS[level].letSpeed;
+    const now = Clock.totalMinutes;
+    if (room.status === "vacant" && !isHotel(room) && room.moveInAt > now) {
+      room.moveInAt = now + ((room.moveInAt - now) * before) / after;
     }
   },
 
@@ -121,7 +164,7 @@ const Economy = {
   tally() {
     for (const room of World.rooms) {
       const rentPerWeek = ROOM_TYPES[room.type].rentPerWeek;
-      if (rentPerWeek && room.status === "occupied") room.rentOwed += rentPerWeek / 7;
+      if (rentPerWeek && room.status === "occupied") room.rentOwed += (rentPerWeek * RENT_LEVELS[rentLevel(room)].factor) / 7;
     }
 
     let sales = 0;
@@ -169,19 +212,24 @@ const Economy = {
 
   // Too stressed (or, for a shop, too quiet; see shops.js): the tenants
   // leave and the room is back on the market. A departing studio still
-  // pays the rent it owes at payday.
-  moveOut(room, reason = "Moved out") {
+  // pays the rent it owes at payday. A studio or condo whose tenants left
+  // stressed (`stressed`) is hard to let for a while.
+  moveOut(room, reason = "Moved out", { stressed = false } = {}) {
     World.setRoomStatus(room, "vacant");
-    room.moveInAt = Clock.totalMinutes + randomBetween(MOVE_IN_DELAY_MINUTES);
+    const hardToLet = stressed && hasRentLevel(room) && !isHotel(room);
+    if (hardToLet) room.hardToLet = true;
+    room.moveInAt = Clock.totalMinutes + this.reletMinutes(room, hardToLet);
     People.moveOut(room);
     if (isStorefront(room)) Shops.onMovedOut(room);
     if (room.type === "cafe") Cafes.onClosed(room);
     if (room.type === "restaurant") Restaurants.onClosed(room);
     if (room.type === "snackbar") SnackBars.onClosed(room);
-    const salePrice = ROOM_TYPES[room.type].salePrice;
-    if (salePrice) {
-      World.money -= salePrice;
-      this.popupOverRoom(room, `Moved out: refund -${World.formatMoney(salePrice)}`, "#ff9d9d");
+    if (ROOM_TYPES[room.type].salePrice) {
+      const refund = this.soldFor(room);
+      delete room.soldFor;
+      delete room.soldAtLevel;
+      World.money -= refund;
+      this.popupOverRoom(room, `Moved out: refund -${World.formatMoney(refund)}`, "#ff9d9d");
     } else {
       this.popupOverRoom(room, reason, "#ff9d9d");
     }
@@ -212,7 +260,7 @@ const Economy = {
   },
 
   popupOverRoom(room, text, color) {
-    this.popup(room.tileStart + ROOM_TYPES[room.type].width / 2, room.floor, text, color);
+    this.popup(room.tileStart + roomWidth(room) / 2, room.floor, text, color);
   },
 
   // Popups fade on real time, not game time, so they're readable at any

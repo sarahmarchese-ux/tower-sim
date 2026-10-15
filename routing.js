@@ -10,6 +10,12 @@
 //   { type: "walk", floor, toX }
 //   { type: "stairs" | "elevator", transitId, fromFloor, toFloor }
 //
+// (A ride in a staff lift is an "elevator" leg too: it runs the same way.)
+// Staff lifts (milestone 14b) are only for housekeepers and guards, so
+// only a plan made for them (`staff`) uses them; everyone else plans as if
+// they weren't there. Staff take whichever way is quickest: a staff lift,
+// an elevator or the stairs.
+//
 // Positions along a floor (`x`) are in tiles and can be fractional — 3.5 is
 // the middle of tile 3.
 
@@ -52,7 +58,7 @@ const Routing = {
   lobbyPoints() {
     return World.rooms
       .filter((room) => room.type === "lobby")
-      .map((room) => ({ floor: room.floor, x: room.tileStart + ROOM_TYPES.lobby.width / 2 }));
+      .map((room) => ({ floor: room.floor, x: room.tileStart + roomWidth(room) / 2 }));
   },
 
   // Split every floor into runs of connected built tiles ("segments"), so
@@ -85,13 +91,15 @@ const Routing = {
   },
 
   // starts / goals: arrays of { floor, x }. Several starts or goals are
-  // allowed (e.g. "any lobby") — the cheapest one wins.
+  // allowed (e.g. "any lobby") — the cheapest one wins. `staff`: the trip
+  // is a housekeeper's or a guard's, who can ride staff lifts too.
   // Returns { start, goal, legs, cost } or null if there's no way through.
-  plan(starts, goals) {
+  plan(starts, goals, { staff = false } = {}) {
     const nodes = [];
     for (const s of starts) nodes.push({ floor: s.floor, x: s.x, isStart: true });
     for (const g of goals) nodes.push({ floor: g.floor, x: g.x, isGoal: true });
     for (const t of World.transit) {
+      if (TRANSIT_TYPES[t.kind].staffOnly && !staff) continue;
       for (let floor = t.floorBottom; floor <= t.floorTop; floor++) {
         nodes.push({ floor, x: this.stopX(t, floor), transit: t });
       }
@@ -136,13 +144,13 @@ const Routing = {
       // Riding or climbing to the same transit's stops on other floors.
       if (node.transit) {
         const t = node.transit;
-        const boardCost = t.kind === "elevator"
+        const boardCost = isLift(t.kind)
           ? { up: this.boardCost(t, node.floor, 1), down: this.boardCost(t, node.floor, -1) }
           : null;
         for (let floor = t.floorBottom; floor <= t.floorTop; floor++) {
           if (floor === node.floor) continue;
           const floors = Math.abs(floor - node.floor);
-          const cost = t.kind === "stairs"
+          const cost = !isLift(t.kind)
             ? STAIRS_COST_PER_FLOOR * floors
             : (floor > node.floor ? boardCost.up : boardCost.down) + ELEVATOR_COST_PER_FLOOR * floors;
           const next = byFloor.get(floor).find((i) => nodes[i].transit === t);
@@ -152,8 +160,9 @@ const Routing = {
     }
   },
 
-  // What getting on this elevator at `floor`, going `direction`, costs
-  // right now (see the costs at the top).
+  // What getting on this elevator (or staff lift) at `floor`, going
+  // `direction`, costs right now (see the costs at the top). A staff
+  // lift's small car fills sooner.
   boardCost(transit, floor, direction) {
     const car = Elevators.cars.get(transit.id);
     if (!car) return ELEVATOR_BOARD_COST;
@@ -165,8 +174,9 @@ const Routing = {
       if (w.direction === direction && (w.floor - floor) * direction <= 0) ahead++;
       else others++;
     }
-    const fullLoads = Math.floor(ahead / ELEVATOR_CAPACITY);
-    const firstLoad = ahead - fullLoads * ELEVATOR_CAPACITY;
+    const capacity = TRANSIT_TYPES[transit.kind].capacity;
+    const fullLoads = Math.floor(ahead / capacity);
+    const firstLoad = ahead - fullLoads * capacity;
     // A round trip: down and back up the shaft, stopping on most floors.
     const floors = transit.floorTop - transit.floorBottom;
     const roundTrip = floors * (2 * ELEVATOR_MINUTES_PER_FLOOR + ELEVATOR_DOOR_MINUTES);
@@ -185,23 +195,30 @@ const Routing = {
       if (a.floor === b.floor) {
         if (a.x !== b.x) legs.push({ type: "walk", floor: a.floor, toX: b.x });
       } else {
-        legs.push({ type: a.transit.kind, transitId: a.transit.id, fromFloor: a.floor, toFloor: b.floor });
+        legs.push({ type: isLift(a.transit.kind) ? "elevator" : "stairs", transitId: a.transit.id, fromFloor: a.floor, toFloor: b.floor });
       }
     }
     return { start: path[0], goal: path[path.length - 1], legs };
   },
 
   // Can people get from a lobby to this room at all? Cached until the
-  // building changes, since the drawing code asks every frame.
+  // building changes, since the drawing code asks every frame. A service
+  // room's staff can use staff lifts to get there.
   isReachable(room) {
     if (this._reachableVersion !== World.version) {
       this._reachable = new Map();
       this._reachableVersion = World.version;
     }
     if (!this._reachable.has(room.id)) {
-      const target = { floor: room.floor, x: room.tileStart + ROOM_TYPES[room.type].width / 2 };
-      this._reachable.set(room.id, this.plan(this.lobbyPoints(), [target]) !== null);
+      const target = { floor: room.floor, x: room.tileStart + roomWidth(room) / 2 };
+      const staff = isStaffRole(ROOM_TYPES[room.type].role);
+      this._reachable.set(room.id, this.plan(this.lobbyPoints(), [target], { staff }) !== null);
     }
     return this._reachable.get(room.id);
   },
 };
+
+// Housekeepers and guards: the staff who can ride staff lifts.
+function isStaffRole(role) {
+  return role === "housekeeper" || role === "guard";
+}

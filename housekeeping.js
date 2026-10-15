@@ -42,7 +42,7 @@ const Housekeeping = {
     }
     person.job = job;
     // Somewhere in the room, so a pair cleaning neighbours don't overlap.
-    const width = ROOM_TYPES[job.type].width;
+    const width = roomWidth(job);
     person.workX = job.tileStart + 0.5 + Math.random() * (width - 1);
   },
 
@@ -56,8 +56,8 @@ const Housekeeping = {
     let best = null;
     let bestCost = Infinity;
     for (const room of waiting) {
-      const spot = { floor: room.floor, x: room.tileStart + ROOM_TYPES[room.type].width / 2 };
-      const route = Routing.plan([here], [spot]);
+      const spot = { floor: room.floor, x: room.tileStart + roomWidth(room) / 2 };
+      const route = Routing.plan([here], [spot], People.planFor(person));
       if (route && route.cost < bestCost) {
         best = room;
         bestCost = route.cost;

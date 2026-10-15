@@ -40,7 +40,10 @@
 //
 // Each week (at the Sunday-night tally), every room checks its people's
 // average stress. If it's in the red, they move out (economy.js). Hotel
-// rooms are judged stay by stay instead (hotels.js).
+// rooms are judged stay by stay instead (hotels.js). From milestone 14b
+// a studio's or condo's rent level moves that line (rooms.js:
+// RENT_LEVELS): its people put up with more at a lower rent, and less at
+// a higher one. They still turn red at STRESS_RED, so the room shows it.
 
 const STRESS_MAX = 100;
 const STRESS_PINK = 35; // people turn pink from here...
@@ -114,8 +117,8 @@ const Stress = {
   // Beside each other on the same floor (touching), or on floors directly
   // above/below with at least one tile of overlap.
   areNeighbours(a, b) {
-    const aEnd = a.tileStart + ROOM_TYPES[a.type].width - 1;
-    const bEnd = b.tileStart + ROOM_TYPES[b.type].width - 1;
+    const aEnd = a.tileStart + roomWidth(a) - 1;
+    const bEnd = b.tileStart + roomWidth(b) - 1;
     if (a.floor === b.floor) return aEnd + 1 === b.tileStart || bEnd + 1 === a.tileStart;
     if (Math.abs(a.floor - b.floor) === 1) return a.tileStart <= bEnd && b.tileStart <= aEnd;
     return false;
@@ -265,12 +268,22 @@ const Stress = {
     return "calm";
   },
 
-  // Once a week: rooms whose people are in the red move out.
+  // The average stress at which a room's people move out at the weekly
+  // review (or a hotel room's guests leave early): STRESS_RED, moved by a
+  // studio's rent level, the level a condo was sold at, or the level a
+  // hotel stay was booked at.
+  moveOutLine(room) {
+    if (!hasRentLevel(room)) return STRESS_RED;
+    const level = ROOM_TYPES[room.type].salePrice ? room.soldAtLevel : isHotel(room) ? room.stayLevel : room.rentLevel;
+    return RENT_LEVELS[level] ? RENT_LEVELS[level].line : STRESS_RED;
+  },
+
+  // Once a week: rooms whose people are past their line move out.
   weeklyReview() {
     for (const room of [...World.rooms]) {
       if (room.status !== "occupied" || isHotel(room)) continue;
       const average = this.roomAverage(room);
-      if (average !== null && average >= STRESS_RED) Economy.moveOut(room);
+      if (average !== null && average >= this.moveOutLine(room)) Economy.moveOut(room, "Moved out", { stressed: true });
     }
   },
 };

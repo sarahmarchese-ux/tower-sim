@@ -24,7 +24,7 @@ const SOURCE = FILES.map((f) => fs.readFileSync(path.join(ROOT, `${f}.js`), "utf
 const EXPORTS = `
 ;globalThis.G = { Grid, Clock, World, Routing, Elevators, People, Economy, Stress, Shops, Cafes, Restaurants,
   SnackBars, Hotels, Housekeeping, Security, Parking, Ratings, SaveGame, ROOM_TYPES, TRANSIT_TYPES, ELEVATOR_CAPACITY,
-  RESTAURANT_SEATS, CAFE_SEATS, SNACK_BAR_SEATS, SAVE_KEY, MINUTES_PER_DAY };`;
+  RESTAURANT_SEATS, CAFE_SEATS, SNACK_BAR_SEATS, SAVE_KEY, MINUTES_PER_DAY, RENT_LEVELS, parkingSpaces, roomWidth, roomCost };`;
 
 // A new game, with `seed` for its dice.
 function newGame(seed = 1) {
@@ -763,6 +763,285 @@ test("a save reloads with someone mid-snack, and plays on the same", () => {
   check(Q.state !== "eating", "the reloaded snacker was still eating an hour later");
 });
 
+// --- Decorations, staff lifts, parking and rent (milestone 14b) -------------
+
+test("a decoration keeps noise apart on its floor, and shafts go through it", () => {
+  const G = newGame();
+  G.money(1e7);
+  for (let f = 0; f <= 2; f++) G.World.buildFloorRun(f, 0, 59);
+  build(G, G.World.placeRoom("lobby", 0, 0), "a lobby");
+  build(G, G.World.placeRoom("woodwork", 1, 10), "a woodwork studio, 10–21");
+  build(G, G.World.placeRoom("bench", 1, 22), "a bench beside it, at 1★"); // unlocked from the start
+  build(G, G.World.placeRoom("condo", 1, 26), "a condo beyond the bench");
+  build(G, G.World.placeRoom("condo", 2, 6), "a condo above the studio");
+  build(G, G.World.placeRoom("planterStrip", 2, 22, 4), "a planter strip beside that one");
+  const studio = room(G, "woodwork");
+  const [beside, above] = G.World.rooms.filter((r) => r.type === "condo");
+  G.World.setRoomStatus(studio, "occupied");
+  check(G.Stress.noiseAt(beside, "working") === 0, `a condo with a bench between it and a woodwork studio gets noise ${G.Stress.noiseAt(beside, "working")}`);
+  check(G.Stress.noiseAt(above, "working") === 3, `the condo above the studio gets noise ${G.Stress.noiseAt(above, "working")}, expected 3`);
+
+  // Stairs and an elevator go through decorations, as through the lobby.
+  build(G, G.World.placeTransit("stairs", 22, 1, 2), "stairs through the bench");
+  build(G, G.World.placeRoom("fountain", 0, 44), "a fountain");
+  build(G, G.World.placeTransit("elevator", 46, 0, 2), "an elevator through the fountain");
+
+  // Not in a basement, even at 3★.
+  G.Ratings.stars = 3;
+  build(G, G.World.buildFloorRun(-1, 0, 19), "B1");
+  const below = G.World.placeRoom("planter", -1, 4);
+  check(!below.ok && /above ground/.test(below.reason), `a planter in a basement: ${JSON.stringify(below)}`);
+
+  // Half back: of a fountain's $40,000, and of what a planter strip cost.
+  const strip = room(G, "planterStrip");
+  check(G.roomWidth(strip) === 4 && G.roomCost(strip) === 20000, `a 4-tile planter strip is ${G.roomWidth(strip)} tiles for $${G.roomCost(strip)}`);
+  let money = G.World.money;
+  G.World.demolishAt(0, 44);
+  check(G.World.money - money === 20000, `demolishing a fountain refunded ${G.World.money - money}`);
+  money = G.World.money;
+  G.World.demolishAt(2, 25);
+  check(G.World.money - money === 10000, `demolishing a 4-tile planter strip refunded ${G.World.money - money}`);
+});
+
+// A tower with a staff lift right by the lobby, and the public elevator
+// out at the far end: Housekeeping, a Security office and a studio up on
+// 10F, hotel rooms on 5F.
+function staffLiftTower() {
+  const G = newGame();
+  G.money(1e8);
+  G.Ratings.stars = 2;
+  for (let f = 0; f <= 10; f++) G.World.buildFloorRun(f, 0, 79);
+  build(G, G.World.placeRoom("lobby", 0, 0), "a lobby");
+  build(G, G.World.placeTransit("staffLift", 20, 0, 10), "a staff lift");
+  build(G, G.World.placeTransit("elevator", 70, 0, 10), "an elevator");
+  build(G, G.World.placeRoom("housekeeping", 10, 22), "Housekeeping");
+  build(G, G.World.placeRoom("sewing", 10, 30), "a studio");
+  build(G, G.World.placeRoom("security", 10, 38), "a Security office");
+  for (let x = 22; x < 46; x += 6) build(G, G.World.placeRoom("single", 5, x), "a Single");
+  return G;
+}
+
+test("housekeepers and guards ride a staff lift, and nobody else does", () => {
+  const G = staffLiftTower();
+  const [lift, elevator] = G.World.transit;
+  const rode = { [lift.id]: new Set(), [elevator.id]: new Set() };
+  let mostAboard = 0;
+  const onBoard = G.People.onBoard.bind(G.People);
+  G.People.onBoard = (person) => {
+    for (const car of G.Elevators.cars.values()) {
+      if (car.riders.some((r) => r.person === person)) rode[car.transit.id].add(person.role);
+    }
+    mostAboard = Math.max(mostAboard, G.Elevators.cars.get(lift.id).riders.length);
+    return onBoard(person);
+  };
+  // Monday to Tuesday night: movers, the commute, guests and cleaning,
+  // and the guards' night shift.
+  for (const single of G.World.rooms.filter((r) => r.type === "single")) single.needsCleaning = true;
+  G.runTo(1, 21);
+  const staff = [...rode[lift.id]].sort().join(",");
+  check(staff === "guard,housekeeper", `the staff lift carried: ${staff || "nobody"}`);
+  check(rode[elevator.id].has("maker") && rode[elevator.id].has("guest"), `the public elevator carried: ${[...rode[elevator.id]]}`);
+  check(mostAboard <= 4, `the staff lift's car held ${mostAboard}, more than 4`);
+  const used = G.Elevators.staffToday(lift);
+  check(used.housekeepers === 2 && used.guards === 2, `today the staff lift says ${used.housekeepers} housekeepers and ${used.guards} guards used it`);
+  check(G.World.rooms.filter((r) => r.type === "single").some((r) => !r.needsCleaning), "no hotel room was cleaned");
+
+  // Staff take the public elevator when it's the quicker way; nobody else
+  // ever plans a staff lift, even right beside them.
+  const shaft = (route) => route.legs.filter((l) => l.type === "elevator").map((l) => l.transitId).join(",");
+  const farEnd = G.Routing.plan([{ floor: 0, x: 72 }], [{ floor: 10, x: 74 }], { staff: true });
+  check(shaft(farEnd) === String(elevator.id), "a housekeeper at the far end didn't take the public elevator beside them");
+  const byLift = G.Routing.plan([{ floor: 0, x: 20.5 }], [{ floor: 10, x: 21 }]);
+  check(shaft(byLift) === String(elevator.id), "someone who isn't staff planned a trip on the staff lift");
+  check(G.Routing.isReachable(room(G, "housekeeping")), "Housekeeping, reached by the staff lift, counts as unreachable");
+
+  // A staff lift no service room's staff can get to says so.
+  check(G.Elevators.staffCanReach(lift), "the staff lift by Housekeeping says no staff can reach it");
+  for (let f = 0; f <= 1; f++) G.World.buildFloorRun(f, 100, 105);
+  build(G, G.World.placeTransit("staffLift", 102, 0, 1), "a staff lift off on its own");
+  check(!G.Elevators.staffCanReach(G.World.transit[2]), "a staff lift nobody can reach doesn't say so");
+});
+
+test("staff lifts: 2★, $10,000 + $500 a floor, $500 a day, 2 tiles", () => {
+  const G = newGame();
+  G.money(1e6);
+  for (let f = 0; f <= 6; f++) G.World.buildFloorRun(f, 0, 39);
+  const locked = G.World.placeTransit("staffLift", 10, 0, 4);
+  check(!locked.ok && /unlock at 2★/.test(locked.reason), `a staff lift at 1★: ${JSON.stringify(locked)}`);
+  G.Ratings.stars = 2;
+  let money = G.World.money;
+  build(G, G.World.placeTransit("staffLift", 10, 0, 4), "a staff lift, 1F–5F");
+  check(money - G.World.money === 12500, `a 5-floor staff lift cost ${money - G.World.money}, expected $12,500`);
+  build(G, G.World.placeTransit("stairs", 12, 0, 1), "stairs right beside it: it's 2 tiles wide");
+  const lift = G.World.transit[0];
+  money = G.World.money;
+  build(G, G.World.extendElevator(lift, 0, 6), "the staff lift, extended to 7F");
+  check(money - G.World.money === 1000, `extending a staff lift 2 floors cost ${money - G.World.money}`);
+  check(G.World.elevatorToExtend(10, 7, 7) === undefined && G.World.elevatorToExtend(10, 7, 7, "staffLift") === lift,
+    "an elevator drag would extend the staff lift, or a staff lift drag wouldn't");
+  G.Economy.lastTallyDay = 1;
+  money = G.World.money;
+  G.Economy.tally();
+  check(money - G.World.money === 500, `a staff lift's upkeep was ${money - G.World.money}, expected $500`);
+});
+
+test("car parks are priced per bay, and an old one keeps its size and price", () => {
+  const G = newGame();
+  G.money(1e7);
+  G.Ratings.stars = 3;
+  G.World.buildFloorRun(0, 0, 59);
+  G.World.buildFloorRun(-1, 0, 59);
+  build(G, G.World.placeRoom("lobby", 0, 0), "a lobby");
+  check(!G.World.placeRoom("parking", -1, 0, 6).ok, "a car park of a bay and a half was built");
+  let money = G.World.money;
+  build(G, G.World.placeRoom("parking", -1, 0, 8), "2 bays of parking");
+  const carPark = room(G, "parking");
+  check(G.parkingSpaces(carPark) === 10, `2 bays have ${G.parkingSpaces(carPark)} spaces, expected 10`);
+  check(money - G.World.money === 50000, `2 bays cost ${money - G.World.money}, expected $50,000`);
+  money = G.World.money;
+  G.World.demolishAt(-1, 3);
+  check(G.World.money - money === 25000, `demolishing 2 bays refunded ${G.World.money - money}, expected $25,000`);
+
+  // A car park from before (no width or price of its own): 16 tiles and
+  // 20 spaces, and half its $20,000 back.
+  const old = { id: G.World.nextId++, type: "parking", floor: -1, tileStart: 20, status: null };
+  G.World.rooms.push(old);
+  G.World.version++;
+  check(G.roomWidth(old) === 16 && G.parkingSpaces(old) === 20, `an old car park is ${G.roomWidth(old)} tiles with ${G.parkingSpaces(old)} spaces`);
+  check(G.World.roomAt(-1, 35) === old && !G.World.roomAt(-1, 36), "an old car park doesn't cover its 16 tiles");
+  money = G.World.money;
+  G.World.demolishAt(-1, 25);
+  check(G.World.money - money === 10000, `demolishing an old car park refunded ${G.World.money - money}, expected $10,000`);
+});
+
+// A row of studios, a condo and Singles by the lobby, everyone moved in.
+function rentTower() {
+  const G = newGame();
+  G.money(1e7);
+  G.Ratings.stars = 2;
+  G.World.buildFloorRun(0, 0, 99);
+  build(G, G.World.placeRoom("lobby", 0, 0), "a lobby");
+  build(G, G.World.placeRoom("sewing", 0, 20), "studio A");
+  build(G, G.World.placeRoom("sewing", 0, 28), "studio B");
+  build(G, G.World.placeRoom("sewing", 0, 36), "studio C");
+  build(G, G.World.placeRoom("condo", 0, 44), "a condo");
+  build(G, G.World.placeRoom("single", 0, 60), "a Single");
+  build(G, G.World.placeRoom("single", 0, 66), "another Single");
+  G.runTo(1, 12); // Tuesday noon: everyone's moved in
+  const [A, B, C] = G.World.rooms.filter((r) => r.type === "sewing");
+  return { G, A, B, C, condo: room(G, "condo") };
+}
+
+test("rent levels: studios pay and put up with stress by their level", () => {
+  const { G, A, B, C } = rentTower();
+  check([A, B, C].every((r) => r.status === "occupied"), "the studios should be occupied by Tuesday noon");
+  G.Economy.setRentLevel(A, "low");
+  G.Economy.setRentLevel(B, "high");
+  for (const r of [A, B, C]) r.rentOwed = 0;
+  G.Economy.lastTallyDay = 2;
+  G.Economy.tally();
+  check(Math.abs(A.rentOwed - (11200 * 0.8) / 7) < 1e-6, `a day's rent at Low is ${A.rentOwed}, expected 80%`);
+  check(Math.abs(B.rentOwed - (11200 * 1.25) / 7) < 1e-6, `a day's rent at High is ${B.rentOwed}, expected 125%`);
+  check(Math.abs(C.rentOwed - 11200 / 7) < 1e-6, `a day's rent at Normal is ${C.rentOwed}`);
+
+  // At the review: stress 70 is fine at Low, not at Normal; 60 is too
+  // much at High.
+  for (const p of G.People.list) if (p.room === A || p.room === C) p.stress = 70;
+  for (const p of G.People.list) if (p.room === B) p.stress = 60;
+  G.Stress.weeklyReview();
+  check(A.status === "occupied", "makers at stress 70 left a studio at Low rent (their line is 75)");
+  check(B.status === "vacant", "makers at stress 60 stayed in a studio at High rent (their line is 55)");
+  check(C.status === "vacant", "makers at stress 70 stayed in a studio at Normal rent");
+  check(G.Stress.band(70) === "red", "stress 70 should still show red");
+});
+
+test("a condo sells and refunds at its level, and keeps its owners' line", () => {
+  const G = newGame();
+  G.money(1e6);
+  G.World.buildFloorRun(0, 0, 59);
+  build(G, G.World.placeRoom("lobby", 0, 0), "a lobby");
+  build(G, G.World.placeRoom("condo", 0, 20), "a condo");
+  const condo = room(G, "condo");
+  G.Economy.setRentLevel(condo, "low");
+  G.World.setRoomStatus(condo, "movingIn");
+  let money = G.World.money;
+  G.Economy.onArrived(condo);
+  check(G.World.money - money === 24000, `a condo at Low sold for ${G.World.money - money}, expected $24,000`);
+  G.Economy.setRentLevel(condo, "high"); // for the next sale
+  G.People.moveIn(condo);
+  for (const p of G.People.list) {
+    p.movingIn = false;
+    p.state = "inRoom";
+    p.stress = 70;
+  }
+  G.Stress.weeklyReview();
+  check(condo.status === "occupied", "owners who bought at Low (line 75) left at stress 70 after the level went up");
+  for (const p of G.People.list) p.stress = 80;
+  money = G.World.money;
+  G.Stress.weeklyReview();
+  check(condo.status === "vacant" && money - G.World.money === 24000, `the condo refunded ${money - G.World.money}, expected the $24,000 paid`);
+  G.World.setRoomStatus(condo, "movingIn");
+  money = G.World.money;
+  G.Economy.onArrived(condo);
+  check(G.World.money - money === 37500, `the next sale, at High, paid ${G.World.money - money}, expected $37,500`);
+});
+
+test("a hotel room at Very low books more often, earns less a night and keeps its guests longer", () => {
+  const { G } = rentTower();
+  const [cheap, normal] = G.World.rooms.filter((r) => r.type === "single");
+  G.Economy.setRentLevel(cheap, "veryLow");
+  G.Clock.totalMinutes = 8 * G.MINUTES_PER_DAY + 15 * 60; // a Tuesday afternoon
+  const booked = (r) => {
+    let n = 0;
+    for (let i = 0; i < 2000; i++) if (G.Hotels.whoBooks(r)) n++;
+    return n;
+  };
+  const cheapBooked = booked(cheap);
+  const normalBooked = booked(normal);
+  check(cheapBooked > normalBooked * 1.35, `a Very low room was booked ${cheapBooked} times in 2,000, a Normal one ${normalBooked}`);
+
+  for (const r of [cheap, normal]) {
+    G.World.setRoomStatus(r, "vacant");
+    G.People.list = G.People.list.filter((p) => p.room !== r);
+    G.Hotels.checkIn(r, "buyer");
+    for (const p of G.People.list.filter((p) => p.room === r)) {
+      p.arrived = true;
+      p.state = "inRoom";
+      p.stress = 70;
+    }
+    G.World.setRoomStatus(r, "occupied");
+  }
+  check(G.Hotels.rateFor(cheap) === 1200 && G.Hotels.rateFor(normal) === 2000, `nightly rates ${G.Hotels.rateFor(cheap)} and ${G.Hotels.rateFor(normal)}`);
+  G.Economy.setRentLevel(cheap, "high"); // only from the next booking
+  check(G.Hotels.rateFor(cheap) === 1200, "a new level changed the rate of a stay already booked");
+  G.Hotels.update();
+  check(cheap.status === "occupied", "guests at stress 70 left a room booked at Very low (their line is 85)");
+  check(normal.status === "vacant", "guests at stress 70 stayed in a Normal room");
+  check(Math.abs(G.Hotels.reviewFor(70, 20) - 0.3) < 1e-9 && G.Hotels.reviewFor(70) === 0, "a cheap room's review bands didn't move 20 points");
+});
+
+test("a studio whose makers left stressed sits empty for days; a rebuilt one re-lets in hours", () => {
+  const { G, A, B } = rentTower();
+  for (const p of G.People.list) if (p.room === A || p.room === B) p.stress = 90;
+  G.Economy.setRentLevel(B, "low");
+  const now = G.Clock.totalMinutes;
+  G.Stress.weeklyReview();
+  const days = (r) => (r.moveInAt - now) / G.MINUTES_PER_DAY;
+  check(A.hardToLet && days(A) >= 1 && days(A) <= 3, `a studio whose makers left stressed re-lets in ${days(A).toFixed(2)} days`);
+  check(B.hardToLet && days(B) >= 0.5 && days(B) <= 1.5, `at Low rent it re-lets in ${days(B).toFixed(2)} days, expected half of 1–3`);
+  G.Economy.setRentLevel(A, "veryLow");
+  check(days(A) >= 0.25 && days(A) <= 0.75, `cutting the rent to Very low didn't bring the new tenants sooner (${days(A).toFixed(2)} days)`);
+  G.run(6 * 60);
+  check(A.status === "vacant", "a hard-to-let studio filled within 6 hours");
+
+  // Knocked down and built again, it's a new room: hours, not days.
+  G.World.demolishAt(0, A.tileStart);
+  build(G, G.World.placeRoom("sewing", 0, 20), "the studio, rebuilt");
+  const rebuilt = G.World.roomAt(0, 20);
+  const hours = (rebuilt.moveInAt - G.Clock.totalMinutes) / 60;
+  check(!rebuilt.hardToLet && hours >= 1 && hours <= 4, `a rebuilt studio re-lets in ${hours.toFixed(1)} hours`);
+});
+
 // --- Saving -----------------------------------------------------------------
 
 test("a save reloads to exactly the same game, which plays on the same", () => {
@@ -828,6 +1107,43 @@ test("a real 3★ tower (the day-85 save) loads and plays a day", () => {
   G.runTo(day + 1, 1); // past the midnight tally
   check(G.Economy.lastSales > 0, "the day-85 tower's shops sold nothing");
   check(G.World.money > money, `the day-85 tower lost money in a day (${money} -> ${G.World.money})`);
+  check(G.People.population() > 250, `the day-85 tower dropped to ${G.People.population()} people in a day`);
+  check(G.Ratings.stars === 3, "the day-85 tower lost its third star");
+});
+
+// The same tower, with milestone 14b's additions: its four car parks keep
+// their size and price, and with a staff lift, decorations, a new car park
+// and rent levels added it saves and reloads the same, and plays on.
+test("the day-85 tower with a staff lift, decorations and rent levels plays on", () => {
+  const text = fs.readFileSync(path.join(ROOT, "tests", "saves", "day-85.json"), "utf8");
+  const G = newGame();
+  check(G.SaveGame.load(text), "the day-85 save didn't load");
+  const carParks = G.World.rooms.filter((r) => r.type === "parking");
+  check(carParks.length === 4 && carParks.every((r) => G.parkingSpaces(r) === 20 && G.roomCost(r) === 20000),
+    "the day-85 car parks aren't 20 spaces at $20,000 each");
+  // A staff lift up a new column at the right-hand end, beside the hotel
+  // rooms; a planter strip; a 2-bay car park; studios at Low on 10F and
+  // hotel rooms at High on 7F.
+  for (let f = -1; f <= 8; f++) build(G, G.World.buildFloorRun(f, 72, 75), `floor at the end of ${f}`);
+  build(G, G.World.placeTransit("staffLift", 72, 0, 8), "a staff lift");
+  build(G, G.World.placeRoom("planterStrip", 8, 74, 2), "a planter strip beside the staff lift");
+  build(G, G.World.placeRoom("parking", -1, -68, 8), "2 bays of parking");
+  for (const r of G.World.rooms.filter((r) => r.floor === 9 && G.ROOM_TYPES[r.type].role === "maker")) G.Economy.setRentLevel(r, "low");
+  for (const r of G.World.rooms.filter((r) => r.floor === 6 && (r.type === "single" || r.type === "twin"))) G.Economy.setRentLevel(r, "high");
+  const day = G.Clock.day;
+  const money = G.World.money;
+  G.runTo(day, 22);
+  const strip = (saved) => {
+    const data = JSON.parse(saved);
+    delete data.savedAt;
+    return JSON.stringify(data);
+  };
+  const saved = G.SaveGame.exportText();
+  const H = newGame();
+  check(H.SaveGame.load(saved), "the day-85 tower with 14b's additions didn't load");
+  check(strip(H.SaveGame.exportText()) === strip(saved), "the day-85 tower with 14b's additions saves differently once loaded");
+  G.runTo(day + 1, 1);
+  check(G.World.money > money - 150000, `the day-85 tower lost ${money - G.World.money} in a day`);
   check(G.People.population() > 250, `the day-85 tower dropped to ${G.People.population()} people in a day`);
   check(G.Ratings.stars === 3, "the day-85 tower lost its third star");
 });

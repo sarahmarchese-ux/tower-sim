@@ -43,6 +43,9 @@
 //     cleaning, one of them goes and cleans it (housekeeping.js).
 //   - Security guards (milestone 12) work nights, 8pm to 6am, in their
 //     Security office, and commute in and out like makers (security.js).
+//   - Housekeepers and guards can ride staff lifts (milestone 14b), and
+//     take whichever way is quickest; nobody else can (`staff` in
+//     routing.js's plan).
 //
 // Instead of a timetable of "at 9:00 do X", each person just asks, whenever
 // they're standing still: "given the time right now, where should I be — in
@@ -184,7 +187,7 @@ const People = {
   // an easy trip (shops.js). A driver (`parked`: the car park and space
   // Parking.pickFor chose) turns up at their car instead.
   addShopper(room, budget, parked = null) {
-    const width = ROOM_TYPES[room.type].width;
+    const width = roomWidth(room);
     this.list.push({
       parking: parked ? parked.carPark : null,
       space: parked ? parked.space : null,
@@ -290,7 +293,7 @@ const People = {
   // Where each tenant stands inside their room, spread evenly across it.
   slotX(room, slot) {
     const type = ROOM_TYPES[room.type];
-    return room.tileStart + ((slot + 1) * type.width) / (type.tenants + 1);
+    return room.tileStart + ((slot + 1) * roomWidth(room)) / (type.tenants + 1);
   },
 
   // Where this person stands in their room: a tenant's own slot, or the
@@ -434,7 +437,7 @@ const People = {
   startTrip(person, target, from, freshTrip = false) {
     const starts = from ? [from] : this.pointsFor(person, this.whereIs(person));
     const goals = this.pointsFor(person, target);
-    const route = starts.length && goals.length ? Routing.plan(starts, goals) : null;
+    const route = starts.length && goals.length ? Routing.plan(starts, goals, this.planFor(person)) : null;
 
     if (!route) {
       // No way through (no lobby, a missing elevator, a gap in the floor...).
@@ -661,20 +664,26 @@ const People = {
     // staying would be costed as if they'd just joined at the back.)
     const kept = car.waiting;
     car.waiting = kept.filter((w, i) => i < spot || w.floor !== leg.fromFloor || w.direction !== direction);
-    const route = Routing.plan([here], goals);
+    const route = Routing.plan([here], goals, this.planFor(person));
     const first = route && route.legs.find((l) => l.type !== "walk");
     let switchTo = route && !(first && first.transitId === leg.transitId);
     if (switchTo) {
       // Another way looks quicker: is it quicker than waiting on by enough
       // to be worth giving up their place?
       const exit = { floor: leg.toFloor, x: Routing.stopX(car.transit, leg.toFloor) };
-      const rest = Routing.plan([exit], goals);
+      const rest = Routing.plan([exit], goals, this.planFor(person));
       const stay = rest ? Routing.boardCost(car.transit, leg.fromFloor, direction) +
         ELEVATOR_COST_PER_FLOOR * Math.abs(leg.toFloor - leg.fromFloor) + rest.cost : Infinity;
       switchTo = route.cost + SWITCH_MARGIN < stay;
     }
     car.waiting = kept;
     if (switchTo) this.reroute(person);
+  },
+
+  // How this person plans a trip: housekeepers and guards can ride staff
+  // lifts.
+  planFor(person) {
+    return { staff: isStaffRole(person.role) };
   },
 
   reroute(person, removed) {
