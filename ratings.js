@@ -6,11 +6,12 @@
 // SimTower. 2★ at 100 people unlocks shops, hotel rooms, restaurants,
 // Housekeeping and the Security office; 3★ at 300 people, with a
 // Housekeeping room and a Security office whose staff are hired, unlocks
-// basements and Parking (rooms.js: `unlocksAt`, BASEMENTS_AT_STARS).
+// basements, Parking and the Snack Bar (rooms.js: `unlocksAt`,
+// BASEMENTS_AT_STARS).
 
 const STAR_TARGETS = [
   { stars: 2, population: 100, unlocks: "Shops, hotel rooms, the Restaurant and service rooms unlock." },
-  { stars: 3, population: 300, needs: ["housekeeping", "security"], unlocks: "Basements and Parking unlock." },
+  { stars: 3, population: 300, needs: ["housekeeping", "security"], unlocks: "Basements, Parking and the Snack Bar unlock." },
 ];
 
 // Rooms a star can need, and how the checklist names them. "Staffed" means

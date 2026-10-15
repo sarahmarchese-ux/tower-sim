@@ -13,6 +13,12 @@
 // trip down, and they pay for their meal. But a café high up the tower
 // pulls everyone up the elevators at once, so where it goes matters.
 //
+// From milestone 14, a maker with no café to go to tries a Snack Bar
+// (snackbars.js) before going out: the nearest one that's serving and has
+// a seat, within the same detour. `lunchCafe` is then that Snack Bar. They
+// eat for 10–15 minutes (`lunchDoneAt`) and go back to their studio for
+// the rest of their break.
+//
 // While it's serving lunch (weekdays, its `lunchHours`), a café is busy
 // and noisy: it gives off its `noise` to the rooms around it, as a studio
 // does while its makers work (stress.js).
@@ -35,20 +41,23 @@ const Cafes = {
     if (person.lunchDay === day || day % 7 >= 5) return;
     if (minute < person.lunchAt || minute >= person.lunchAt + person.lunchMinutes) return;
     person.lunchDay = day;
+    person.lunchDoneAt = null;
     person.lunchCafe = this.pick(person);
     if (person.lunchCafe) {
-      const width = ROOM_TYPES.cafe.width;
+      const width = ROOM_TYPES[person.lunchCafe.type].width;
       person.seatX = person.lunchCafe.tileStart + 0.5 + Math.random() * (width - 1);
     }
   },
 
   // The café closest to this maker's studio that's open, has a seat, and
-  // isn't much further than going out; null if none.
+  // isn't much further than going out; failing that, the nearest Snack Bar
+  // the same; null if neither.
   pick(person) {
     const home = { floor: person.room.floor, x: People.homeX(person) };
     const out = Routing.plan([home], Routing.lobbyPoints());
+    const limit = out ? out.cost + LUNCH_DETOUR_COST : Infinity;
     let best = null;
-    let bestCost = out ? out.cost + LUNCH_DETOUR_COST : Infinity;
+    let bestCost = limit;
     for (const room of World.rooms) {
       if (room.type !== "cafe" || !Shops.isOpen(room) || this.seated(room) >= CAFE_SEATS) continue;
       const seat = { floor: room.floor, x: room.tileStart + ROOM_TYPES.cafe.width / 2 };
@@ -58,7 +67,7 @@ const Cafes = {
         bestCost = route.cost;
       }
     }
-    return best;
+    return best || SnackBars.nearest(home, limit);
   },
 
   // Called by people.js when a maker sits down: they pay for lunch. If
@@ -70,17 +79,24 @@ const Cafes = {
       this.eatOut(person);
       return;
     }
+    if (room.type === "snackbar") {
+      SnackBars.onMakerArrived(person);
+      return;
+    }
     const spend = Math.round(randomBetween(ROOM_TYPES.cafe.visitors.spend));
     room.till = (room.till || 0) + spend;
     Economy.popupOverRoom(room, `+${World.formatMoney(spend)}`, "#c8f7d4");
   },
 
-  // A café has closed (its owner moved out) or been knocked down: makers
-  // eating there or on their way eat out instead (or, if their break is
-  // over, go back to work).
+  // A café (or Snack Bar) has closed (its owner moved out) or been knocked
+  // down: makers eating there or on their way eat out instead (or, if
+  // their break is over, go back to work). Those who've already eaten
+  // there and gone back to their studio stay put.
   onClosed(room) {
     for (const person of People.list) {
-      if (person.lunchCafe === room) this.eatOut(person);
+      if (person.lunchCafe === room && (person.state === "eating" || (person.route && person.target === "cafe"))) {
+        this.eatOut(person);
+      }
     }
   },
 

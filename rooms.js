@@ -23,12 +23,16 @@
 // So does a restaurant (milestone 11, see restaurants.js), in the evening:
 // residents and hotel guests some nights, and diners from outside, who
 // come in twice as often on Fridays and Saturdays (`dayRush`, Mon ... Sun).
-// Shops, cafés and restaurants are "storefronts": `keeperHours` is when
-// the keeper is in (the room is open), and `visitors` says when visitors
-// come from the lobby, how often, how long they stay and what they spend.
-// A café is noisy (`noise`) only while it's serving lunch, and a
-// restaurant only while it's serving dinner, as a studio is only while its
-// makers work.
+// The Snack Bar (milestone 14, see snackbars.js) unlocks at 3★: cheap and
+// quick, open all day, every day, for shoppers on their way out of a shop,
+// makers with no café seat, residents and guests at lunchtime, and a small
+// crowd of its own.
+// Shops, cafés, restaurants and Snack Bars are "storefronts": `keeperHours`
+// is when the keeper is in (the room is open), and `visitors` says when
+// visitors come from the lobby, how often, how long they stay and what they
+// spend. A café is noisy (`noise`) only while it's serving lunch, a
+// restaurant only while it's serving dinner, and a Snack Bar while it
+// serves (`servingHours`), as a studio is only while its makers work.
 //
 // A hotel room (milestone 9, see hotels.js) has no tenants of its own:
 // parties of up to `tenants` guests book it for a night or a few, and it
@@ -91,6 +95,15 @@ const ROOM_TYPES = {
     },
     dinnerHours: [18, 23], // when it's busy (and noisy), every day
   },
+  snackbar: {
+    name: "Snack Bar", width: 8, cost: 10000, color: "#f0a868", tenants: 1, role: "shopkeeper", noise: 1, unlocksAt: 3,
+    keeperHours: [[9.5, 10], [21, 21.5]], // arrives 9:30–10am, leaves 9–9:30pm
+    visitors: {
+      who: "customers", hours: [10, 20.5], gapMinutes: 20, weekendRush: 2, eveningRush: 1, max: 6,
+      stayMinutes: [10, 15], spend: [8, 12], quietPerDay: 200,
+    },
+    servingHours: [10, 21], // when it's busy (and noisy), every day
+  },
   single: { name: "Single Room", width: 6, cost: 10000, color: "#e9a6a6", underground: false, tenants: 1, role: "guest", noise: 0, ratePerNight: 2000, parties: ["buyer"], unlocksAt: 2 },
   twin: { name: "Twin Room", width: 10, cost: 17000, color: "#e08f9a", underground: false, tenants: 2, role: "guest", noise: 0, ratePerNight: 2800, parties: ["tourists", "buyer"], unlocksAt: 2 },
   housekeeping: {
@@ -115,8 +128,8 @@ const TRANSIT_TYPES = {
   elevator: { name: "Elevator", width: 4, baseCost: 20000, costPerFloor: 1000, maxFloors: 30, upkeepPerDay: 1000 },
 };
 
-// Shops, cafés and restaurants: rooms with a keeper that sell to visitors
-// (shops.js).
+// Shops, cafés, restaurants and Snack Bars: rooms with a keeper that sell
+// to visitors (shops.js).
 function isStorefront(room) {
   return !!ROOM_TYPES[room.type].visitors;
 }

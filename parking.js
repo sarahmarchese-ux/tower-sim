@@ -5,8 +5,8 @@
 // run: it pays off only through the drivers it brings.
 //
 // Drivers are visitors like shoppers, the lunch crowd and diners (shops.js
-// sends them), and come on top of them: every shop, café and restaurant
-// gets DRIVER_SHARE as many again by car, with the same rushes. A driver
+// sends them), and come on top of them: every shop, café, restaurant and
+// Snack Bar gets DRIVER_SHARE as many again by car, with the same rushes. A driver
 // comes only if a car park has a free space and a way through to where
 // they're going; with several, they use the one with the easiest trip.
 // They park, walk (or climb, or ride) from the car park, and go back to
@@ -64,11 +64,12 @@ const Parking = {
     return best;
   },
 
-  // Called by people.js when a driver arrives at their shop, café or
-  // restaurant: today's count, for the tooltip.
+  // Called by people.js when a driver arrives at their shop, café,
+  // restaurant or Snack Bar: today's count, for the tooltip. (One who
+  // stops at a Snack Bar after a shop was counted at the shop.)
   onDriverArrived(person) {
     const carPark = person.parking;
-    if (!carPark) return;
+    if (!carPark || person.afterShop) return;
     if (carPark.driversDay !== Clock.day) {
       carPark.driversDay = Clock.day;
       carPark.driversToday = 0;
@@ -80,7 +81,7 @@ const Parking = {
     return carPark.driversDay === Clock.day ? carPark.driversToday : 0;
   },
 
-  // Can drivers get from this car park to any shop, café or restaurant?
+  // Can drivers get from this car park to any storefront?
   // Cached until the building changes, since the tooltip asks every frame.
   reachesAnything(carPark) {
     if (this._reachVersion !== World.version) {
@@ -107,10 +108,10 @@ const Parking = {
   // For the car park's tooltip: why no drivers come, if none can.
   warning(carPark) {
     if (!World.rooms.some((room) => isStorefront(room))) {
-      return "Drivers come to shops, cafés and restaurants: build one for them to visit.";
+      return "Drivers come to shops, cafés, restaurants and Snack Bars: build one for them to visit.";
     }
     if (!this.reachesAnything(carPark)) {
-      return "No shop, café or restaurant can be reached from here: connect this floor to them with stairs or an elevator.";
+      return "No shop or place to eat can be reached from here: connect this floor to them with stairs or an elevator.";
     }
     return null;
   },

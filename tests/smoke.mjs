@@ -403,7 +403,9 @@ try {
     await dragAcross([0, -1], [39, -1]);
     check(!(await page.evaluate(() => World.floors.has(-1) && World.floors.get(-1).size > 0)), "a basement was dug before 3★");
     check((await page.evaluate(() => World.money)) === before, "a refused basement cost money");
-    check(await page.evaluate(() => document.querySelector('#toolbar button[data-tool="parking"]').classList.contains("locked")), "Parking isn't locked before 3★");
+    for (const tool of ["parking", "snackbar"]) {
+      check(await page.evaluate((t) => document.querySelector(`#toolbar button[data-tool="${t}"]`).classList.contains("locked"), tool), `${tool} isn't locked before 3★`);
+    }
 
     // 300 people isn't enough without both service rooms staffed. (Reaching
     // 300 would take too long here, so the head count is faked.)
@@ -421,7 +423,7 @@ try {
     });
     check(stars.without === 2, `3★ was given without a staffed Security office (${stars.without}★)`);
     check(stars.with === 3, `300 people with both service rooms staffed didn't make 3★ (${stars.with}★)`);
-    check(/3-star!.*Basements and Parking unlock/.test(stars.banner), `no 3★ banner: "${stars.banner}"`);
+    check(/3-star!.*Basements, Parking and the Snack Bar unlock/.test(stars.banner), `no 3★ banner: "${stars.banner}"`);
 
     // Dig B1 at $400 a tile, and run the elevator down to it.
     const dug = await page.evaluate(() => World.money);
@@ -442,9 +444,20 @@ try {
     await clickAt(20, -1); // still holding Parking
     await page.keyboard.press("Escape");
     check(await page.evaluate(() => World.rooms.some((r) => r.type === "parking" && r.floor === -1)), "no car park was built on B1");
+    // A Snack Bar by the elevator on B1, for the drivers.
+    const unlocked = await page.evaluate(() => !document.querySelector('#toolbar button[data-tool="snackbar"]').classList.contains("locked"));
+    check(unlocked, "the Snack Bar is still locked at 3★");
+    const beforeSnack = await page.evaluate(() => World.money);
+    await pickTool("snackbar");
+    await clickAt(4, -1);
+    await page.keyboard.press("Escape");
+    check(await page.evaluate(() => World.rooms.some((r) => r.type === "snackbar" && r.floor === -1 && r.tileStart === 4)), "no Snack Bar was built on B1");
+    check(beforeSnack - (await page.evaluate(() => World.money)) === 10000, "the Snack Bar didn't cost $10,000");
 
-    // Drivers park, visit the shop, café and restaurant, and drive off.
+    // Drivers park, visit the shop, café, restaurant and Snack Bar, and
+    // drive off.
     await page.evaluate(() => {
+      window.__snackSales = 0;
       window.__drivers = 0;
       window.__driverSales = 0;
       window.__mostParked = 0;
@@ -466,12 +479,15 @@ try {
         const spaces = Parking.drivers(carPark).map((p) => p.space);
         window.__mostParked = Math.max(window.__mostParked, spaces.length);
         if (new Set(spaces).size !== spaces.length) window.__mostParked = 999; // two cars in one space
+        const snackBar = World.rooms.find((r) => r.type === "snackbar");
+        window.__snackSales = Math.max(window.__snackSales, snackBar.till || 0, snackBar.salesYesterday || 0);
       });
     }
     const parked = await page.evaluate(() => ({ drivers: window.__drivers, sales: window.__driverSales, most: window.__mostParked }));
     check(parked.drivers > 0, "no driver ever came");
     check(parked.sales > 0, "drivers never bought anything");
     check(parked.most <= 20, `the car park held ${parked.most} cars (20 spaces), or two in one space`);
+    check((await page.evaluate(() => window.__snackSales)) > 0, "the Snack Bar never sold anything");
 
     // Hovering the car park says how full it is.
     const p = await spot(22, -1);

@@ -16,15 +16,15 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FILES = [
   "grid", "clock", "rooms", "world", "routing", "elevators", "people", "economy", "stress",
-  "shops", "cafes", "restaurants", "hotels", "housekeeping", "security", "parking", "ratings", "save",
+  "shops", "cafes", "restaurants", "snackbars", "hotels", "housekeeping", "security", "parking", "ratings", "save",
 ];
 const SOURCE = FILES.map((f) => fs.readFileSync(path.join(ROOT, `${f}.js`), "utf8")).join("\n;\n");
 // The game's objects are top-level `const`s, which a sandbox doesn't expose
 // as properties, so the script hands them over itself.
 const EXPORTS = `
 ;globalThis.G = { Grid, Clock, World, Routing, Elevators, People, Economy, Stress, Shops, Cafes, Restaurants,
-  Hotels, Housekeeping, Security, Parking, Ratings, SaveGame, ROOM_TYPES, TRANSIT_TYPES, ELEVATOR_CAPACITY,
-  RESTAURANT_SEATS, SAVE_KEY, MINUTES_PER_DAY };`;
+  SnackBars, Hotels, Housekeeping, Security, Parking, Ratings, SaveGame, ROOM_TYPES, TRANSIT_TYPES, ELEVATOR_CAPACITY,
+  RESTAURANT_SEATS, CAFE_SEATS, SNACK_BAR_SEATS, SAVE_KEY, MINUTES_PER_DAY };`;
 
 // A new game, with `seed` for its dice.
 function newGame(seed = 1) {
@@ -503,6 +503,264 @@ test("a car park nobody can get anywhere from says so", () => {
   check(/can be reached from here/.test(G.Parking.warning(carPark) || ""), `cut off, the warning reads: ${G.Parking.warning(carPark)}`);
   build(G, G.World.placeTransit("stairs", 50, -1, 0), "stairs");
   check(G.Parking.warning(carPark) === null, `connected, the car park still warns: ${G.Parking.warning(carPark)}`);
+});
+
+// --- The Snack Bar (milestone 14) -------------------------------------------
+
+// The plan's test tower: a lobby, two shops with a Snack Bar between them,
+// a car park on B1, condos (one right over the Snack Bar), and hotel rooms
+// with Housekeeping. (Makers and a full café have their own tower, below.)
+function snackTower(seed = 1) {
+  const G = newGame(seed);
+  G.money(1e8);
+  G.Ratings.stars = 3;
+  for (let f = -1; f <= 6; f++) G.World.buildFloorRun(f, 0, 99);
+  build(G, G.World.placeRoom("lobby", 0, 0), "a lobby");
+  build(G, G.World.placeTransit("elevator", 24, -1, 6), "an elevator");
+  build(G, G.World.placeTransit("stairs", 28, -1, 0), "stairs to B1");
+  build(G, G.World.placeTransit("stairs", 28, 0, 1), "stairs to 1F");
+  build(G, G.World.placeRoom("parking", -1, 40), "a car park");
+  build(G, G.World.placeRoom("shop", 0, 32), "a shop");
+  build(G, G.World.placeRoom("snackbar", 0, 42), "a Snack Bar");
+  build(G, G.World.placeRoom("shop", 0, 50), "a second shop");
+  build(G, G.World.placeRoom("condo", 1, 42), "a condo over the Snack Bar");
+  build(G, G.World.placeRoom("condo", 5, 32), "a condo");
+  build(G, G.World.placeRoom("condo", 5, 48), "a condo");
+  build(G, G.World.placeRoom("condo", 5, 64), "a condo");
+  for (let x = 32; x < 92; x += 6) build(G, G.World.placeRoom("single", 6, x), "a Single");
+  build(G, G.World.placeRoom("housekeeping", 6, 92), "Housekeeping");
+  return G;
+}
+
+test("the Snack Bar unlocks at 3★ and goes where storefronts go, basements included", () => {
+  const G = newGame();
+  G.money(1e8);
+  G.Ratings.stars = 2;
+  build(G, G.World.buildFloorRun(0, 0, 59), "the ground floor");
+  const locked = G.World.placeRoom("snackbar", 0, 0);
+  check(!locked.ok && /Snack Bars unlock at 3★/.test(locked.reason), `at 2★ a Snack Bar: ${JSON.stringify(locked)}`);
+  G.Ratings.stars = 3;
+  build(G, G.World.buildFloorRun(-1, 0, 59), "B1");
+  const money = G.World.money;
+  build(G, G.World.placeRoom("snackbar", 0, 0), "a Snack Bar");
+  check(money - G.World.money === 10000, `a Snack Bar cost ${money - G.World.money}, expected $10,000`);
+  build(G, G.World.placeRoom("snackbar", -1, 0), "a Snack Bar on B1");
+  const before = G.World.money;
+  G.World.demolishAt(-1, 3);
+  check(G.World.money - before === 5000, `demolishing a Snack Bar refunded ${G.World.money - before}, expected $5,000`);
+});
+
+test("shoppers stop for a snack after a shop next door (not one far away), and drivers come too", () => {
+  const G = snackTower();
+  const snackBar = room(G, "snackbar");
+  let shopCheckouts = 0;
+  const kinds = { walkIn: 0, driver: 0, afterShop: 0 };
+  let afterShopMood = 0;
+  const checkout = G.Shops.checkout.bind(G.Shops);
+  G.Shops.checkout = (p) => {
+    if (p.room.type === "shop") shopCheckouts++;
+    return checkout(p);
+  };
+  const arrived = G.Shops.onShopperArrived.bind(G.Shops);
+  G.Shops.onShopperArrived = (p, felt) => {
+    arrived(p, felt);
+    if (p.room !== snackBar) return;
+    if (p.afterShop) {
+      kinds.afterShop++;
+      afterShopMood += p.mood;
+    } else kinds[p.parking ? "driver" : "walkIn"]++;
+  };
+  G.runTo(1, 0);
+  shopCheckouts = 0;
+  afterShopMood = 0;
+  for (const kind in kinds) kinds[kind] = 0;
+  G.runTo(2, 0); // a whole Tuesday
+  const share = kinds.afterShop / shopCheckouts;
+  check(share > 0.2 && share < 0.45, `${kinds.afterShop} of ${shopCheckouts} shoppers stopped for a snack, expected about 1 in 3`);
+  check(afterShopMood / kinds.afterShop > 0.95, `shoppers from next door spent ${Math.round((100 * afterShopMood) / kinds.afterShop)}% of their budget, not all of it`);
+  check(kinds.walkIn >= 20 && kinds.walkIn <= 45, `${kinds.walkIn} walk-ins on a weekday, expected about 30 (every 20 minutes, 10am–8:30pm)`);
+  check(kinds.driver > 0, "no drivers came to the Snack Bar");
+  check(snackBar.salesYesterday >= 300 && snackBar.salesYesterday <= 1200, `the Snack Bar took ${snackBar.salesYesterday} on a weekday`);
+
+  // Three floors up from the shops, it's no short detour.
+  const H = newGame();
+  H.money(1e8);
+  H.Ratings.stars = 3;
+  for (let f = 0; f <= 3; f++) H.World.buildFloorRun(f, 0, 79);
+  build(H, H.World.placeRoom("lobby", 0, 0), "a lobby");
+  build(H, H.World.placeTransit("elevator", 24, 0, 3), "an elevator");
+  build(H, H.World.placeRoom("shop", 0, 32), "a shop");
+  build(H, H.World.placeRoom("shop", 0, 50), "a second shop");
+  build(H, H.World.placeRoom("snackbar", 3, 32), "a Snack Bar up on 4F");
+  const far = room(H, "snackbar");
+  H.runTo(1, 20);
+  check(H.Shops.isOpen(far) && H.Shops.weekAverage(far) === null, "the far Snack Bar isn't open on its first full day");
+  check(H.SnackBars.afterShopToday(far) === 0, `${H.SnackBars.afterShopToday(far)} shoppers went three floors up for a snack`);
+  check(H.Shops.takingsToday() > 0 && far.till > 0, "nobody bought anything in the tower with a far Snack Bar");
+});
+
+test("makers eat at a Snack Bar only when the café is full, then go back to work", () => {
+  // 44 makers on 2F–4F, and a café and a Snack Bar on 2F by the elevator.
+  // The café seats 24, and its lunch crowd from outside takes some of those.
+  const G = newGame();
+  G.money(1e8);
+  G.Ratings.stars = 3;
+  for (let f = 0; f <= 3; f++) G.World.buildFloorRun(f, 0, 95);
+  build(G, G.World.placeRoom("lobby", 0, 0), "a lobby");
+  build(G, G.World.placeTransit("elevator", 24, 0, 3), "an elevator");
+  build(G, G.World.placeRoom("cafe", 1, 28), "a café");
+  build(G, G.World.placeRoom("snackbar", 1, 40), "a Snack Bar");
+  for (let x = 48; x < 96; x += 8) build(G, G.World.placeRoom("sewing", 1, x), "a studio");
+  for (let f = 2; f <= 3; f++) {
+    for (let x = 28; x < 92; x += 8) build(G, G.World.placeRoom("sewing", f, x), "a studio");
+  }
+  const snackBar = room(G, "snackbar");
+  const cafe = room(G, "cafe");
+  const picks = [];
+  const pick = G.Cafes.pick.bind(G.Cafes);
+  G.Cafes.pick = (p) => {
+    const full = !G.Shops.isOpen(cafe) || G.Cafes.seated(cafe) >= G.CAFE_SEATS;
+    const chosen = pick(p);
+    picks.push({ chosen, full });
+    return chosen;
+  };
+  G.runTo(1, 11);
+  const eating = new Map(); // maker -> minutes at the Snack Bar today
+  const leftEarly = new Set(); // ...who headed back to work before their break was over
+  for (let t = 0; t < 4 * 60; t++) {
+    G.run(1);
+    for (const p of G.People.list) {
+      if (p.role !== "maker" || p.lunchCafe !== snackBar) continue;
+      if (p.state === "eating") eating.set(p, (eating.get(p) || 0) + 1);
+      const minute = G.Clock.totalMinutes % G.MINUTES_PER_DAY;
+      if (eating.has(p) && p.route && p.target === "room" && minute < p.lunchAt + p.lunchMinutes) leftEarly.add(p);
+    }
+  }
+  const toSnackBar = picks.filter((x) => x.chosen === snackBar);
+  check(picks.some((x) => x.chosen === cafe), "no maker ate at the café");
+  check(toSnackBar.length > 0, "no maker ate at the Snack Bar when the café was full");
+  check(toSnackBar.every((x) => x.full), `${toSnackBar.filter((x) => !x.full).length} makers chose the Snack Bar while the café had a seat`);
+  const longest = Math.max(...eating.values());
+  check(longest <= 16, `a maker sat at the Snack Bar for ${longest} minutes, expected 10–15`);
+  check(leftEarly.size > 0, "no maker headed back to their studio before their break was over (as they'd stay at a café)");
+});
+
+test("residents at weekends and hotel guests any day come down for lunch", () => {
+  const G = snackTower();
+  const snackBar = room(G, "snackbar");
+  const seen = new Set();
+  const byDay = { resident: [0, 0, 0, 0, 0, 0, 0], guest: [0, 0, 0, 0, 0, 0, 0] };
+  const eating = new Map();
+  for (let t = 0; t < 7 * G.MINUTES_PER_DAY; t++) {
+    G.run(1);
+    for (const p of G.People.list) {
+      if (p.snackRoom !== snackBar || p.state !== "eating") continue;
+      const key = `${p.id}:${G.Clock.day}`;
+      eating.set(key, (eating.get(key) || 0) + 1);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      byDay[p.role][G.Clock.day % 7]++;
+    }
+  }
+  const weekday = (counts) => counts.slice(0, 5).reduce((a, b) => a + b, 0);
+  const weekend = (counts) => counts[5] + counts[6];
+  check(weekday(byDay.resident) === 0, `residents came down for a snack on weekdays: ${byDay.resident}`);
+  check(weekend(byDay.resident) > 0, "no resident came down for a snack at the weekend");
+  check(weekday(byDay.guest) + weekend(byDay.guest) > 0, "no hotel guest came down for a snack all week");
+  check(Math.max(...eating.values()) <= 16, `someone sat at the Snack Bar for ${Math.max(...eating.values())} minutes, expected 10–15`);
+  check(snackBar.status === "occupied", "a busy Snack Bar closed at its first weekly review");
+});
+
+test("a Snack Bar is noisy 10am–9pm, every day, evenings included", () => {
+  const G = snackTower();
+  const condo = G.World.rooms.find((r) => r.type === "condo" && r.floor === 1);
+  const at = (day, hour) => {
+    G.runTo(day, hour);
+    return G.Stress.noiseAt(condo);
+  };
+  check(at(5, 9.75) === 0, "the condo over the Snack Bar heard noise at 9:45am on Saturday");
+  check(at(5, 10.5) === 1, "the condo over the Snack Bar heard no noise at 10:30am on Saturday");
+  check(at(5, 20.75) === 1, "the condo over the Snack Bar heard no noise at 8:45pm on Saturday");
+  check(at(5, 21.5) === 0, "the condo over the Snack Bar still heard noise at 9:30pm");
+  check(G.Stress.noiseAt(condo, "working") === 1 && G.Stress.noiseAt(condo, "evening") === 1,
+    "the condo's readout should show the Snack Bar's noise both in working hours and in the evening");
+});
+
+test("a quiet Snack Bar closes at the weekly review", () => {
+  const G = snackTower();
+  const snackBar = room(G, "snackbar");
+  G.runTo(1, 12);
+  check(snackBar.status === "occupied", "the Snack Bar isn't open by Tuesday noon");
+  snackBar.weekDays = 3;
+  snackBar.weekSales = 3 * 150; // $150 a day, under the $200 line
+  G.Shops.weeklyReview();
+  check(snackBar.status === "vacant", "a Snack Bar taking $150 a day didn't close");
+  check(G.popups.includes("Closed: too few customers"), `no "Closed: too few customers" message (got ${G.popups.slice(-3)})`);
+  G.run(30);
+  check(!G.People.list.some((p) => p.room === snackBar), "customers or the keeper are still in a Snack Bar that closed half an hour ago");
+});
+
+test("closing a Snack Bar or restaurant moves only those eating there", () => {
+  // Someone who had a snack at lunch still points at the Snack Bar at
+  // dinner, and someone who dined last night still points at the
+  // restaurant at lunch. Neither counts as seated there, nor is sent back
+  // to their seat (to pay again) when it closes.
+  const G = snackTower();
+  build(G, G.World.placeRoom("restaurant", 0, 60), "a restaurant");
+  const snackBar = room(G, "snackbar");
+  const restaurant = room(G, "restaurant");
+  G.runTo(5, 19.5); // Saturday evening
+  const [A, B] = G.People.list.filter((p) => p.role === "resident" && p.state === "inRoom");
+  const sitAt = (p, target, place) => {
+    p.state = "eating";
+    p.target = target;
+    p.route = null;
+    p.floor = place.floor;
+    p.x = place.tileStart + 1;
+    p.idleUntil = G.Clock.totalMinutes + 60;
+  };
+  Object.assign(A, { snackRoom: snackBar, snackDay: G.Clock.day, snackDoneAt: 0, dinnerRoom: restaurant, dinnerDay: G.Clock.day });
+  sitAt(A, "restaurant", restaurant); // at dinner, after a snack at lunch
+  Object.assign(B, { dinnerRoom: restaurant, dinnerDay: G.Clock.day - 1, snackRoom: snackBar, snackDay: G.Clock.day, snackDoneAt: G.Clock.totalMinutes + 60 });
+  sitAt(B, "snack", snackBar); // at the Snack Bar, after dinner out last night
+  check(G.SnackBars.snackersAt(snackBar) === 1, `the Snack Bar counts ${G.SnackBars.snackersAt(snackBar)} residents, expected 1 (not the one at dinner)`);
+  check(G.Restaurants.dinersAt(restaurant) === 1, `the restaurant counts ${G.Restaurants.dinersAt(restaurant)} residents, expected 1 (not the one at the Snack Bar)`);
+  G.World.demolishAt(0, 44);
+  check(A.state === "eating" && A.target === "restaurant", `demolishing the Snack Bar moved a resident at dinner (${A.state}, ${A.target})`);
+  check(B.state !== "eating", "a resident eating at the demolished Snack Bar stayed sat there");
+  sitAt(B, "snack", { floor: 0, tileStart: 42 });
+  G.World.demolishAt(0, 64);
+  check(A.state !== "eating", "a resident at dinner in the demolished restaurant stayed sat there");
+  check(B.state === "eating" && B.target === "snack", `demolishing the restaurant moved someone eating elsewhere (${B.state}, ${B.target})`);
+});
+
+test("a save reloads with someone mid-snack, and plays on the same", () => {
+  const G = snackTower();
+  const snackBar = room(G, "snackbar");
+  G.runTo(5, 11.5); // Saturday lunchtime
+  const snacking = () => G.People.list.find((p) => p.snackRoom === snackBar && p.state === "eating");
+  for (let t = 0; t < 180 && !snacking(); t++) G.run(1);
+  const P = snacking();
+  check(P, "nobody was having a snack on Saturday lunchtime");
+  if (!P) return;
+  const strip = (text) => {
+    const data = JSON.parse(text);
+    delete data.savedAt;
+    return JSON.stringify(data);
+  };
+  const text = G.SaveGame.exportText();
+  const H = newGame();
+  check(H.SaveGame.load(text), "the save didn't load");
+  const Q = H.People.list.find((p) => p.id === P.id);
+  check(Q && Q.state === "eating" && Q.snackRoom === H.World.rooms.find((r) => r.id === snackBar.id),
+    "the reloaded snacker isn't eating at the Snack Bar");
+  check(strip(H.SaveGame.exportText()) === strip(text), "the reloaded game saves differently from the original");
+  G.reseed(42);
+  H.reseed(42);
+  G.run(60);
+  H.run(60);
+  check(strip(H.SaveGame.exportText()) === strip(G.SaveGame.exportText()), "after an hour the reloaded game had drifted from the original");
+  check(Q.state !== "eating", "the reloaded snacker was still eating an hour later");
 });
 
 // --- Saving -----------------------------------------------------------------
