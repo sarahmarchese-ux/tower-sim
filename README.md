@@ -35,7 +35,7 @@ a room for its details.
 Two test files, both run by GitHub Actions on every pull request
 (`.github/workflows/smoke.yml`), and both with `npm test`.
 
-**`tests/sim.mjs`** checks the game's rules without a browser, in about two
+**`tests/sim.mjs`** checks the game's rules without a browser, in about 15
 seconds, with nothing to install (`npm run sim`). It loads the game's logic
 into a sandbox with seeded dice, builds towers through the game's own
 functions, and checks: someone at the front of an elevator queue keeps their
@@ -50,7 +50,11 @@ staying for a late shopper; seats held by diners on their way; visitors
 turning back from a shop that closes; people rerouting when a lobby is
 demolished; basements (3★, B10, which rooms, half back); the car park's
 warnings; a save reloading to the very same game, which then plays on the
-same; and a save that won't load being kept.
+same; and a save that won't load being kept. It also loads a real player's
+tower, `tests/saves/day-85.json` (a 3★ game on day 85: 14 floors, about 300
+people, nine elevators and four car parks), checks it saves back the same,
+and plays it for a day: drivers come, shops sell, money goes up, and it
+keeps its people and its third star. That one takes most of the time.
 
 **`tests/smoke.mjs`** plays the game in headless Chromium. It builds a
 small tower with real mouse clicks (checking shops, hotel rooms,
