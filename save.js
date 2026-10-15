@@ -154,6 +154,10 @@ const SaveGame = {
           lunchCafeId: p.lunchCafe ? p.lunchCafe.id : null,
           dinnerRoom: undefined,
           dinnerRoomId: p.dinnerRoom ? p.dinnerRoom.id : null,
+          // Left out when there's none, so a save from before Snack Bars
+          // saves back exactly as it was.
+          snackRoom: undefined,
+          snackRoomId: p.snackRoom ? p.snackRoom.id : undefined,
           job: undefined,
           jobId: p.job ? p.job.id : null,
           cleaningAt: undefined, // the job, while they're at it (see load)
@@ -295,7 +299,7 @@ const SaveGame = {
       const transitById = new Map(data.world.transit.map((t) => [t.id, t]));
       const personIds = new Set();
       const people = data.people.list.map((saved) => {
-        const { roomId, lunchCafeId, dinnerRoomId, jobId, parkingId, ...person } = saved;
+        const { roomId, lunchCafeId, dinnerRoomId, snackRoomId, jobId, parkingId, ...person } = saved;
         person.room = roomsById.get(roomId);
         if (!person.room) throw new Error("a person's room is missing");
         check(isInt(person.id) && person.id > 0 && !personIds.has(person.id), "a person has a missing or repeated id");
@@ -327,7 +331,12 @@ const SaveGame = {
         if (person.role === "resident" || person.role === "guest") {
           if (person.dinnerAt == null) Object.assign(person, People.dinnerTimes());
           person.dinnerRoom = (dinnerRoomId != null && roomsById.get(dinnerRoomId)) || null;
-          if (person.state === "eating" && !person.dinnerRoom) person.state = "offsite";
+          // ...and their Snack Bar, if they're having lunch at or heading
+          // for one. Their lunchtime comes when it's first needed
+          // (snackbars.js), so it isn't added here.
+          person.snackRoom = (snackRoomId != null && roomsById.get(snackRoomId)) || null;
+          const meal = person.target === "snack" ? person.snackRoom : person.dinnerRoom;
+          if (person.state === "eating" && !meal) person.state = "offsite";
         }
         // A housekeeper's hotel room to clean, if they're on a job.
         if (person.role === "housekeeper") {

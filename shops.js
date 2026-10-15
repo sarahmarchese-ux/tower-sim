@@ -1,13 +1,15 @@
 // Shops (milestone 8): where the tower's makers sell their work, and the
 // first rooms that earn from visitors rather than tenants.
 //
-// Cafés (milestone 10) and restaurants (milestone 11) run on the same
-// machinery: a keeper, visitors from the lobby (the lunch crowd, or diners
-// in the evening), a till and a weekly review. What differs, such as their
-// hours and what visitors spend, is in rooms.js (`keeperHours`,
-// `visitors`). Makers' lunch breaks are in cafes.js, and residents' and
-// guests' dinners in restaurants.js. Below, "shop" means any of them, and
-// "shopper" any visitor, diners included.
+// Cafés (milestone 10), restaurants (milestone 11) and Snack Bars
+// (milestone 14) run on the same machinery: a keeper, visitors from the
+// lobby (the lunch crowd, diners in the evening, or a Snack Bar's
+// customers all day), a till and a weekly review. What differs, such as
+// their hours and what visitors spend, is in rooms.js (`keeperHours`,
+// `visitors`). Makers' lunch breaks are in cafes.js, residents' and
+// guests' dinners in restaurants.js, and everyone who stops at a Snack Bar
+// (shoppers on their way out of a shop among them) in snackbars.js. Below,
+// "shop" means any of them, and "shopper" any visitor, diners included.
 //
 // A shop has one shopkeeper, who moves in like any tenant (economy.js) and
 // keeps shop every day, weekends included (people.js). The shop is open
@@ -109,15 +111,17 @@ const Shops = {
 
   // No room for another visitor, walking in or (`byCar`) driving: its
   // limit of visitors of that kind are already on their way or in, or (a
-  // café or restaurant) every seat is taken. Drivers have their own limit,
-  // DRIVER_SHARE of the walk-ins', so they come on top of them rather than
-  // taking their places.
+  // café, restaurant or Snack Bar) every seat is taken. Drivers have their
+  // own limit, DRIVER_SHARE of the walk-ins', so they come on top of them
+  // rather than taking their places. So do shoppers who came over to a
+  // Snack Bar from a shop (`afterShop`), though they need a seat too.
   isFull(room, byCar) {
     const max = ROOM_TYPES[room.type].visitors.max;
-    const coming = People.list.filter((p) => p.role === "shopper" && p.room === room && !!p.parking === byCar).length;
+    const coming = People.list.filter((p) => p.role === "shopper" && p.room === room && !p.afterShop && !!p.parking === byCar).length;
     return coming >= (byCar ? Math.ceil(max * DRIVER_SHARE) : max) ||
       (room.type === "cafe" && Cafes.seated(room) >= CAFE_SEATS) ||
-      (room.type === "restaurant" && Restaurants.seated(room) >= RESTAURANT_SEATS);
+      (room.type === "restaurant" && Restaurants.seated(room) >= RESTAURANT_SEATS) ||
+      (room.type === "snackbar" && SnackBars.seated(room) >= SNACK_BAR_SEATS);
   },
 
   // Minutes until the next shopper, around an average that shrinks when

@@ -57,6 +57,9 @@ const UI = {
       if (room.type === "condo" && room.status === "occupied" && Stress.noiseAt(room, "evening") >= 2) {
         this.addWarning(tip, "Noisy in the evening: residents are home to unwind, and a restaurant next door, above or below stresses them. Leave a floor between condos and restaurants.");
       }
+      if ((room.type === "condo" || isHotel(room)) && Stress.noisyNeighbours(room).some((n) => n.type === "snackbar" && n.status === "occupied")) {
+        this.addWarning(tip, "A Snack Bar next door, above or below is noisy 10am–9pm, every day, evenings included. Leave a gap or a floor between them: residents and guests come down to eat there anyway.");
+      }
       if (isHotel(room) && room.needsCleaning && !Housekeeping.staffed()) {
         this.addWarning(tip, "Can't be booked until it's cleaned, and the tower has no housekeepers. Build Housekeeping, near the hotel rooms.");
       }
@@ -145,6 +148,11 @@ const UI = {
       } else if (room.type === "restaurant") {
         const dining = Restaurants.seated(room);
         if (dining > 0) parts.push(`${dining} dining`);
+      } else if (room.type === "snackbar") {
+        const eating = SnackBars.seated(room);
+        if (eating > 0) parts.push(`${eating} of ${SNACK_BAR_SEATS} seats taken`);
+        const fromShops = SnackBars.afterShopToday(room);
+        if (fromShops > 0) parts.push(`${fromShops} from the shops today`);
       } else {
         const shoppers = Shops.shoppersFor(room);
         if (shoppers > 0) parts.push(`${shoppers} shopper${shoppers === 1 ? "" : "s"}`);
@@ -168,6 +176,7 @@ const UI = {
     }
     else if (room.type === "cafe") parts.push(`noise ${type.noise} while serving lunch`);
     else if (room.type === "restaurant") parts.push(`noise ${type.noise} while serving dinner`);
+    else if (room.type === "snackbar") parts.push(`noise ${type.noise} while serving, 10am–9pm`);
     else if (type.noise > 0) parts.push(`makes noise ${type.noise}`);
     else if (room.type !== "security") parts.push("quiet"); // an office's reach says more (describeSecurity)
     return parts.join(" · ");

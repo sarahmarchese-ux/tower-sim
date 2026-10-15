@@ -346,8 +346,9 @@ function drawPeople(w, h) {
     ctx.arc(x, feet - 12, 2.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // A shopper who bought something carries a bag out.
-    if (person.role === "shopper" && person.bought > 0 && person.room.type === "shop") {
+    // A shopper who bought something carries a bag out (and to a Snack
+    // Bar, if they stop for a snack on the way).
+    if (person.role === "shopper" && ((person.bought > 0 && person.room.type === "shop") || person.hasBag)) {
       ctx.fillStyle = "#e07a2f";
       ctx.fillRect(x + 2, feet - 6, 4, 4);
     }

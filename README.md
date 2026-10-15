@@ -49,8 +49,14 @@ under guard, and the warning when guards can't reach their office; a keeper
 staying for a late shopper; seats held by diners on their way; visitors
 turning back from a shop that closes; people rerouting when a lobby is
 demolished; basements (3★, B10, which rooms, half back); the car park's
-warnings; a save reloading to the very same game, which then plays on the
-same; and a save that won't load being kept. It also loads a real player's
+warnings; the Snack Bar (3★, any storefront spot, basements included):
+shoppers stopping for a snack after a shop next door (about 1 in 3) but
+not after one three floors down, drivers coming too, makers eating there
+only when the café is full and heading back to work before their break
+is over, residents at weekends and guests any day coming down at
+lunchtime, its noise from 10am to 9pm, a quiet one closing, and a save
+reloading with someone mid-snack; a save reloading to the very same game,
+which then plays on the same; and a save that won't load being kept. It also loads a real player's
 tower, `tests/saves/day-85.json` (a 3★ game on day 85: 14 floors, about 300
 people, nine elevators and four car parks), checks it saves back the same,
 and plays it for a day: drivers come, shops sell, money goes up, and it
@@ -65,8 +71,9 @@ café, the restaurant sells dinners, some to residents or guests, and a
 housekeeper cleans a room after a checkout), forces break-ins (checking the
 money, the message and the stress tooltip), builds a Security office and
 runs three nights with every valuable room tried every night (nothing is
-taken), checks the 3★ checklist and the basement and Parking locks, digs a
-basement, runs a car park for 2 days, hovers every room with people in it
+taken), checks the 3★ checklist and the basement, Parking and Snack Bar locks,
+digs a basement, builds a Snack Bar on B1, runs a car park (and the Snack
+Bar) for 2 days, hovers every room with people in it
 and the elevator shaft, and tries the controls: Space, 1 and 3, WASD and
 the arrows, a right-drag, the wheel, Esc and a right-click to put a tool
 down, losing focus mid-drag, and the Save file panel and New game question
@@ -89,6 +96,57 @@ npm run smoke
 (The game itself still needs no install; `package.json` is only for the tests.)
 
 ## Status
+
+**Milestone 14: the Snack Bar.** Cheap, quick food, open all day, every
+day, and the first room where one visit leads into another: shoppers stop
+for a snack on their way out of a shop.
+
+- **The Snack Bar** unlocks at 3★. It's 8 tiles wide and costs $10,000.
+  Its keeper is in about 9:30am–9:30pm, and it serves 10am–9pm every day,
+  with 12 seats. A meal is $8–12 and takes 10–15 minutes. It goes
+  wherever shops, cafés and restaurants go, basements included.
+- **Its own customers** walk in about every 20 minutes, 10am–8:30pm
+  (twice as often at weekends), up to 6 at a time, with drivers half as
+  many again, as at every storefront.
+- **Shoppers, after a shop.** About 1 in 3 stop for a snack on their way
+  out of a shop, if a Snack Bar is open, has a seat and is a short detour
+  away: about one flight of stairs or a short walk. They walk over (with
+  their shopping), eat, pay, and leave from there. That short leg decides
+  what they spend, so a Snack Bar beside the shops gets their full spend.
+- **Makers with no café seat.** On their weekday lunch break a maker picks
+  a café first. With none open, with a seat and near enough, they go to
+  the nearest Snack Bar within the same detour instead of going out, eat
+  for 10–15 minutes, and head back to their studio for the rest of their
+  break, which keeps them off the lifts to the lobby.
+- **Residents at weekends, and hotel guests any day,** if they're at home
+  at lunchtime, come down about 1 day in 3 to the nearest Snack Bar no
+  further than they'd go for dinner. Otherwise they eat at home.
+- Makers, residents and guests pay in full; visitors pay less after a
+  long trip, as at any storefront.
+- **It's noisy the whole time it serves:** noise 1 from 10am to 9pm,
+  evenings included, when residents mind noise nearly four times as much.
+  Hovering a condo or hotel room beside, above or below one warns about it.
+- A Snack Bar that averages under $200 a day closes at the weekly review
+  ("Closed: too few customers").
+- **Hover a Snack Bar** to see whether it's open, how many of its 12 seats
+  are taken, how many came over from the shops today, today's takings and
+  this week's average a day.
+- In a test tower with a Snack Bar between two shops by the lobby, a car
+  park on B1 and a full café upstairs, a weekday brought about 30
+  walk-ins, 15 drivers, 14 shoppers from next door and 7 makers: about
+  $650. Weekends brought twice that, about $1,300. So it pays for itself
+  in under two weeks.
+- In the day-85 test tower, two Snack Bars on B1 beside the car parks took
+  about $450–530 each on a weekday and $1,000 at weekends. With seven cafés
+  there already, they kept only 7 to 30 more makers' lunches a week in
+  the building, and a few more people at the first weekly review (5 to
+  18, across three runs). They don't fix the elevator waits that stall that
+  tower at about 265 people.
+- The day-85 save, and any save from before Snack Bars, loads and saves
+  back unchanged.
+
+<details>
+<summary>Milestone 13: 3★, basements and parking</summary>
 
 **Milestone 13: 3★, basements and parking.** Stars become a tech tree
 again: 3★ asks for more than a head count, and it opens up the ground
@@ -130,6 +188,7 @@ beneath the tower, with a second way in for visitors.
 - **Hover a car park** to see how many spaces are taken and how many
   drivers came today. It warns if no shop, café or restaurant can be
   reached from it. Parked cars are drawn in their spaces.
+</details>
 
 <details>
 <summary>Milestone 12: service rooms</summary>
@@ -515,13 +574,13 @@ or visiting a GitHub Pages link.
   elevator legs) and works out which rooms can be reached from a lobby.
 - `elevators.js` — self-running elevator cars ("collective control").
 - `people.js` — every tenant, shopper and hotel guest: moving in, their
-  daily schedule (makers' lunch breaks, residents' and guests' dinners,
+  daily schedule (makers' lunch breaks, residents' and guests' snacks and dinners,
   housekeepers' and guards' shifts included), and how they work through a
   route.
 - `economy.js` — who moves in (and out) when, condo sales and refunds,
   weekly rent, nightly shop takings, hotel nights, upkeep and wages, and
   bankruptcy.
-- `shops.js` — shops, cafés and restaurants: when they're open, sending
+- `shops.js` — shops, cafés, restaurants and Snack Bars: when they're open, sending
   shoppers (and the lunch crowd, and diners, and drivers) in, what each spends (less
   after a long trip), the day's takings, and closing quiet ones.
 - `cafes.js` — makers' lunch: which café (if any) each maker eats at, what
@@ -529,6 +588,10 @@ or visiting a GitHub Pages link.
 - `restaurants.js` — residents' and guests' dinners: who eats out tonight,
   at which restaurant, what they pay, and when a restaurant is serving
   dinner (and noisy).
+- `snackbars.js` — the Snack Bar's customers beyond its own crowd:
+  shoppers stopping on their way out of a shop, makers with no café seat,
+  and residents and guests at lunchtime; what they pay, and when it's
+  serving (and noisy).
 - `hotels.js` — hotel rooms: bookings, checking guests in and out (early,
   if they're too stressed), reviews and occupancy, and nightly takings.
 - `housekeeping.js` — cleaning hotel rooms after their guests leave: which
@@ -539,7 +602,7 @@ or visiting a GitHub Pages link.
   the car park's tooltip.
 - `ratings.js` — the star rating, its population targets and the rooms
   each star needs (2★ unlocks shops, hotel rooms, restaurants and service
-  rooms; 3★ unlocks basements and Parking).
+  rooms; 3★ unlocks basements, Parking and the Snack Bar).
 - `stress.js` — each person's stress: trips, noise, break-ins, rest, what
   caused it over the last week, and the weekly review that decides who
   moves out.

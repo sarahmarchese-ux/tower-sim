@@ -20,8 +20,9 @@
 //     are in during the day and came to get away from it all, gain it 7½
 //     times as fast: a woodwork studio next door can send them red in a
 //     single working day. A café is noisy too, while it's serving lunch
-//     on weekdays (cafes.js), and a restaurant every evening while it's
-//     serving dinner (restaurants.js). Residents are home to unwind in the
+//     on weekdays (cafes.js), a restaurant every evening while it's
+//     serving dinner (restaurants.js), and a Snack Bar all day, every day,
+//     while it serves, 10am–9pm (snackbars.js). Residents are home to unwind in the
 //     evening, so from UNWIND_FROM_HOUR noise bothers them nearly four
 //     times as much as by day. Makers and shopkeepers don't mind noise.
 //   - A break-in (security.js): a jewellery studio's makers lose their
@@ -87,19 +88,27 @@ const Stress = {
   },
 
   // Noise reaching a room right now (`when` "now"): from the studios next
-  // to it that have a maker at work, and the cafés and restaurants serving.
-  // "working" is what it would be with every occupied studio at work (and
-  // café serving), i.e. on a weekday lunchtime; "evening" is what it would
-  // be with every occupied restaurant serving dinner.
+  // to it that have a maker at work, and the cafés, restaurants and Snack
+  // Bars serving. "working" is what it would be with every occupied studio
+  // at work (and café and Snack Bar serving), i.e. on a weekday lunchtime;
+  // "evening" is what it would be with every occupied restaurant serving
+  // dinner (and Snack Bar still serving, until 9pm).
   noiseAt(room, when = "now") {
     let level = 0;
     for (const neighbour of this.noisyNeighbours(room)) {
-      const evening = neighbour.type === "restaurant";
       const noisy = when === "now" ? this._working.has(neighbour)
-        : neighbour.status === "occupied" && evening === (when === "evening");
+        : neighbour.status === "occupied" && this.noisyWhen(neighbour, when);
       if (noisy) level += ROOM_TYPES[neighbour.type].noise;
     }
     return level;
+  },
+
+  // Is this noisy room loud in working hours (`when` "working") or in the
+  // evening ("evening")? Restaurants only in the evening, Snack Bars both,
+  // and studios and cafés only in working hours.
+  noisyWhen(room, when) {
+    if (room.type === "snackbar") return true;
+    return (room.type === "restaurant") === (when === "evening");
   },
 
   // Beside each other on the same floor (touching), or on floors directly
@@ -115,7 +124,8 @@ const Stress = {
   // Noise and rest, for everyone who isn't mid-trip. Movers aren't settled
   // in yet (or are on their way out), so they're left alone.
   // Which rooms are making noise right now: studios with a maker at work
-  // (not out at lunch), cafés serving lunch and restaurants serving dinner.
+  // (not out at lunch), cafés serving lunch, restaurants serving dinner and
+  // Snack Bars serving.
   refreshWorking() {
     this._working = new Set(
       People.list.filter((p) => p.role === "maker" && p.state === "inRoom").map((p) => p.room),
@@ -123,6 +133,7 @@ const Stress = {
     for (const room of World.rooms) {
       if (room.type === "cafe" && Cafes.isServingLunch(room)) this._working.add(room);
       if (room.type === "restaurant" && Restaurants.isServingDinner(room)) this._working.add(room);
+      if (room.type === "snackbar" && SnackBars.isServing(room)) this._working.add(room);
     }
   },
 
