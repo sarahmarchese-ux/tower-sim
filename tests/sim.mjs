@@ -700,6 +700,40 @@ test("a quiet Snack Bar closes at the weekly review", () => {
   check(!G.People.list.some((p) => p.room === snackBar), "customers or the keeper are still in a Snack Bar that closed half an hour ago");
 });
 
+test("closing a Snack Bar or restaurant moves only those eating there", () => {
+  // Someone who had a snack at lunch still points at the Snack Bar at
+  // dinner, and someone who dined last night still points at the
+  // restaurant at lunch. Neither counts as seated there, nor is sent back
+  // to their seat (to pay again) when it closes.
+  const G = snackTower();
+  build(G, G.World.placeRoom("restaurant", 0, 60), "a restaurant");
+  const snackBar = room(G, "snackbar");
+  const restaurant = room(G, "restaurant");
+  G.runTo(5, 19.5); // Saturday evening
+  const [A, B] = G.People.list.filter((p) => p.role === "resident" && p.state === "inRoom");
+  const sitAt = (p, target, place) => {
+    p.state = "eating";
+    p.target = target;
+    p.route = null;
+    p.floor = place.floor;
+    p.x = place.tileStart + 1;
+    p.idleUntil = G.Clock.totalMinutes + 60;
+  };
+  Object.assign(A, { snackRoom: snackBar, snackDay: G.Clock.day, snackDoneAt: 0, dinnerRoom: restaurant, dinnerDay: G.Clock.day });
+  sitAt(A, "restaurant", restaurant); // at dinner, after a snack at lunch
+  Object.assign(B, { dinnerRoom: restaurant, dinnerDay: G.Clock.day - 1, snackRoom: snackBar, snackDay: G.Clock.day, snackDoneAt: G.Clock.totalMinutes + 60 });
+  sitAt(B, "snack", snackBar); // at the Snack Bar, after dinner out last night
+  check(G.SnackBars.snackersAt(snackBar) === 1, `the Snack Bar counts ${G.SnackBars.snackersAt(snackBar)} residents, expected 1 (not the one at dinner)`);
+  check(G.Restaurants.dinersAt(restaurant) === 1, `the restaurant counts ${G.Restaurants.dinersAt(restaurant)} residents, expected 1 (not the one at the Snack Bar)`);
+  G.World.demolishAt(0, 44);
+  check(A.state === "eating" && A.target === "restaurant", `demolishing the Snack Bar moved a resident at dinner (${A.state}, ${A.target})`);
+  check(B.state !== "eating", "a resident eating at the demolished Snack Bar stayed sat there");
+  sitAt(B, "snack", { floor: 0, tileStart: 42 });
+  G.World.demolishAt(0, 64);
+  check(A.state !== "eating", "a resident at dinner in the demolished restaurant stayed sat there");
+  check(B.state === "eating" && B.target === "snack", `demolishing the restaurant moved someone eating elsewhere (${B.state}, ${B.target})`);
+});
+
 test("a save reloads with someone mid-snack, and plays on the same", () => {
   const G = snackTower();
   const snackBar = room(G, "snackbar");

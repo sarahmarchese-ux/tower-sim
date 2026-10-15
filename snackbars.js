@@ -33,9 +33,10 @@
 // evenings included, when residents mind noise most. So it's a poor
 // neighbour for condos and hotel rooms, who also want one close.
 //
-// A resident's or guest's lunchtime (`snackAt`) is given them the first
-// time it comes round, rather than when an older save loads, so a save
-// from before Snack Bars loads (and saves back) exactly as it was.
+// A resident's or guest's lunchtime (`snackAt`) is given them once the
+// tower has a Snack Bar, the first time they're at home to plan, rather
+// than when an older save loads, so a save from before Snack Bars loads
+// (and saves back) exactly as it was.
 
 const SNACK_BAR_SEATS = 12; // everyone eating or on their way, at once
 const SNACK_AFTER_SHOP = 3; // about one shopper in this many stops for a snack
@@ -211,8 +212,10 @@ const SnackBars = {
     }
   },
 
+  // Only someone eating here or on their way moves: a resident or guest
+  // still pointing at today's Snack Bar may be at dinner by now.
   goHome(person) {
-    const going = person.state === "eating" || (person.route && person.target === "snack");
+    const going = person.target === "snack" && (person.state === "eating" || person.route);
     person.snackRoom = null; // keeps `snackDay`: today's plan is now "at home"
     if (!going) return;
     const want = People.desiredLocation(person, Clock.totalMinutes);
@@ -226,15 +229,17 @@ const SnackBars = {
 
   // --- Counting ---
 
-  // Residents and guests eating here, or on their way.
+  // Residents and guests eating here today, or on their way.
   snackersAt(room) {
     return People.list.filter(
-      (p) => p.snackRoom === room && (p.state === "eating" || (p.route && p.target === "snack")),
+      (p) => p.snackRoom === room && p.snackDay === Clock.day && p.target === "snack" && (p.state === "eating" || p.route),
     ).length;
   },
 
   // Everyone eating here or on their way: makers, residents, guests, and
-  // visitors (its own, drivers, and shoppers after a shop).
+  // visitors (its own, drivers, and shoppers after a shop; as at any
+  // storefront, a visitor holds their place until they've left the
+  // building).
   seated(room) {
     return Cafes.makersAt(room) + this.snackersAt(room) + Shops.shoppersFor(room);
   },

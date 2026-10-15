@@ -93,10 +93,13 @@ const Restaurants = {
     }
   },
 
+  // Only someone eating here or on their way moves: since Snack Bars, a
+  // resident or guest still pointing at last night's restaurant may be
+  // eating somewhere else.
   goHome(person) {
     person.dinnerRoom = null; // keeps `dinnerDay`: tonight's plan is now "at home"
     const want = People.desiredLocation(person, Clock.totalMinutes);
-    if (person.state === "eating") {
+    if (person.state === "eating" && person.target === "restaurant") {
       People.startTrip(person, want, { floor: person.floor, x: person.x }, true);
     } else if (person.route && person.target === "restaurant") {
       person.target = want;
@@ -108,7 +111,7 @@ const Restaurants = {
   dinersAt(room) {
     return People.list.filter(
       (p) => p.dinnerRoom === room && p.dinnerDay === Clock.day &&
-        (p.state === "eating" || (p.route && p.target === "restaurant")),
+        p.target === "restaurant" && (p.state === "eating" || p.route),
     ).length;
   },
 
