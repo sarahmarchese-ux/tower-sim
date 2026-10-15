@@ -547,6 +547,33 @@ test("a save that won't load is kept, and tabs can tell their saves apart", () =
   check(!G.SaveGame.save(), "a tab whose save another tab replaced saved over it");
 });
 
+// A real tower: Sarah's own 3★ game from day 85 (14 floors, about 300
+// people, nine elevators, four car parks). Any change that stops a player's
+// save from loading, or breaks a big tower once it's running, shows up here.
+test("a real 3★ tower (the day-85 save) loads and plays a day", () => {
+  const text = fs.readFileSync(path.join(ROOT, "tests", "saves", "day-85.json"), "utf8");
+  const G = newGame();
+  check(G.SaveGame.load(text), "the day-85 save didn't load");
+  const strip = (saved) => {
+    const data = JSON.parse(saved);
+    delete data.savedAt;
+    return JSON.stringify(data);
+  };
+  check(strip(G.SaveGame.exportText()) === strip(text), "the day-85 save saves differently once loaded");
+  check(G.Ratings.stars === 3, `the day-85 tower is ${G.Ratings.stars}★, not 3★`);
+  const money = G.World.money;
+  const day = G.Clock.day;
+  G.runTo(day, 22); // Monday: the morning rush, lunch, the evening rush and dinner
+  const carParks = G.World.rooms.filter((r) => r.type === "parking");
+  const drivers = carParks.reduce((sum, r) => sum + G.Parking.driversToday(r), 0);
+  check(drivers > 0, "no drivers came to the day-85 tower's car parks");
+  G.runTo(day + 1, 1); // past the midnight tally
+  check(G.Economy.lastSales > 0, "the day-85 tower's shops sold nothing");
+  check(G.World.money > money, `the day-85 tower lost money in a day (${money} -> ${G.World.money})`);
+  check(G.People.population() > 250, `the day-85 tower dropped to ${G.People.population()} people in a day`);
+  check(G.Ratings.stars === 3, "the day-85 tower lost its third star");
+});
+
 // --- Run --------------------------------------------------------------------
 
 const started = Date.now();
