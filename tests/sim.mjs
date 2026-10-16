@@ -465,6 +465,31 @@ test("demolishing a lobby sends people out through another", () => {
 
 // --- Building, basements and parking ----------------------------------------
 
+test("the lobby is drawn tile by tile, and touching pieces join", () => {
+  const G = newGame();
+  for (let f = 0; f <= 1; f++) G.World.buildFloorRun(f, 0, 59);
+  const money = G.World.money;
+  const lobbies = () => G.World.rooms.filter((r) => r.type === "lobby");
+  build(G, G.World.placeRoom("lobby", 0, 5, 1), "one tile of lobby");
+  check(lobbies().length === 1 && G.roomWidth(lobbies()[0]) === 1, "a one-tile lobby wasn't built");
+  build(G, G.World.placeRoom("lobby", 0, 6, 4), "more lobby to its right");
+  build(G, G.World.placeRoom("lobby", 0, 2, 3), "more lobby to its left");
+  check(lobbies().length === 1 && lobbies()[0].tileStart === 2 && G.roomWidth(lobbies()[0]) === 8, "the pieces didn't join into one lobby, tiles 2–9");
+  build(G, G.World.placeRoom("lobby", 0, 20, 30), "a second lobby, apart");
+  check(lobbies().length === 2, "a lobby with a gap between joined anyway");
+  build(G, G.World.placeRoom("lobby", 0, 10, 10), "lobby filling the gap");
+  check(lobbies().length === 1 && lobbies()[0].tileStart === 2 && G.roomWidth(lobbies()[0]) === 48, "filling the gap didn't make one lobby, tiles 2–49");
+  check(G.World.money === money, "the lobby isn't free");
+  check(!G.World.placeRoom("lobby", 1, 0, 5).ok, "a lobby was built off the ground floor");
+  check(!G.World.placeRoom("lobby", 0, 55, 10).ok, "a lobby was built past the floor");
+  const H = newGame();
+  check(H.SaveGame.load(G.SaveGame.exportText()), "the save didn't load");
+  const reloaded = H.World.rooms.filter((r) => r.type === "lobby");
+  check(reloaded.length === 1 && H.roomWidth(reloaded[0]) === 48, "the lobby came back from the save a different width");
+  G.World.demolishAt(0, 30);
+  check(lobbies().length === 0, "demolishing didn't remove the whole lobby");
+});
+
 test("basements: 3★, B10 at most, the right rooms, half back", () => {
   const G = newGame();
   G.money(1e8);
