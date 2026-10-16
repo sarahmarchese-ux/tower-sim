@@ -44,7 +44,7 @@ const Cafes = {
     person.lunchDoneAt = null;
     person.lunchCafe = this.pick(person);
     if (person.lunchCafe) {
-      const width = ROOM_TYPES[person.lunchCafe.type].width;
+      const width = roomWidth(person.lunchCafe);
       person.seatX = person.lunchCafe.tileStart + 0.5 + Math.random() * (width - 1);
     }
   },

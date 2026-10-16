@@ -14,8 +14,14 @@
 //
 // Times are in game minutes. `floor` is fractional while moving: 3.4 means
 // 40% of the way from floor 3 to floor 4.
+//
+// Staff lifts (milestone 14b) run by exactly the same rules, with a
+// smaller car (rooms.js: `capacity`). Only housekeepers and guards plan
+// trips on them (routing.js). Each one keeps a note of which of them rode
+// it today (`usedToday` on the shaft, so it's saved with it), for its
+// tooltip.
 
-const ELEVATOR_CAPACITY = 8;
+const ELEVATOR_CAPACITY = TRANSIT_TYPES.elevator.capacity;
 const ELEVATOR_MINUTES_PER_FLOOR = 0.5;
 const ELEVATOR_DOOR_MINUTES = 1;
 const WAIT_HISTORY_MINUTES = 60; // how far back a shaft's tooltip looks at waits
@@ -23,6 +29,8 @@ const BUSY_WAIT_MINUTES = 10; // an average wait this long gets a warning
 
 const Elevators = {
   cars: new Map(), // transit id -> car
+  _staffReachVersion: -1,
+  _staffReach: new Map(), // staff lift id -> can any service room's staff get to it?
 
   // A person at `leg.fromFloor` presses the call button. They stand in a
   // little queue next to the shaft until a car going their way opens up.
@@ -73,12 +81,17 @@ const Elevators = {
     return 0;
   },
 
+  // How many this car holds.
+  capacity(car) {
+    return TRANSIT_TYPES[car.transit.kind].capacity;
+  },
+
   // Rule 2: should the car stop at `floor`, which it has just reached? A
   // full car only stops to let people off: opening for people it can't
   // take would just cost everyone aboard a minute.
   shouldStop(car, floor) {
     if (car.riders.some((r) => r.dest === floor)) return true;
-    if (car.riders.length >= ELEVATOR_CAPACITY) return false;
+    if (car.riders.length >= this.capacity(car)) return false;
     const turningAround = !this.hasRequestsBeyond(car, car.direction);
     return car.waiting.some((w) => w.floor === floor && (w.direction === car.direction || turningAround));
   },
@@ -117,12 +130,13 @@ const Elevators = {
       direction = here.some((w) => w.direction === car.direction) ? car.direction : here[0].direction;
     }
 
-    const room = ELEVATOR_CAPACITY - car.riders.length;
+    const room = this.capacity(car) - car.riders.length;
     const boarding = here.filter((w) => w.direction === direction).slice(0, room);
     for (const w of boarding) {
       car.waiting.splice(car.waiting.indexOf(w), 1);
       if (w.since != null) this.noteWait(car, Clock.totalMinutes - w.since);
       car.riders.push({ person: w.person, dest: w.dest });
+      if (TRANSIT_TYPES[car.transit.kind].staffOnly) this.noteStaff(car.transit, w.person);
       People.onBoard(w.person);
     }
     if (boarding.length > 0) car.direction = direction;
@@ -135,6 +149,38 @@ const Elevators = {
     const now = Clock.totalMinutes;
     car.recentWaits = (car.recentWaits || []).filter((w) => w.at > now - WAIT_HISTORY_MINUTES);
     car.recentWaits.push({ at: now, minutes });
+  },
+
+  // A housekeeper or guard got on this staff lift: count them (once) for
+  // today.
+  noteStaff(transit, person) {
+    if (!transit.usedToday || transit.usedToday.day !== Clock.day) transit.usedToday = { day: Clock.day, housekeeper: [], guard: [] };
+    const seen = transit.usedToday[person.role];
+    if (seen && !seen.includes(person.id)) seen.push(person.id);
+  },
+
+  // How many housekeepers and guards have ridden this staff lift today.
+  staffToday(transit) {
+    const used = transit.usedToday && transit.usedToday.day === Clock.day ? transit.usedToday : null;
+    return { housekeepers: used ? used.housekeeper.length : 0, guards: used ? used.guard.length : 0 };
+  },
+
+  // Can the staff of any Housekeeping room or Security office get to this
+  // staff lift? Cached until the building changes, since its tooltip asks
+  // every frame.
+  staffCanReach(transit) {
+    if (this._staffReachVersion !== World.version) {
+      this._staffReach = new Map();
+      this._staffReachVersion = World.version;
+    }
+    if (!this._staffReach.has(transit.id)) {
+      const doors = [];
+      for (let floor = transit.floorBottom; floor <= transit.floorTop; floor++) doors.push({ floor, x: Routing.stopX(transit, floor) });
+      const reached = World.rooms.some((room) => isStaffRole(ROOM_TYPES[room.type].role) &&
+        Routing.plan([{ floor: room.floor, x: room.tileStart + roomWidth(room) / 2 }], doors, { staff: true }) !== null);
+      this._staffReach.set(transit.id, reached);
+    }
+    return this._staffReach.get(transit.id);
   },
 
   // How a shaft is coping: who's waiting now, and the waits of everyone
@@ -224,7 +270,7 @@ const Elevators = {
 };
 
 World.subscribe((event, transit) => {
-  if (event === "transitAdded" && transit.kind === "elevator") {
+  if (event === "transitAdded" && isLift(transit.kind)) {
     Elevators.cars.set(transit.id, {
       transit,
       floor: transit.floorBottom,

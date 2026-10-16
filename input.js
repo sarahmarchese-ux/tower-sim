@@ -10,17 +10,27 @@
 // Floor or Elevator in hand (as a left-drag does) and scrolls otherwise.
 // Two fingers always scroll.
 //
-// Two tools use a drag: Floor drags sideways along one level, and Elevator
-// drags up or down along one column (from an existing shaft's end, that
-// extends it). Everything else is a single click.
+// Some tools use a drag. Floor, the Planter Strip and Parking drag
+// sideways along one level (Parking in whole bays of 4 tiles), and
+// Elevator and Staff Lift drag up or down along one column (from an
+// existing shaft's end, that extends it). Everything else is a single
+// click.
 //
 // No tool is picked at the start. A right-click that doesn't drag (or Esc,
 // or clicking the picked tool's button again; see ui.js) puts the tool
-// down, so the mouse is back to just looking.
+// down, so the mouse is back to just looking. With no tool, clicking (or
+// tapping) a studio, condo or hotel room opens its rent panel (ui.js).
 
 const Tool = {
   current: null, // "floor", "sewing", "stairs", ... or null for none
 };
+
+// The tools built by dragging: along a floor, or up and down a column.
+const DRAG_ALONG_TOOLS = ["floor", "planterStrip", "parking"];
+const LIFT_TOOLS = ["elevator", "staffLift"];
+function isDragTool(tool) {
+  return DRAG_ALONG_TOOLS.includes(tool) || LIFT_TOOLS.includes(tool);
+}
 
 // A right-click that moves less than this many pixels is a click, not a pan.
 const RIGHT_CLICK_SLOP = 4;
@@ -50,38 +60,57 @@ function screenToWorld(canvas, clientX, clientY) {
   };
 }
 
-// What an elevator drag (or click) would do right now: build a new shaft,
-// or extend an existing one.
+// What an elevator or staff lift drag (or click) would do right now: build
+// a new shaft, or extend an existing one of the same kind.
 //
 // A drag that starts on a shaft, or just above or below it, in the same
 // column extends it to cover every floor dragged over; a click just above
 // or below adds that one floor. Anywhere else, the drag's floors are a new
 // shaft, and a click without dragging is the smallest one: this floor and
 // the one above.
-function elevatorPlan() {
+function elevatorPlan(kind = Tool.current) {
   const tile = Pointer.dragging ? Pointer.dragStartTile : Pointer.tile;
   const from = Pointer.dragging ? Pointer.dragStartFloor : Pointer.floor;
   const to = Pointer.floor;
   const lo = Math.min(from, to);
   const hi = Math.max(from, to);
 
-  const shaft = World.elevatorToExtend(tile, from, from);
+  const shaft = World.elevatorToExtend(tile, from, from, kind);
   if (shaft) {
     return {
+      kind,
       extend: shaft,
       tile: shaft.tileStart,
       bottom: Math.min(shaft.floorBottom, lo),
       top: Math.max(shaft.floorTop, hi),
     };
   }
-  if (lo === hi) return { tile, bottom: lo, top: lo + 1 };
-  return { tile, bottom: lo, top: hi };
+  if (lo === hi) return { kind, tile, bottom: lo, top: lo + 1 };
+  return { kind, tile, bottom: lo, top: hi };
 }
 
 function elevatorPlanCheck(plan) {
   return plan.extend
     ? World.canExtendElevator(plan.extend, plan.bottom, plan.top)
-    : World.canPlaceTransit("elevator", plan.tile, plan.bottom, plan.top);
+    : World.canPlaceTransit(plan.kind, plan.tile, plan.bottom, plan.top);
+}
+
+// What a Planter Strip or Parking drag (or click) would build right now:
+// the tiles from where it started to the mouse, along the floor it started
+// on. A car park grows a whole bay at a time, away from where the drag
+// started, so a click builds one bay.
+function roomRunPlan(typeKey = Tool.current) {
+  const floor = Pointer.dragging ? Pointer.dragStartFloor : Pointer.floor;
+  const start = Pointer.dragging ? Pointer.dragStartTile : Pointer.tile;
+  const end = Pointer.tile;
+  const bay = ROOM_TYPES[typeKey].bayWidth || 1;
+  const width = Math.ceil((Math.abs(end - start) + 1) / bay) * bay;
+  const tileStart = end >= start ? start : start - width + 1;
+  return { typeKey, floor, tileStart, width };
+}
+
+function roomRunCheck(plan) {
+  return World.canPlaceRoom(plan.typeKey, plan.floor, plan.tileStart, plan.width);
 }
 
 // Where new stairs clicked at (floor, tile) go. Hovering over the floor
@@ -110,10 +139,10 @@ function aimAt(canvas, clientX, clientY) {
   updatePointer(canvas);
 }
 
-// Floor and Elevator are built by dragging: from where the button (or
-// finger) goes down, to where it comes up.
+// Floor, Elevator and the other drag tools are built by dragging: from
+// where the button (or finger) goes down, to where it comes up.
 function startBuildDrag() {
-  if (Tool.current !== "floor" && Tool.current !== "elevator") return;
+  if (!isDragTool(Tool.current)) return;
   Pointer.dragging = true;
   Pointer.dragStartTile = Pointer.tile;
   Pointer.dragStartFloor = Pointer.floor;
@@ -126,13 +155,18 @@ function finishBuildDrag() {
     UI.reportResult(World.buildFloorRun(Pointer.dragStartFloor, start, end));
   }
 
-  if (Tool.current === "elevator" && Pointer.dragging) {
+  if (LIFT_TOOLS.includes(Tool.current) && Pointer.dragging) {
     const plan = elevatorPlan();
     UI.reportResult(
       plan.extend
         ? World.extendElevator(plan.extend, plan.bottom, plan.top)
-        : World.placeTransit("elevator", plan.tile, plan.bottom, plan.top),
+        : World.placeTransit(plan.kind, plan.tile, plan.bottom, plan.top),
     );
+  }
+
+  if (ROOM_TYPES[Tool.current] && Pointer.dragging) {
+    const plan = roomRunPlan();
+    UI.reportResult(World.placeRoom(plan.typeKey, plan.floor, plan.tileStart, plan.width));
   }
   cancelBuildDrag();
 }
@@ -147,10 +181,18 @@ function cancelBuildDrag() {
   }
 }
 
-// A plain click (no drag) handles everything except the two drag tools.
+// A plain click (no drag) handles everything except the drag tools. With
+// no tool, it opens the rent panel of the studio, condo or hotel room
+// clicked (or closes the panel, clicking anywhere else).
 function clickBuild() {
-  if (!Tool.current || Tool.current === "floor" || Tool.current === "elevator") return;
+  if (isDragTool(Tool.current)) return;
   if (Pointer.tile === null || Pointer.floor === null) return;
+  if (!Tool.current) {
+    const room = World.roomAt(Pointer.floor, Pointer.tile);
+    if (room && hasRentLevel(room)) UI.openRoomPanel(room);
+    else UI.closeRoomPanel();
+    return;
+  }
 
   let result;
   if (Tool.current === "demolish") {
@@ -203,7 +245,7 @@ function attachBuildControls(canvas) {
   // leaving it stuck to the mouse.
   window.addEventListener("blur", cancelBuildDrag);
 
-  // The two drag tools were already handled on mouseup above.
+  // The drag tools were already handled on mouseup above.
   canvas.addEventListener("click", clickBuild);
 
   // Touch. The page's own scrolling and zooming are off over the canvas

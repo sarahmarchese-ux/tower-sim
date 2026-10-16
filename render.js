@@ -8,7 +8,8 @@
 // which hotel rooms have guests and who's carrying a suitcase (milestone 9),
 // and which hotel rooms need cleaning, whether the guards are on duty and
 // which floors they cover (milestone 12), and the cars parked in each car
-// park (milestone 13).
+// park (milestone 13), and decorations, staff lifts and the rent level of
+// each room not at Normal (milestone 14b).
 // This file only draws; World (world.js), Elevators and People decide what's
 // true, and input.js decides what the player is doing.
 
@@ -46,6 +47,7 @@ function draw() {
   UI.updateClock();
   UI.updatePopulation();
   UI.updateInspect();
+  UI.updateRoomPanel();
 }
 
 // Sky color keyframes through the day, keyed by hour. Drawn colors between
@@ -183,8 +185,12 @@ function drawBuiltFloors(w, h) {
 function drawRooms(w, h) {
   for (const room of World.rooms) {
     const type = ROOM_TYPES[room.type];
-    const box = roomScreenBox(room, type);
+    const box = roomScreenBox(room);
     if (box.right < 0 || box.left > w || box.bottom < 0 || box.top > h) continue;
+    if (type.decoration) {
+      drawDecoration(room, box);
+      continue;
+    }
 
     // A room nobody has moved into yet is drawn faded, with a dashed
     // outline and a sign saying it's on the market.
@@ -207,7 +213,7 @@ function drawRooms(w, h) {
     ctx.fillText(type.name, box.left + box.width / 2, box.top + 9, box.width - 6);
     if (empty) {
       const sign = room.status === "movingIn" ? "Moving in" : room.status === "checkingIn" ? "Checking in"
-        : room.needsCleaning ? "Needs cleaning" : vacantLabel(type);
+        : room.needsCleaning ? "Needs cleaning" : room.hardToLet ? "Hard to let" : vacantLabel(type);
       ctx.font = "italic 10px sans-serif";
       ctx.fillText(sign, box.left + box.width / 2, box.top + 21, box.width - 6);
     } else if (isStorefront(room)) {
@@ -238,6 +244,11 @@ function drawRooms(w, h) {
       ctx.stroke();
     }
 
+    // A small tag on a studio, condo or hotel room whose rent isn't Normal:
+    // "-20%", "+25%".
+    const level = heldRentLevel(room);
+    if (level !== "normal") drawRentTag(box, RENT_LEVELS[level].factor);
+
     // A red "!" on rooms nobody can get to from a lobby.
     if (type.tenants > 0 && !Routing.isReachable(room)) {
       ctx.fillStyle = "#c94444";
@@ -249,6 +260,93 @@ function drawRooms(w, h) {
       ctx.fillText("!", box.right - 9, box.top + 9.5);
     }
   }
+}
+
+// The rent level a room's tag shows: the terms its people hold (a condo's
+// owners, the level they bought at; a hotel room's guests, the level they
+// booked at), or else the room's own level for its next tenants.
+function heldRentLevel(room) {
+  if (!hasRentLevel(room)) return "normal";
+  const holding = room.type === "condo" ? room.status === "occupied" : isHotel(room) && room.status !== "vacant";
+  if (!holding) return rentLevel(room);
+  const kept = room.type === "condo" ? room.soldAtLevel : room.stayLevel;
+  return RENT_LEVELS[kept] ? kept : "normal";
+}
+
+// "-20%" in the bottom corner of a room let at Low rent, and so on.
+function drawRentTag(box, factor) {
+  const percent = Math.round((factor - 1) * 100);
+  const text = `${percent > 0 ? "+" : "−"}${Math.abs(percent)}%`;
+  ctx.font = "bold 9px sans-serif";
+  const width = ctx.measureText(text).width + 6;
+  const left = box.right - width - 3;
+  const top = box.bottom - 13;
+  ctx.fillStyle = percent > 0 ? "#b5452f" : "#2f7a4a";
+  ctx.fillRect(left, top, width, 11);
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, left + width / 2, top + 6);
+}
+
+// Decorations are drawn as what they are, on the floor's own background:
+// a planter strip's bushes, a planter, a bench, a mural, a fountain.
+function drawDecoration(room, box) {
+  const type = ROOM_TYPES[room.type];
+  const floorY = box.bottom - 2;
+  const tile = box.width / roomWidth(room);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(box.left, box.top, box.width, box.height);
+  ctx.clip();
+  if (room.type === "planterStrip" || room.type === "planter") {
+    // A box of soil with a bush (or a row of them) in it.
+    const tall = room.type === "planter" ? 0.75 : 0.5;
+    ctx.fillStyle = "#8a6a4a";
+    ctx.fillRect(box.left + 1, floorY - 7, box.width - 2, 7);
+    ctx.fillStyle = type.color;
+    const bushes = room.type === "planter" ? 1 : roomWidth(room);
+    const step = box.width / bushes;
+    for (let i = 0; i < bushes; i++) {
+      const cx = box.left + step * (i + 0.5);
+      const r = Math.min(step * 0.45, box.height * tall * 0.5);
+      ctx.beginPath();
+      ctx.arc(cx, floorY - 7 - r * 0.8, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (room.type === "bench") {
+    ctx.fillStyle = type.color;
+    ctx.fillRect(box.left + tile * 0.4, floorY - 11, box.width - tile * 0.8, 4); // seat
+    ctx.fillRect(box.left + tile * 0.4, floorY - 19, box.width - tile * 0.8, 3); // back
+    ctx.fillStyle = "#5a4a3a";
+    ctx.fillRect(box.left + tile * 0.6, floorY - 7, 3, 7); // legs
+    ctx.fillRect(box.right - tile * 0.6 - 3, floorY - 7, 3, 7);
+  } else if (room.type === "mural") {
+    // Bands of colour on the back wall.
+    const colours = ["#d98bb0", "#f2c48d", "#8cc7e8", "#9fd18f", "#c9a0dc"];
+    const band = (box.width - 4) / colours.length;
+    colours.forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(box.left + 2 + i * band, box.top + 4, band, box.height - 8);
+    });
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+    ctx.strokeRect(box.left + 2, box.top + 4, box.width - 4, box.height - 8);
+  } else if (room.type === "fountain") {
+    ctx.fillStyle = "#b9b4a8";
+    ctx.fillRect(box.left + tile, floorY - 8, box.width - 2 * tile, 8); // basin
+    ctx.fillStyle = type.color;
+    ctx.fillRect(box.left + tile + 2, floorY - 7, box.width - 2 * tile - 4, 4); // water
+    ctx.fillRect(box.left + box.width / 2 - 1.5, box.top + 8, 3, floorY - 8 - box.top - 8); // spout
+    ctx.strokeStyle = type.color;
+    ctx.lineWidth = 2;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(box.left + box.width / 2, box.top + 8);
+      ctx.quadraticCurveTo(box.left + box.width / 2 + side * tile * 1.5, box.top + 2, box.left + box.width / 2 + side * tile * 2.5, floorY - 8);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 // Screen rectangle covering tiles [tileStart, tileEnd] on every floor from
@@ -298,8 +396,9 @@ function drawStairs(box) {
 }
 
 // A dark shaft with a mark at each floor, and the car wherever it is now.
+// A staff lift's shaft is brown, so it stands out from the public ones.
 function drawElevator(t, box) {
-  ctx.fillStyle = "#4f555c";
+  ctx.fillStyle = TRANSIT_TYPES[t.kind].staffOnly ? "#6b5646" : "#4f555c";
   ctx.fillRect(box.left, box.top, box.width, box.height);
   ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
   ctx.lineWidth = 1;
@@ -435,7 +534,7 @@ function drawSecurityCoverage(w, h) {
 const CAR_COLORS = ["#c94444", "#3b6fb6", "#e0c341", "#f4f4f4", "#3a3a3a", "#4f9a5b"];
 
 function drawParkedCars(room, box) {
-  const spaces = ROOM_TYPES.parking.spaces;
+  const spaces = parkingSpaces(room);
   const spaceWidth = box.width / spaces;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
   ctx.lineWidth = 1;
@@ -458,8 +557,8 @@ function drawParkedCars(room, box) {
   }
 }
 
-function roomScreenBox(room, type) {
-  const tileEnd = room.tileStart + type.width - 1;
+function roomScreenBox(room) {
+  const tileEnd = room.tileStart + roomWidth(room) - 1;
   const left = Camera.worldToScreenX(Grid.tileToX(room.tileStart));
   const right = Camera.worldToScreenX(Grid.tileToX(tileEnd + 1));
   const top = Camera.worldToScreenY(Grid.floorToY(room.floor + 1));
@@ -505,13 +604,14 @@ function drawHoverPreview(w, h) {
     return;
   }
 
-  if (Tool.current === "elevator") {
-    const width = TRANSIT_TYPES.elevator.width;
+  if (LIFT_TOOLS.includes(Tool.current)) {
+    const width = TRANSIT_TYPES[Tool.current].width;
     const plan = elevatorPlan();
     const check = elevatorPlanCheck(plan);
     Pointer.buildCheck = check;
     if (plan.extend && check.ok) {
-      Pointer.buildNote = `Extend elevator to ${floorLabel(plan.bottom)}–${floorLabel(plan.top)}: ${World.formatMoney(check.cost)}`;
+      const what = Tool.current === "elevator" ? "elevator" : "staff lift";
+      Pointer.buildNote = `Extend ${what} to ${floorLabel(plan.bottom)}–${floorLabel(plan.top)}: ${World.formatMoney(check.cost)}`;
     }
     drawAreaPreview(plan.bottom, plan.top, plan.tile, plan.tile + width - 1, check.ok);
     return;
@@ -519,6 +619,20 @@ function drawHoverPreview(w, h) {
 
   const type = ROOM_TYPES[Tool.current];
   if (!type) return;
+  // A car park or planter strip, dragged to size: say what it comes to.
+  if (type.sized) {
+    const plan = roomRunPlan();
+    const check = roomRunCheck(plan);
+    Pointer.buildCheck = check;
+    if (check.ok) {
+      const size = type.bayWidth
+        ? `${plan.width / type.bayWidth} bay${plan.width === type.bayWidth ? "" : "s"}, ${(plan.width / type.bayWidth) * type.spacesPerBay} spaces`
+        : `${plan.width} tile${plan.width === 1 ? "" : "s"}`;
+      Pointer.buildNote = `${type.name}: ${size}, ${World.formatMoney(check.cost)}`;
+    }
+    drawAreaPreview(plan.floor, plan.floor, plan.tileStart, plan.tileStart + plan.width - 1, check.ok);
+    return;
+  }
   const check = World.canPlaceRoom(Tool.current, Pointer.floor, Pointer.tile);
   Pointer.buildCheck = check;
   const tileEnd = Pointer.tile + type.width - 1;
@@ -548,5 +662,6 @@ UI.attachGameOver();
 UI.attachBanner();
 UI.attachSaveControls();
 UI.attachSaveFile();
+UI.attachRoomPanel();
 UI.showHint(null);
 resize();

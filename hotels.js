@@ -34,6 +34,13 @@
 // Guests robbed in a night-time break-in (security.js) give the stay the
 // worst review, however calm they were otherwise (`robbed`).
 //
+// A room's rent level (milestone 14b; rooms.js: RENT_LEVELS) sets its
+// nightly rate and how often it's booked, from the next booking on. A
+// stay keeps the level it was booked at (`stayLevel`), which also moves
+// the stress at which its guests leave early, and its review bands, by
+// the same amount: a cheap room's guests put up with more, and review it
+// more kindly.
+//
 // Room state lives on the room: `status` is "vacant", "checkingIn" (a
 // party is on its way up) or "occupied" (they've arrived), and the party's
 // details (`party`, `nights`, `checkInDay`, `checkoutAt`) sit beside it.
@@ -81,7 +88,7 @@ const Hotels = {
         this.endStay(room, guests, null);
       } else if (now >= room.checkoutAt) {
         this.endStay(room, guests, "Checked out");
-      } else if (guests.some((g) => Stress.band(g.stress) === "red")) {
+      } else if (guests.some((g) => g.stress >= Stress.moveOutLine(room))) {
         const why = Stress.noiseAt(room) > 0 ? "too noisy" : "too far to get to";
         this.endStay(room, guests, `Checked out early: ${why}`);
       }
@@ -101,6 +108,7 @@ const Hotels = {
       const party = this.whoBooks(room);
       if (party) {
         room.nextParty = party;
+        room.nextLevel = rentLevel(room); // the stay's terms are fixed when it's booked
         const lastArrival = Clock.day * MINUTES_PER_DAY + CHECK_IN_HOURS[1] * 60;
         room.nextGuestsAt = randomBetween([now, lastArrival]);
       }
@@ -116,9 +124,10 @@ const Hotels = {
   // lists them; a Twin only gets a buyer when there's no Single free.
   whoBooks(room) {
     const goodName = Math.max(MIN_BOOKING_REPUTATION, this.reputation(room));
+    const price = RENT_LEVELS[rentLevel(room)].bookings;
     for (const party of ROOM_TYPES[room.type].parties) {
       if (party === "buyer" && room.type !== "single" && this.singleFree()) continue;
-      if (Math.random() < BOOKING_CHANCE[party][Clock.day % 7] * goodName) return party;
+      if (Math.random() < BOOKING_CHANCE[party][Clock.day % 7] * goodName * price) return party;
     }
     return null;
   },
@@ -131,9 +140,11 @@ const Hotels = {
   },
 
   // What a party pays a night: a buyer pays the Single rate, whichever
-  // room they're in.
+  // room they're in, at the level the stay was booked at.
   rateFor(room) {
-    return room.party === "buyer" ? ROOM_TYPES.single.ratePerNight : ROOM_TYPES[room.type].ratePerNight;
+    const rate = room.party === "buyer" ? ROOM_TYPES.single.ratePerNight : ROOM_TYPES[room.type].ratePerNight;
+    const level = RENT_LEVELS[room.stayLevel] || RENT_LEVELS.normal;
+    return Math.round(rate * level.factor);
   },
 
   // A new room starts with a good name.
@@ -152,6 +163,8 @@ const Hotels = {
     room.nights = nights;
     room.checkInDay = Clock.day;
     room.checkoutAt = (Clock.day + nights) * MINUTES_PER_DAY + randomBetween(CHECK_OUT_HOURS.map((h) => h * 60));
+    room.stayLevel = RENT_LEVELS[room.nextLevel] ? room.nextLevel : rentLevel(room);
+    delete room.nextLevel;
     World.setRoomStatus(room, "checkingIn");
 
     const size = tourists ? 2 : 1;
@@ -191,7 +204,7 @@ const Hotels = {
   endStay(room, guests, reason) {
     if (guests.length) {
       const peak = Math.max(...guests.map((g) => g.peakStress));
-      const review = room.robbed ? 0 : this.reviewFor(peak);
+      const review = room.robbed ? 0 : this.reviewFor(peak, Stress.moveOutLine(room) - STRESS_RED);
       room.reputation = this.reputation(room) * (1 - REVIEW_WEIGHT) + review * REVIEW_WEIGHT;
     }
     // Guests who got as far as the room leave it needing a clean.
@@ -201,13 +214,15 @@ const Hotels = {
     World.setRoomStatus(room, "vacant");
     room.party = null;
     room.checkoutAt = null;
+    delete room.stayLevel;
     if (reason) Economy.popupOverRoom(room, reason, reason === "Checked out" ? "#d0d0d0" : "#ff9d9d");
   },
 
   // How a stay went, from the most stressed its guests got: 1 if they
-  // hardly noticed anything, falling to 0 at red.
-  reviewFor(peakStress) {
-    return Math.min(1, Math.max(0, (STRESS_RED - peakStress) / (STRESS_RED - UNBOTHERED_STRESS)));
+  // hardly noticed anything, falling to 0 at red. `shift` moves both
+  // bands, for a stay booked at a lower or higher rate.
+  reviewFor(peakStress, shift = 0) {
+    return Math.min(1, Math.max(0, (STRESS_RED + shift - peakStress) / (STRESS_RED - UNBOTHERED_STRESS)));
   },
 
   // "good" / "mixed" / "poor", for the hover readout (null before the

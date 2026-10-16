@@ -15,8 +15,8 @@
 const World = {
   money: STARTING_MONEY,
   floors: new Map(), // floor number -> Set of built tile indices
-  rooms: [], // { id, type: "sewing", floor: 0, tileStart: 3, status: "vacant" }
-  transit: [], // { id, kind: "stairs" | "elevator", tileStart, floorBottom, floorTop }
+  rooms: [], // { id, type: "sewing", floor: 0, tileStart: 3, status: "vacant" } (+ width and paid, if it can be any size)
+  transit: [], // { id, kind: "stairs" | "elevator" | "staffLift", tileStart, floorBottom, floorTop }
   version: 0,
   nextId: 1,
   listeners: [],
@@ -38,7 +38,7 @@ const World = {
   // The room (if any) whose footprint covers this tile on this floor.
   roomAt(floor, tile) {
     return this.rooms.find((room) => {
-      const width = ROOM_TYPES[room.type].width;
+      const width = roomWidth(room);
       return (
         room.floor === floor &&
         tile >= room.tileStart &&
@@ -125,9 +125,16 @@ const World = {
   // Checked both before placing (to charge money) and every frame while
   // hovering (to color the preview green or red) — kept as one function so
   // the rules can never drift between "what we check" and "what we allow".
-  canPlaceRoom(typeKey, floor, tileStart) {
+  // A room that can be any size (`sized`: a car park, a planter strip) is
+  // as wide as `width` says; anything else is its type's width.
+  canPlaceRoom(typeKey, floor, tileStart, width) {
     const type = ROOM_TYPES[typeKey];
     if (!type) return { ok: false, reason: "Unknown room type" };
+    if (!type.sized || width === undefined) width = type.width;
+    if (type.bayWidth && (width < type.bayWidth || width % type.bayWidth !== 0)) {
+      return { ok: false, reason: `${type.name} is built in bays of ${type.bayWidth} tiles` };
+    }
+    if (!(width >= 1)) return { ok: false, reason: "Drag along the floor to build it" };
 
     // New room types are the reward for each star (ratings.js).
     if (type.unlocksAt && Ratings.stars < type.unlocksAt) {
@@ -143,10 +150,11 @@ const World = {
       return { ok: false, reason: `${type.name} goes underground: build it on a basement floor` };
     }
     if (type.underground === false && floor < 0) {
+      if (type.decoration) return { ok: false, reason: "Decorations go above ground, not in basements" };
       return { ok: false, reason: "Studios, condos and hotel rooms need daylight: they can't go underground" };
     }
 
-    const tileEnd = tileStart + type.width - 1;
+    const tileEnd = tileStart + width - 1;
     for (let tile = tileStart; tile <= tileEnd; tile++) {
       if (!this.isFloorBuilt(floor, tile)) {
         return { ok: false, reason: "Build the floor here first" };
@@ -159,11 +167,12 @@ const World = {
       }
     }
 
-    if (type.cost > this.money) {
+    const cost = sizedCost(typeKey, width);
+    if (cost > this.money) {
       return { ok: false, reason: "Not enough money" };
     }
 
-    return { ok: true, tileEnd };
+    return { ok: true, tileEnd, width, cost };
   },
 
   // Occupancy changes go through here so they're announced like any other
@@ -175,35 +184,46 @@ const World = {
     this.emit("roomStatusChanged", room, { layout: false });
   },
 
-  placeRoom(typeKey, floor, tileStart) {
-    const check = this.canPlaceRoom(typeKey, floor, tileStart);
+  placeRoom(typeKey, floor, tileStart, width) {
+    const check = this.canPlaceRoom(typeKey, floor, tileStart, width);
     if (!check.ok) return check;
     // Rooms with tenants start empty; economy.js moves people in later and
     // updates `status` ("vacant" -> "movingIn" -> "occupied"). The lobby has
     // no tenants, so it has no status.
     const hasTenants = ROOM_TYPES[typeKey].tenants > 0;
     const room = { id: this.nextId++, type: typeKey, floor, tileStart, status: hasTenants ? "vacant" : null };
+    if (ROOM_TYPES[typeKey].sized) {
+      room.width = check.width;
+      room.paid = check.cost;
+    }
     this.rooms.push(room);
-    this.money -= ROOM_TYPES[typeKey].cost;
+    this.money -= check.cost;
     this.emit("roomAdded", room);
     return { ok: true };
   },
 
-  // Same idea as canPlaceRoom, for a stairway or elevator shaft covering
-  // every floor from floorBottom to floorTop.
+  // Same idea as canPlaceRoom, for a stairway or a lift shaft (an
+  // elevator or a staff lift) covering every floor from floorBottom to
+  // floorTop.
   canPlaceTransit(kind, tileStart, floorBottom, floorTop) {
     const type = TRANSIT_TYPES[kind];
     if (!type) return { ok: false, reason: "Unknown transit type" };
 
+    if (type.unlocksAt && Ratings.stars < type.unlocksAt) {
+      const target = starTarget(type.unlocksAt);
+      const how = target ? `: ${howToReach(target)}` : "";
+      return { ok: false, reason: `${type.plural} unlock at ${type.unlocksAt}★${how}` };
+    }
     const floorCount = floorTop - floorBottom + 1;
     if (kind === "stairs" && floorCount !== 2) {
       return { ok: false, reason: "Stairs join two neighbouring floors" };
     }
-    if (kind === "elevator" && floorCount < 2) {
-      return { ok: false, reason: "Drag up or down so the elevator spans at least 2 floors" };
+    const what = kind === "elevator" ? "the elevator" : "the lift";
+    if (isLift(kind) && floorCount < 2) {
+      return { ok: false, reason: `Drag up or down so ${what} spans at least 2 floors` };
     }
-    if (kind === "elevator" && floorCount > type.maxFloors) {
-      return { ok: false, reason: `An elevator can span at most ${type.maxFloors} floors` };
+    if (isLift(kind) && floorCount > type.maxFloors) {
+      return { ok: false, reason: `${what[0].toUpperCase()}${what.slice(1)} can span at most ${type.maxFloors} floors` };
     }
 
     for (let floor = floorBottom; floor <= floorTop; floor++) {
@@ -217,7 +237,7 @@ const World = {
         if (!occupies) continue;
         const room = this.roomAt(floor, tile);
         if (room && !ROOM_TYPES[room.type].allowsTransit) {
-          return { ok: false, reason: "Overlaps a room (only the lobby can share space)" };
+          return { ok: false, reason: "Overlaps a room (only the lobby and decorations can share space)" };
         }
         if (this.transitAt(floor, tile)) {
           return { ok: false, reason: "Overlaps other stairs or an elevator" };
@@ -242,29 +262,29 @@ const World = {
     return { ok: true };
   },
 
-  // The elevator shaft (if any) in this tile's column that a drag over
-  // floors floorLo..floorHi would extend: one it overlaps or touches end to
-  // end.
-  elevatorToExtend(tile, floorLo, floorHi) {
+  // The lift shaft of this kind (an elevator or a staff lift; if any) in
+  // this tile's column that a drag over floors floorLo..floorHi would
+  // extend: one it overlaps or touches end to end.
+  elevatorToExtend(tile, floorLo, floorHi, kind = "elevator") {
     return this.transit.find(
       (t) =>
-        t.kind === "elevator" &&
+        t.kind === kind &&
         tile >= t.tileStart &&
-        tile < t.tileStart + TRANSIT_TYPES.elevator.width &&
+        tile < t.tileStart + TRANSIT_TYPES[kind].width &&
         floorLo <= t.floorTop + 1 &&
         floorHi >= t.floorBottom - 1,
     );
   },
 
   // Growing a shaft up or down to floorBottom..floorTop. Only the new
-  // floors are checked and paid for ($1k each); the car and anyone riding
-  // or waiting carry on as before.
+  // floors are checked and paid for ($1k each, $500 for a staff lift); the
+  // car and anyone riding or waiting carry on as before.
   canExtendElevator(t, floorBottom, floorTop) {
-    const type = TRANSIT_TYPES.elevator;
+    const type = TRANSIT_TYPES[t.kind];
     const added = t.floorBottom - floorBottom + (floorTop - t.floorTop);
     if (added <= 0) return { ok: false, reason: "Drag up or down from the shaft's end to extend it" };
     if (floorTop - floorBottom + 1 > type.maxFloors) {
-      return { ok: false, reason: `An elevator can span at most ${type.maxFloors} floors` };
+      return { ok: false, reason: `${t.kind === "elevator" ? "An elevator" : "A lift"} can span at most ${type.maxFloors} floors` };
     }
     for (let floor = floorBottom; floor <= floorTop; floor++) {
       if (floor >= t.floorBottom && floor <= t.floorTop) continue; // already shaft
@@ -274,7 +294,7 @@ const World = {
         }
         const room = this.roomAt(floor, tile);
         if (room && !ROOM_TYPES[room.type].allowsTransit) {
-          return { ok: false, reason: "Overlaps a room (only the lobby can share space)" };
+          return { ok: false, reason: "Overlaps a room (only the lobby and decorations can share space)" };
         }
         if (this.transitAt(floor, tile)) {
           return { ok: false, reason: "Overlaps other stairs or an elevator" };

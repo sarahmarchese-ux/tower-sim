@@ -26,16 +26,21 @@ const UI = {
     const room = Pointer.floor !== null && World.roomAt(Pointer.floor, Pointer.tile);
     const tenanted = room && ROOM_TYPES[room.type].tenants > 0;
     const transit = Pointer.floor !== null && World.transitAt(Pointer.floor, Pointer.tile);
-    const shaft = transit && transit.kind === "elevator" && Elevators.cars.get(transit.id);
+    const shaft = transit && isLift(transit.kind) && Elevators.cars.get(transit.id);
     tip.textContent = "";
 
-    if (room && room.type === "parking" && !Pointer.dragging) {
+    if (room && ROOM_TYPES[room.type].decoration && !Pointer.dragging && !shaft && !Tool.current) {
+      tip.textContent = `${ROOM_TYPES[room.type].name} · just for looks · the rooms either side of it don't hear each other's noise`;
+    } else if (room && room.type === "parking" && !Pointer.dragging) {
       tip.textContent = Parking.describe(room);
       const warning = Parking.warning(room);
       if (warning) this.addWarning(tip, warning);
     } else if (tenanted && !Pointer.dragging) {
       tip.textContent = this.describeRoom(room);
       if (!Routing.isReachable(room)) this.addWarning(tip, "! " + this.unreachableAdvice(room));
+      if (room.hardToLet && room.status === "vacant") {
+        this.addWarning(tip, "Hard to let: last tenants left stressed. A lower rent finds new ones sooner.");
+      }
       if (isStorefront(room) && room.status === "occupied" && Shops.isQuiet(room)) {
         const visitors = ROOM_TYPES[room.type].visitors;
         const Who = visitors.who[0].toUpperCase() + visitors.who.slice(1);
@@ -101,14 +106,24 @@ const UI = {
   },
 
   // "Elevator 1F–13F · car at 7F going up, 5 of 8 aboard", then the queue
-  // and the last hour's waits, with a warning when people wait long.
+  // and the last hour's waits, with a warning when people wait long. A
+  // staff lift also says which staff have used it today, or warns if no
+  // service room's staff can get to it.
   describeElevator(tip, car) {
     const t = car.transit;
+    const type = TRANSIT_TYPES[t.kind];
     const at = floorLabel(Math.round(car.floor));
     const heading = car.direction > 0 ? " going up" : car.direction < 0 ? " going down" : "";
-    tip.textContent = `Elevator ${floorLabel(t.floorBottom)}–${floorLabel(t.floorTop)} · car at ${at}${heading}, ${car.riders.length} of ${ELEVATOR_CAPACITY} aboard`;
+    tip.textContent = `${type.name} ${floorLabel(t.floorBottom)}–${floorLabel(t.floorTop)} · car at ${at}${heading}, ${car.riders.length} of ${type.capacity} aboard`;
     const r = Elevators.report(car);
     const lines = [];
+    if (type.staffOnly) {
+      const { housekeepers, guards } = Elevators.staffToday(t);
+      const who = [];
+      if (housekeepers) who.push(`${housekeepers} housekeeper${housekeepers === 1 ? "" : "s"}`);
+      if (guards) who.push(`${guards} guard${guards === 1 ? "" : "s"}`);
+      lines.push(who.length ? `Staff only: ${who.join(" and ")} used it today` : "Staff only: nobody has used it today");
+    }
     if (r.waitingNow) {
       const floors = r.busiestFloors.slice(0, 3).map(([floor, n]) => `${n} on ${floorLabel(floor)}`).join(", ");
       lines.push(`Waiting now: ${r.waitingNow} (${floors}${r.busiestFloors.length > 3 ? ", …" : ""})`);
@@ -125,6 +140,9 @@ const UI = {
     }
     if (r.boarded && r.averageWait >= BUSY_WAIT_MINUTES) {
       this.addWarning(tip, `Busy: waiting counts double towards stress. Add a shaft nearer the busiest rooms, or stairs for trips of a floor or two.`);
+    }
+    if (type.staffOnly && !Elevators.staffCanReach(t)) {
+      this.addWarning(tip, "No staff use this lift: connect it to Housekeeping or a Security office.");
     }
   },
 
@@ -163,6 +181,7 @@ const UI = {
       const average = Shops.weekAverage(room);
       if (average !== null) parts.push(`this week ${World.formatMoney(average)}/day`);
     }
+    parts.push(...this.describeRent(room));
     if (type.role === "resident" || type.role === "guest") {
       // Studios are only noisy while their makers work, and restaurants
       // while they serve dinner, so show those too.
@@ -180,6 +199,32 @@ const UI = {
     else if (type.noise > 0) parts.push(`makes noise ${type.noise}`);
     else if (room.type !== "security") parts.push("quiet"); // an office's reach says more (describeSecurity)
     return parts.join(" · ");
+  },
+
+  // A studio's, condo's or hotel room's rent level, when it isn't Normal:
+  // "Low rent (80%): moves out at stress 75". A condo's owners keep the
+  // terms they bought at, and a hotel stay those it was booked at, so
+  // those are shown, and the level for the next sale or booking beside
+  // them if it differs.
+  describeRent(room) {
+    if (!hasRentLevel(room)) return [];
+    const role = ROOM_TYPES[room.type].role;
+    const what = role === "resident" ? "price" : role === "guest" ? "rate" : "rent";
+    const leaves = role === "guest" ? "guests leave early at stress" : "moves out at stress";
+    const terms = (level) => `${RENT_LEVELS[level].name} ${what} (${Math.round(RENT_LEVELS[level].factor * 100)}%)`;
+    const next = rentLevel(room);
+    // Owners or guests in now keep the level they came at.
+    const holds = role === "resident" ? room.status === "occupied" : role === "guest" && room.status !== "vacant";
+    const kept = role === "resident" ? room.soldAtLevel : room.stayLevel;
+    const held = holds ? (RENT_LEVELS[kept] ? kept : "normal") : null;
+    const parts = [];
+    if (held && held !== "normal") {
+      const bought = role === "resident" ? "Bought" : "Booked";
+      parts.push(`${bought} at ${terms(held).toLowerCase()}: ${leaves} ${RENT_LEVELS[held].line}`);
+    }
+    if (held && next !== held) parts.push(`${terms(next)} from the next ${role === "resident" ? "sale" : "booking"}`);
+    if (!held && next !== "normal") parts.push(`${terms(next)}: ${leaves} ${RENT_LEVELS[next].line}`);
+    return parts;
   },
 
   // Who's staying in a hotel room (and how they're feeling), how it's been
@@ -234,12 +279,14 @@ const UI = {
     }
     // Which floors can be climbed to from a lobby floor, ignoring walking?
     // Stairs join just their two floors; an elevator joins every floor it
-    // spans.
+    // spans (and a staff lift does, for its staff).
+    const staff = isStaffRole(ROOM_TYPES[room.type].role);
     const reached = new Set(World.rooms.filter((r) => r.type === "lobby").map((r) => r.floor));
     let grew = true;
     while (grew) {
       grew = false;
       for (const t of World.transit) {
+        if (TRANSIT_TYPES[t.kind].staffOnly && !staff) continue;
         const floors = t.kind === "stairs" ? [t.floorBottom, t.floorTop] : range(t.floorBottom, t.floorTop);
         if (floors.some((f) => reached.has(f)) && floors.some((f) => !reached.has(f))) {
           floors.forEach((f) => reached.add(f));
@@ -323,7 +370,7 @@ const UI = {
     if (this._lockedForStars !== Ratings.stars) {
       this._lockedForStars = Ratings.stars;
       document.querySelectorAll("#toolbar button[data-tool]").forEach((button) => {
-        const type = ROOM_TYPES[button.dataset.tool];
+        const type = ROOM_TYPES[button.dataset.tool] || TRANSIT_TYPES[button.dataset.tool];
         button.classList.toggle("locked", !!type && !!type.unlocksAt && Ratings.stars < type.unlocksAt);
       });
     }
@@ -495,6 +542,86 @@ const UI = {
     });
   },
 
+  // The rent panel: a studio's, condo's or hotel room's four rent levels
+  // (rooms.js: RENT_LEVELS), opened by clicking or tapping the room with
+  // no tool picked (input.js). Picking a level sets it on this room at
+  // once; "Set for this floor" gives every studio, condo and hotel room on
+  // its floor the same level. The game keeps running behind it.
+  panelRoom: null,
+
+  openRoomPanel(room) {
+    this.panelRoom = room;
+    document.getElementById("decorbar").classList.remove("shown");
+    const panel = document.getElementById("roompanel");
+    // Just above the toolbar, whose height depends on the window's width.
+    const toolbarTop = document.getElementById("toolbar").getBoundingClientRect().top;
+    panel.style.bottom = `${Math.max(8, window.innerHeight - toolbarTop + 8)}px`;
+    panel.classList.add("shown");
+    this.updateRoomPanel(true);
+  },
+
+  closeRoomPanel() {
+    this.panelRoom = null;
+    document.getElementById("roompanel").classList.remove("shown");
+  },
+
+  // Called every frame (render.js), so the panel follows the room: its
+  // status, and closing if it's demolished. `rebuild` redoes the buttons.
+  updateRoomPanel(rebuild = false) {
+    const room = this.panelRoom;
+    if (!room) return;
+    if (!World.rooms.includes(room)) {
+      this.closeRoomPanel();
+      return;
+    }
+    const type = ROOM_TYPES[room.type];
+    const role = type.role;
+    document.getElementById("roompanel-title").textContent = `${type.name} on ${floorLabel(room.floor)}`;
+    const terms = this.describeRent(room);
+    const base = role === "maker" ? `rent ${World.formatMoney(type.rentPerWeek)}/wk, moves out`
+      : role === "resident" ? `sells for ${World.formatMoney(type.salePrice)}, moves out`
+        : `${World.formatMoney(type.ratePerNight)}/night, guests leave early`;
+    const note = role === "resident" ? "A new level sets the price of the next sale; owners keep what they paid."
+      : role === "guest" ? "A new level applies from the next booking."
+        : "A new level applies at once, to the makers there now.";
+    document.getElementById("roompanel-terms").textContent =
+      `At Normal: ${base} at stress ${RENT_LEVELS.normal.line}. ${terms.length ? `${terms.join(". ")}. ` : ""}${note}`;
+    if (!rebuild && this._panelLevel === rentLevel(room)) return;
+    this._panelLevel = rentLevel(room);
+    const levels = document.querySelector("#roompanel .levels");
+    levels.textContent = "";
+    for (const [key, level] of Object.entries(RENT_LEVELS)) {
+      const button = document.createElement("button");
+      button.dataset.level = key;
+      button.classList.toggle("active", key === rentLevel(room));
+      button.textContent = `${level.name} · ${Math.round(level.factor * 100)}%`;
+      const small = document.createElement("small");
+      const fills = level.letSpeed === 1 ? "" : level.letSpeed > 1 ? ` · fills ${level.letSpeed}× as fast` : " · fills half as fast";
+      small.textContent = `${role === "guest" ? "leave early" : "moves out"} at ${level.line}${fills}`;
+      button.appendChild(small);
+      button.addEventListener("click", () => {
+        Economy.setRentLevel(room, key);
+        this.updateRoomPanel(true);
+      });
+      levels.appendChild(button);
+    }
+  },
+
+  attachRoomPanel() {
+    document.getElementById("roompanel-close").addEventListener("click", () => this.closeRoomPanel());
+    document.getElementById("roompanel-floor").addEventListener("click", () => {
+      const room = this.panelRoom;
+      if (!room) return;
+      const level = rentLevel(room);
+      const rooms = World.rooms.filter((r) => r.floor === room.floor && hasRentLevel(r));
+      for (const r of rooms) Economy.setRentLevel(r, level);
+      this.showHint(null);
+      document.getElementById("hint").textContent =
+        `${rooms.length} room${rooms.length === 1 ? "" : "s"} on ${floorLabel(room.floor)} set to ${RENT_LEVELS[level].name} (${Math.round(RENT_LEVELS[level].factor * 100)}%)`;
+      this.updateRoomPanel(true);
+    });
+  },
+
   attachClockControls() {
     const pauseBtn = document.getElementById("pause-btn");
     pauseBtn.addEventListener("click", () => {
@@ -529,26 +656,53 @@ const UI = {
         this.setSpeed(3);
       } else if (e.key === "Escape") {
         this.selectTool(null);
+        this.closeRoomPanel();
       }
     });
   },
 
   attachToolbar() {
-    document.querySelectorAll("#toolbar button[data-tool]").forEach((button) => {
+    document.querySelectorAll("#toolbar button[data-tool], #decorbar button[data-tool]").forEach((button) => {
       // Clicking the picked tool again puts it down.
       button.addEventListener("click", () => {
         const tool = button.dataset.tool;
         this.selectTool(Tool.current === tool ? null : tool);
       });
     });
+    // Decor opens (or closes) the row of decorations above the toolbar.
+    // Picking one closes it again, and the Decor button stays lit while
+    // one's in hand.
+    const bar = document.getElementById("decorbar");
+    const place = () => {
+      const toolbarTop = document.getElementById("toolbar").getBoundingClientRect().top;
+      bar.style.bottom = `${window.innerHeight - toolbarTop + 6}px`;
+    };
+    document.getElementById("decor-btn").addEventListener("click", () => {
+      if (bar.classList.contains("shown")) {
+        bar.classList.remove("shown");
+        return;
+      }
+      this.closeRoomPanel();
+      place();
+      bar.classList.add("shown");
+    });
+    // The toolbar re-wraps when the window changes size.
+    window.addEventListener("resize", () => {
+      if (bar.classList.contains("shown")) place();
+    });
   },
 
-  // Pick a tool (or put it down, with null) and light up its button.
+  // Pick a tool (or put it down, with null) and light up its button. The
+  // rent panel is for looking, so picking a tool closes it.
   selectTool(tool) {
+    if (tool) this.closeRoomPanel();
     Tool.current = tool;
-    document.querySelectorAll("#toolbar button[data-tool]").forEach((b) => {
+    document.querySelectorAll("#toolbar button[data-tool], #decorbar button[data-tool]").forEach((b) => {
       b.classList.toggle("active", b.dataset.tool === tool);
     });
+    const decoration = !!tool && !!ROOM_TYPES[tool] && !!ROOM_TYPES[tool].decoration;
+    document.getElementById("decor-btn").classList.toggle("active", decoration);
+    document.getElementById("decorbar").classList.remove("shown");
     this.showHint(null);
   },
 };

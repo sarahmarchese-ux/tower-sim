@@ -129,7 +129,10 @@ async function spot(tile, floor) {
   );
 }
 async function pickTool(tool) {
-  await page.click(`#toolbar button[data-tool="${tool}"]`);
+  // Decorations are behind the toolbar's Decor button.
+  const selector = `button[data-tool="${tool}"]`;
+  if (!(await page.isVisible(selector))) await page.click("#decor-btn");
+  await page.click(selector);
 }
 async function clickAt(tile, floor) {
   const p = await spot(tile, floor);
@@ -210,6 +213,7 @@ try {
       World.rooms.filter((r) => ["shop", "restaurant", "housekeeping", "security"].includes(r.type) || isHotel(r)).length,
     );
     check(early === 0, "a shop, hotel room, restaurant or service room was built before 2★");
+    check(await page.evaluate(() => document.querySelector('#toolbar button[data-tool="staffLift"]').classList.contains("locked")), "the Staff Lift isn't locked before 2★");
     await page.evaluate(() => {
       Ratings.stars = 2;
       World.money += 50000;
@@ -397,7 +401,7 @@ try {
     check(/^3★: \d+ \/ 300 people · Housekeeping ✓ · Security office ✓$/.test(bar), `the star checklist reads "${bar}"`);
 
     // Before 3★: no digging, no car park.
-    await page.evaluate(() => (World.money += 100000));
+    await page.evaluate(() => (World.money += 250000));
     const before = await page.evaluate(() => World.money);
     await pickTool("floor");
     await dragAcross([0, -1], [39, -1]);
@@ -441,9 +445,18 @@ try {
       await clickAt(tile, floor);
     }
     check(!(await page.evaluate(() => World.rooms.some((r) => r.floor < 0 || r.type === "parking"))), "a studio or hotel room went underground, or Parking above ground");
-    await clickAt(20, -1); // still holding Parking
+    // Still holding Parking: drag out 4 bays (16 tiles, 20 spaces) at
+    // $25,000 a bay. A drag that ends mid-bay rounds up to the whole bay.
+    const beforeParking = await page.evaluate(() => World.money);
+    await dragAcross([20, -1], [34, -1]);
     await page.keyboard.press("Escape");
-    check(await page.evaluate(() => World.rooms.some((r) => r.type === "parking" && r.floor === -1)), "no car park was built on B1");
+    const carPark = await page.evaluate(() => {
+      const r = World.rooms.find((r) => r.type === "parking");
+      return r && { floor: r.floor, tileStart: r.tileStart, width: r.width, spaces: parkingSpaces(r) };
+    });
+    check(carPark && carPark.floor === -1 && carPark.tileStart === 20 && carPark.width === 16 && carPark.spaces === 20,
+      `the car park dragged on B1 is ${JSON.stringify(carPark)}, expected 16 tiles and 20 spaces at tile 20`);
+    check(beforeParking - (await page.evaluate(() => World.money)) === 100000, "4 bays of parking didn't cost $100,000");
     // A Snack Bar by the elevator on B1, for the drivers.
     const unlocked = await page.evaluate(() => !document.querySelector('#toolbar button[data-tool="snackbar"]').classList.contains("locked"));
     check(unlocked, "the Snack Bar is still locked at 3★");
@@ -496,6 +509,66 @@ try {
     const tip = await page.textContent("#tooltip");
     check(/^Parking · \d+ of 20 spaces taken · \d+ drivers? today$/.test(tip), `the car park's tooltip reads "${tip}"`);
     await page.mouse.move(5, 5);
+  });
+
+  await step("decorations, a staff lift and rent levels", async () => {
+    await page.evaluate(() => (World.money += 200000));
+    // A bench in the gap beside the café on 4F, and a planter strip dragged
+    // after it; a fountain won't go in a basement.
+    let before = await page.evaluate(() => World.money);
+    await pickTool("bench");
+    await clickAt(16, 3);
+    await pickTool("planterStrip");
+    await dragAcross([20, 3], [25, 3]);
+    await pickTool("fountain");
+    await clickAt(12, -1);
+    await page.keyboard.press("Escape");
+    const decor = await page.evaluate(() => World.rooms.filter((r) => ROOM_TYPES[r.type].decoration).map((r) => `${r.type}@${r.floor}:${r.tileStart}:${roomWidth(r)}`).sort());
+    check(JSON.stringify(decor) === JSON.stringify(["bench@3:16:4", "planterStrip@3:20:6"]), `decorations built: ${decor}`);
+    check(before - (await page.evaluate(() => World.money)) === 20000 + 6 * 5000, "a bench and 6 tiles of planter strip didn't cost $50,000");
+
+    // A staff lift beside the Twin, 4F–5F, through to the Security office's
+    // floor: $10,000 + $500 a floor. Hovering it says it's staff only.
+    before = await page.evaluate(() => World.money);
+    await pickTool("staffLift");
+    await dragAcross([38, 3], [38, 4]);
+    await page.keyboard.press("Escape");
+    check(await page.evaluate(() => World.transit.some((t) => t.kind === "staffLift" && t.tileStart === 38 && t.floorBottom === 3 && t.floorTop === 4)), "no staff lift was built");
+    check(before - (await page.evaluate(() => World.money)) === 11000, "a 2-floor staff lift didn't cost $11,000");
+    let p = await spot(38, 4);
+    await page.mouse.move(p.x, p.y);
+    await page.waitForFunction(() => document.getElementById("tooltip").classList.contains("shown"), null, { timeout: 2000 });
+    const lift = await page.textContent("#tooltip");
+    check(/^Staff Lift 4F–5F · car at (4F|5F)( going (up|down))?, \d of 4 aboard/.test(lift) && /Staff only: /.test(lift), `the staff lift's tooltip reads "${lift}"`);
+    check(!/NaN|undefined|No staff use this lift/.test(lift), `bad staff lift tooltip: "${lift}"`);
+
+    // With nothing in hand, clicking the sewing studio opens its rent
+    // panel. Low rent for it, then for its whole floor; it says so on hover.
+    await page.mouse.move(5, 5);
+    await clickAt(6, 1);
+    check(await page.isVisible("#roompanel"), "clicking a studio with no tool didn't open its rent panel");
+    check(/^Sewing Studio on 2F$/.test(await page.textContent("#roompanel-title")), "the rent panel isn't the sewing studio's");
+    await page.click('#roompanel button[data-level="low"]');
+    await page.click("#roompanel-floor");
+    const levels = await page.evaluate(() => World.rooms.filter((r) => r.floor === 1).map((r) => `${r.type}:${rentLevel(r)}`).sort());
+    check(JSON.stringify(levels) === JSON.stringify(["pottery:low", "sewing:low", "woodwork:low"]), `2F's rent levels: ${levels}`);
+    await page.keyboard.press("Escape");
+    check(!(await page.isVisible("#roompanel")), "Esc didn't close the rent panel");
+    p = await spot(6, 1);
+    await page.mouse.move(p.x, p.y);
+    await page.waitForFunction(() => document.getElementById("tooltip").classList.contains("shown"), null, { timeout: 2000 });
+    const tip = await page.textContent("#tooltip");
+    check(/Low rent \(80%\): moves out at stress 75/.test(tip), `the sewing studio's tooltip reads "${tip}"`);
+    await page.mouse.move(5, 5);
+
+    // Knocking the bench and the staff lift down refunds half of each.
+    before = await page.evaluate(() => World.money);
+    await pickTool("demolish");
+    await clickAt(17, 3);
+    await clickAt(38, 4);
+    await page.keyboard.press("Escape");
+    check((await page.evaluate(() => World.money)) - before === 10000 + 5500, "demolishing the bench and staff lift didn't refund half");
+    check(!(await page.evaluate(() => World.transit.some((t) => t.kind === "staffLift"))), "the staff lift wasn't demolished");
   });
 
   await step("hover every room with people in it, and the elevator shaft", async () => {
