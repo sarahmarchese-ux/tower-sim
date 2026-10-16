@@ -76,7 +76,8 @@
 // you like (free, as it always was). Its `width` of 20 is what a lobby was
 // before then, which a lobby in an older save still is. Lobbies `join`: one
 // drawn touching another becomes part of it (see World.placeRoom), so a
-// lobby drawn a bit at a time ends up as one long hall.
+// lobby drawn a bit at a time ends up as one long hall. It's demolished a
+// tile at a time, too (World.removeRoomTile).
 
 const STARTING_MONEY = 200000;
 const FLOOR_COST_PER_TILE = 200;

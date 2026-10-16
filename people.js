@@ -258,9 +258,9 @@ const People = {
     if (room.type === "lobby") this.onLobbyRemoved();
   },
 
-  // A lobby was demolished. Anyone on their way out of the building (not a
-  // driver, who leaves by car) may have been heading for it, so they work
-  // out the way to whichever lobby is left.
+  // A lobby was demolished, or grew or lost tiles. Anyone on their way out
+  // of the building (not a driver, who leaves by car) may have been heading
+  // for where it was, so they work out the way to a lobby as it is now.
   onLobbyRemoved() {
     for (const person of this.list) {
       if (person.route && person.target === "offsite" && !person.parking) this.reroute(person);
@@ -707,6 +707,7 @@ const People = {
 
 World.subscribe((event, payload) => {
   if (event === "roomRemoved") People.removeForRoom(payload);
+  if (event === "roomResized" && payload.type === "lobby") People.onLobbyRemoved();
   if (event === "transitRemoved") People.onTransitRemoved(payload);
   if (event === "floorsChanged") People.onFloorsChanged();
 });

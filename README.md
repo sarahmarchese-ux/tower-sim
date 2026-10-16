@@ -193,8 +193,9 @@ tower to spend on, and new levers against stress.
 - **The lobby is drawn tile by tile.** Drag along the ground floor to
   build it, as wide as you like, from a single tile (still free). Lobby
   drawn touching lobby joins it, so a lobby built a bit at a time, or
-  between two others, is one long hall. Demolishing it still removes the
-  whole lobby. Lobbies in an older save stay 20 tiles wide.
+  between two others, is one long hall. Demolish takes it down a tile at
+  a time too: a tile off either end shortens it, and one from the middle
+  splits it in two. Lobbies in an older save stay 20 tiles wide.
 
 <details>
 <summary>Milestone 14: the Snack Bar</summary>

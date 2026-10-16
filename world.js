@@ -349,7 +349,8 @@ const World = {
   // refunds nothing (see roomRefund in rooms.js).
   //
   // Whatever is drawn on top goes first: transit (drawn over the lobby),
-  // then a room, then the bare floor tile.
+  // then a room, then the bare floor tile. A lobby comes down a tile at a
+  // time, as it went up (see removeRoomTile).
   demolishAt(floor, tile) {
     const transit = this.transitAt(floor, tile);
     if (transit) {
@@ -359,6 +360,10 @@ const World = {
       return { ok: true };
     }
     const room = this.roomAt(floor, tile);
+    if (room && ROOM_TYPES[room.type].joins && roomWidth(room) > 1) {
+      this.removeRoomTile(room, tile);
+      return { ok: true };
+    }
     if (room) {
       this.rooms = this.rooms.filter((r) => r !== room);
       this.money += roomRefund(room);
@@ -377,6 +382,28 @@ const World = {
       return { ok: true };
     }
     return { ok: false, reason: "Nothing here to demolish" };
+  },
+
+  // One tile of a lobby goes: one at either end shortens it, and one in
+  // the middle cuts it in two. What it cost is shared out by the tile, so
+  // the tile refunds half its share (nothing, for a lobby, which is free).
+  removeRoomTile(room, tile) {
+    const width = roomWidth(room);
+    const perTile = roomCost(room) / width;
+    const leftWidth = tile - room.tileStart;
+    const rightWidth = width - leftWidth - 1;
+    if (leftWidth > 0 && rightWidth > 0) {
+      const right = { id: this.nextId++, type: room.type, floor: room.floor, tileStart: tile + 1, status: room.status };
+      right.width = rightWidth;
+      right.paid = perTile * rightWidth;
+      this.rooms.push(right);
+      this.emit("roomAdded", right);
+    }
+    if (leftWidth === 0) room.tileStart = tile + 1;
+    room.width = leftWidth > 0 ? leftWidth : rightWidth;
+    room.paid = perTile * room.width;
+    this.money += perTile / 2;
+    this.emit("roomResized", room);
   },
 
   formatMoney(amount) {

@@ -458,14 +458,15 @@ test("demolishing a lobby sends people out through another", () => {
   G.runTo(2, 17.3); // Wednesday, going home
   const leaving = () => G.People.list.filter((p) => p.route && p.target === "offsite");
   check(leaving().some((p) => p.route.goal.x === 80), "nobody was heading for the second lobby");
-  G.World.demolishAt(0, 75);
+  for (let tile = 70; tile < 90; tile++) G.World.demolishAt(0, tile); // a tile at a time
+  check(G.World.rooms.filter((r) => r.type === "lobby").length === 1, "the lobby by the studios wasn't all demolished");
   const stale = leaving().filter((p) => p.route.goal.x === 80).length;
   check(stale === 0, `${stale} people still head for the demolished lobby`);
 });
 
 // --- Building, basements and parking ----------------------------------------
 
-test("the lobby is drawn tile by tile, and touching pieces join", () => {
+test("the lobby is drawn and demolished tile by tile, and touching pieces join", () => {
   const G = newGame();
   for (let f = 0; f <= 1; f++) G.World.buildFloorRun(f, 0, 59);
   const money = G.World.money;
@@ -486,8 +487,17 @@ test("the lobby is drawn tile by tile, and touching pieces join", () => {
   check(H.SaveGame.load(G.SaveGame.exportText()), "the save didn't load");
   const reloaded = H.World.rooms.filter((r) => r.type === "lobby");
   check(reloaded.length === 1 && H.roomWidth(reloaded[0]) === 48, "the lobby came back from the save a different width");
+  // Demolish takes it down a tile at a time: from the middle, it splits.
   G.World.demolishAt(0, 30);
-  check(lobbies().length === 0, "demolishing didn't remove the whole lobby");
+  const pieces = lobbies().map((r) => `${r.tileStart}+${G.roomWidth(r)}`).sort().join(" ");
+  check(pieces === "2+28 31+19", `demolishing tile 30 left lobbies ${pieces}, not tiles 2–29 and 31–49`);
+  G.World.demolishAt(0, 2);
+  G.World.demolishAt(0, 49);
+  const ends = lobbies().map((r) => `${r.tileStart}+${G.roomWidth(r)}`).sort().join(" ");
+  check(ends === "3+27 31+18", `demolishing the end tiles left lobbies ${ends}, not tiles 3–29 and 31–48`);
+  check(G.World.money === money, "demolishing lobby changed the money");
+  for (let tile = 0; tile < 60; tile++) G.World.demolishAt(0, tile);
+  check(lobbies().length === 0, "a lobby was left after demolishing every tile");
 });
 
 test("basements: 3★, B10 at most, the right rooms, half back", () => {
