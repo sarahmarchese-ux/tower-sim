@@ -125,8 +125,8 @@ const World = {
   // Checked both before placing (to charge money) and every frame while
   // hovering (to color the preview green or red) — kept as one function so
   // the rules can never drift between "what we check" and "what we allow".
-  // A room that can be any size (`sized`: a car park, a planter strip) is
-  // as wide as `width` says; anything else is its type's width.
+  // A room that can be any size (`sized`: the lobby, a car park, a planter
+  // strip) is as wide as `width` says; anything else is its type's width.
   canPlaceRoom(typeKey, floor, tileStart, width) {
     const type = ROOM_TYPES[typeKey];
     if (!type) return { ok: false, reason: "Unknown room type" };
@@ -191,15 +191,43 @@ const World = {
     // updates `status` ("vacant" -> "movingIn" -> "occupied"). The lobby has
     // no tenants, so it has no status.
     const hasTenants = ROOM_TYPES[typeKey].tenants > 0;
+    this.money -= check.cost;
+    if (ROOM_TYPES[typeKey].joins && this.joinRoom(typeKey, floor, tileStart, check)) return { ok: true };
     const room = { id: this.nextId++, type: typeKey, floor, tileStart, status: hasTenants ? "vacant" : null };
     if (ROOM_TYPES[typeKey].sized) {
       room.width = check.width;
       room.paid = check.cost;
     }
     this.rooms.push(room);
-    this.money -= check.cost;
     this.emit("roomAdded", room);
     return { ok: true };
+  },
+
+  // A lobby drawn touching another lobby (on either side, or between two)
+  // becomes part of it, rather than a separate room: the one on the left
+  // (or else the right) grows to cover the lot, and one on the other side,
+  // if any, is folded in. Returns whether there was one to join.
+  joinRoom(typeKey, floor, tileStart, check) {
+    const left = this.roomAt(floor, tileStart - 1);
+    const right = this.roomAt(floor, check.tileEnd + 1);
+    const joinLeft = left && left.type === typeKey ? left : null;
+    const joinRight = right && right.type === typeKey ? right : null;
+    const room = joinLeft || joinRight;
+    if (!room) return false;
+    const start = joinLeft ? joinLeft.tileStart : tileStart;
+    const end = joinRight ? joinRight.tileStart + roomWidth(joinRight) - 1 : check.tileEnd;
+    let paid = roomCost(room) + check.cost;
+    if (joinLeft && joinRight) {
+      paid += roomCost(joinRight);
+      this.rooms = this.rooms.filter((r) => r !== joinRight);
+    }
+    room.tileStart = start;
+    room.width = end - start + 1;
+    room.paid = paid;
+    this.emit("roomResized", room);
+    // Anyone heading for the lobby that was folded in goes to this one.
+    if (joinLeft && joinRight) this.emit("roomRemoved", joinRight);
+    return true;
   },
 
   // Same idea as canPlaceRoom, for a stairway or a lift shaft (an
@@ -321,7 +349,8 @@ const World = {
   // refunds nothing (see roomRefund in rooms.js).
   //
   // Whatever is drawn on top goes first: transit (drawn over the lobby),
-  // then a room, then the bare floor tile.
+  // then a room, then the bare floor tile. A lobby comes down a tile at a
+  // time, as it went up (see removeRoomTile).
   demolishAt(floor, tile) {
     const transit = this.transitAt(floor, tile);
     if (transit) {
@@ -331,6 +360,10 @@ const World = {
       return { ok: true };
     }
     const room = this.roomAt(floor, tile);
+    if (room && ROOM_TYPES[room.type].joins && roomWidth(room) > 1) {
+      this.removeRoomTile(room, tile);
+      return { ok: true };
+    }
     if (room) {
       this.rooms = this.rooms.filter((r) => r !== room);
       this.money += roomRefund(room);
@@ -349,6 +382,28 @@ const World = {
       return { ok: true };
     }
     return { ok: false, reason: "Nothing here to demolish" };
+  },
+
+  // One tile of a lobby goes: one at either end shortens it, and one in
+  // the middle cuts it in two. What it cost is shared out by the tile, so
+  // the tile refunds half its share (nothing, for a lobby, which is free).
+  removeRoomTile(room, tile) {
+    const width = roomWidth(room);
+    const perTile = roomCost(room) / width;
+    const leftWidth = tile - room.tileStart;
+    const rightWidth = width - leftWidth - 1;
+    if (leftWidth > 0 && rightWidth > 0) {
+      const right = { id: this.nextId++, type: room.type, floor: room.floor, tileStart: tile + 1, status: room.status };
+      right.width = rightWidth;
+      right.paid = perTile * rightWidth;
+      this.rooms.push(right);
+      this.emit("roomAdded", right);
+    }
+    if (leftWidth === 0) room.tileStart = tile + 1;
+    room.width = leftWidth > 0 ? leftWidth : rightWidth;
+    room.paid = perTile * room.width;
+    this.money += perTile / 2;
+    this.emit("roomResized", room);
   },
 
   formatMoney(amount) {

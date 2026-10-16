@@ -619,7 +619,7 @@ function drawHoverPreview(w, h) {
 
   const type = ROOM_TYPES[Tool.current];
   if (!type) return;
-  // A car park or planter strip, dragged to size: say what it comes to.
+  // A lobby, car park or planter strip, dragged to size: say what it comes to.
   if (type.sized) {
     const plan = roomRunPlan();
     const check = roomRunCheck(plan);

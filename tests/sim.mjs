@@ -392,7 +392,9 @@ test("a keeper stays past closing until the last shopper has paid", () => {
   const keeper = G.People.list.find((p) => p.role === "shopkeeper" && p.room === shop);
   check(keeper && G.Shops.isOpen(shop), "the shop isn't open at 6:30pm");
   keeper.leaveAt = 19 * 60;
+  // Just the one late shopper: nobody else comes in, on foot or by car.
   G.People.list = G.People.list.filter((p) => p.role !== "shopper");
+  shop.nextShopperAt = shop.nextDriverAt = Infinity;
   G.People.addShopper(shop, 100);
   const shopper = G.People.list.find((p) => p.role === "shopper");
   G.runTo(1, 18.95);
@@ -402,7 +404,9 @@ test("a keeper stays past closing until the last shopper has paid", () => {
   G.runTo(1, 19.25);
   check(G.Shops.isOpen(shop), "the shop shut at closing time with a shopper still browsing");
   G.runTo(1, 20);
-  check(shopper.bought === 100, `the late shopper spent ${shopper.bought}, expected their $100`);
+  // What they spend depends on how the trip in felt, not on the hour.
+  const expected = Math.round(100 * shopper.mood);
+  check(expected > 0 && shopper.bought === expected, `the late shopper spent ${shopper.bought}, expected $${expected}`);
   check(!G.popups.includes("No sale: closed"), "a shopper who came in before closing got \"No sale: closed\"");
   check(!G.Shops.isOpen(shop), "the shop stayed open after its last shopper paid");
 });
@@ -455,15 +459,82 @@ test("demolishing a lobby sends people out through another", () => {
     build(G, G.World.placeRoom("sewing", f, 60), "a studio");
     build(G, G.World.placeRoom("pottery", f, 80), "a studio");
   }
-  G.runTo(2, 17.3); // Wednesday, going home
   const leaving = () => G.People.list.filter((p) => p.route && p.target === "offsite");
-  check(leaving().some((p) => p.route.goal.x === 80), "nobody was heading for the second lobby");
-  G.World.demolishAt(0, 75);
-  const stale = leaving().filter((p) => p.route.goal.x === 80).length;
+  const toSecond = (p) => p.route.goal.floor === 0 && p.route.goal.x >= 70 && p.route.goal.x < 90;
+  G.runTo(2, 16.5); // Wednesday: wait for the first makers going home
+  for (let t = 0; t < 3 * 60 && !leaving().some(toSecond); t++) G.run(1);
+  check(leaving().some(toSecond), "nobody was heading for the second lobby");
+  for (let tile = 70; tile < 90; tile++) G.World.demolishAt(0, tile); // a tile at a time
+  check(G.World.rooms.filter((r) => r.type === "lobby").length === 1, "the lobby by the studios wasn't all demolished");
+  const stale = leaving().filter(toSecond).length;
   check(stale === 0, `${stale} people still head for the demolished lobby`);
 });
 
+test("people enter and leave anywhere along a lobby, nearest where they're going", () => {
+  const G = newGame();
+  G.money(1e8);
+  for (let f = 0; f <= 4; f++) G.World.buildFloorRun(f, 0, 99);
+  build(G, G.World.placeRoom("lobby", 0, 0, 60), "a 60-tile lobby");
+  build(G, G.World.placeTransit("elevator", 4, 0, 4), "an elevator at one end");
+  build(G, G.World.placeTransit("elevator", 50, 0, 4), "an elevator at the other");
+  const lobby = G.Routing.lobbyPoints();
+  // Up to a room above the far shaft: in by that shaft, no walk first.
+  const up = G.Routing.plan(lobby, [{ floor: 4, x: 52 }]);
+  check(up && up.start.x === 50.5 && up.legs[0].type === "elevator" && up.legs[0].transitId === G.World.transit[1].id,
+    `going up to tile 52 started at ${up && up.start.x}, not at the far shaft (50.5)`);
+  const near = G.Routing.plan(lobby, [{ floor: 4, x: 6 }]);
+  check(near && near.start.x === 4.5 && near.legs[0].transitId === G.World.transit[0].id,
+    `going up to tile 6 started at ${near && near.start.x}, not at the near shaft (4.5)`);
+  // Back out: off at the shaft, and gone from there.
+  const out = G.Routing.plan([{ floor: 4, x: 52 }], lobby);
+  check(out && out.goal.x === 50.5 && out.legs[out.legs.length - 1].type === "elevator",
+    `leaving from tile 52 ended at ${out && out.goal.x}, not at the far shaft (50.5)`);
+  // On the ground floor, past the lobby: in from its nearest end.
+  const along = G.Routing.plan(lobby, [{ floor: 0, x: 80 }]);
+  check(along && along.start.x === 59.5 && along.cost === 20.5, `walking to tile 80 started at ${along && along.start.x}, not the lobby's end (59.5)`);
+  // A busy shaft: people in the lobby take the other one rather than queue.
+  const far = G.Elevators.cars.get(G.World.transit[1].id);
+  for (let i = 0; i < 30; i++) far.waiting.push({ person: { id: -1 }, floor: 0, dest: 4, direction: 1, since: 0 });
+  const busy = G.Routing.plan(lobby, [{ floor: 4, x: 52 }]);
+  check(busy && busy.legs.find((l) => l.type === "elevator").transitId === G.World.transit[0].id,
+    "with 30 waiting at the far shaft, people still queued there");
+});
+
 // --- Building, basements and parking ----------------------------------------
+
+test("the lobby is drawn and demolished tile by tile, and touching pieces join", () => {
+  const G = newGame();
+  for (let f = 0; f <= 1; f++) G.World.buildFloorRun(f, 0, 59);
+  const money = G.World.money;
+  const lobbies = () => G.World.rooms.filter((r) => r.type === "lobby");
+  build(G, G.World.placeRoom("lobby", 0, 5, 1), "one tile of lobby");
+  check(lobbies().length === 1 && G.roomWidth(lobbies()[0]) === 1, "a one-tile lobby wasn't built");
+  build(G, G.World.placeRoom("lobby", 0, 6, 4), "more lobby to its right");
+  build(G, G.World.placeRoom("lobby", 0, 2, 3), "more lobby to its left");
+  check(lobbies().length === 1 && lobbies()[0].tileStart === 2 && G.roomWidth(lobbies()[0]) === 8, "the pieces didn't join into one lobby, tiles 2–9");
+  build(G, G.World.placeRoom("lobby", 0, 20, 30), "a second lobby, apart");
+  check(lobbies().length === 2, "a lobby with a gap between joined anyway");
+  build(G, G.World.placeRoom("lobby", 0, 10, 10), "lobby filling the gap");
+  check(lobbies().length === 1 && lobbies()[0].tileStart === 2 && G.roomWidth(lobbies()[0]) === 48, "filling the gap didn't make one lobby, tiles 2–49");
+  check(G.World.money === money, "the lobby isn't free");
+  check(!G.World.placeRoom("lobby", 1, 0, 5).ok, "a lobby was built off the ground floor");
+  check(!G.World.placeRoom("lobby", 0, 55, 10).ok, "a lobby was built past the floor");
+  const H = newGame();
+  check(H.SaveGame.load(G.SaveGame.exportText()), "the save didn't load");
+  const reloaded = H.World.rooms.filter((r) => r.type === "lobby");
+  check(reloaded.length === 1 && H.roomWidth(reloaded[0]) === 48, "the lobby came back from the save a different width");
+  // Demolish takes it down a tile at a time: from the middle, it splits.
+  G.World.demolishAt(0, 30);
+  const pieces = lobbies().map((r) => `${r.tileStart}+${G.roomWidth(r)}`).sort().join(" ");
+  check(pieces === "2+28 31+19", `demolishing tile 30 left lobbies ${pieces}, not tiles 2–29 and 31–49`);
+  G.World.demolishAt(0, 2);
+  G.World.demolishAt(0, 49);
+  const ends = lobbies().map((r) => `${r.tileStart}+${G.roomWidth(r)}`).sort().join(" ");
+  check(ends === "3+27 31+18", `demolishing the end tiles left lobbies ${ends}, not tiles 3–29 and 31–48`);
+  check(G.World.money === money, "demolishing lobby changed the money");
+  for (let tile = 0; tile < 60; tile++) G.World.demolishAt(0, tile);
+  check(lobbies().length === 0, "a lobby was left after demolishing every tile");
+});
 
 test("basements: 3★, B10 at most, the right rooms, half back", () => {
   const G = newGame();

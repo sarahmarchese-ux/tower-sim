@@ -169,8 +169,14 @@ try {
     await pickTool("floor");
     for (const floor of [0, 1, 2, 3, 4]) await dragAcross([0, floor], [39, floor]);
 
+    // The lobby is dragged out, in two pieces that join into one.
     await pickTool("lobby");
-    await clickAt(0, 0);
+    await dragAcross([0, 0], [9, 0]);
+    await dragAcross([19, 0], [10, 0]);
+    check(await page.evaluate(() => {
+      const lobbies = World.rooms.filter((r) => r.type === "lobby");
+      return lobbies.length === 1 && lobbies[0].tileStart === 0 && roomWidth(lobbies[0]) === 20;
+    }), "the two pieces of lobby didn't join into one 20 tiles wide");
     await pickTool("elevator");
     await dragAcross([0, 0], [0, 4]);
     await pickTool("stairs");
@@ -785,7 +791,11 @@ try {
     await clickAt(0, 0); // the elevator, drawn over the lobby
     await clickAt(34, 0); // the stairs
     await clickAt(14, 1); // the pottery studio
+    await clickAt(10, 0); // a tile from the middle of the lobby, which splits it
     await page.keyboard.press("Escape");
+    const lobbies = await page.evaluate(() =>
+      World.rooms.filter((r) => r.type === "lobby").map((r) => `${r.tileStart}+${roomWidth(r)}`).sort().join(" "));
+    check(lobbies === "0+10 11+9", `demolishing a lobby tile left lobbies ${lobbies}, not tiles 0–9 and 11–19`);
     const s = await state();
     check(s.transit.length === 0, `transit should be gone, got ${s.transit}`);
     check(!s.rooms.some((r) => r.startsWith("pottery")), "the pottery studio should be gone");

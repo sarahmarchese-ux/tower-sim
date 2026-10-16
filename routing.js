@@ -18,6 +18,14 @@
 //
 // Positions along a floor (`x`) are in tiles and can be fractional — 3.5 is
 // the middle of tile 3.
+//
+// A start or goal can also be a stretch of floor, from `xMin` to `xMax`:
+// a lobby, which people enter or leave anywhere along. A route uses the
+// spot on it nearest the next stop (or the last one), so people come in
+// at the end of the lobby nearest where they're going, or right by the
+// stairs or elevator they want if it's in the lobby. A long lobby spreads
+// them across every shaft in it, rather than favouring those near its
+// middle. Separate lobbies are still separate doors.
 
 // Costs are in "tiles of walking" (3 tiles a minute), set to match how
 // long each kind of travel *feels* (stress.js counts stairs and queueing
@@ -55,10 +63,30 @@ const Routing = {
     return transit.tileStart + 0.5;
   },
 
+  // Every lobby, as a stretch people can enter or leave anywhere along
+  // (the middle of its first tile to the middle of its last).
   lobbyPoints() {
     return World.rooms
       .filter((room) => room.type === "lobby")
-      .map((room) => ({ floor: room.floor, x: room.tileStart + roomWidth(room) / 2 }));
+      .map((room) => ({
+        floor: room.floor,
+        x: room.tileStart + roomWidth(room) / 2,
+        xMin: room.tileStart + 0.5,
+        xMax: room.tileStart + roomWidth(room) - 0.5,
+      }));
+  },
+
+  // The nearest two spots on stops a and b, on the same floor: each a
+  // point (`x`) or a stretch (`xMin`..`xMax`). Returns [x on a, x on b].
+  nearestSpots(a, b) {
+    const aMin = a.xMin ?? a.x;
+    const aMax = a.xMax ?? a.x;
+    const bMin = b.xMin ?? b.x;
+    const bMax = b.xMax ?? b.x;
+    if (aMax < bMin) return [aMax, bMin];
+    if (bMax < aMin) return [aMin, bMax];
+    const overlap = Math.max(aMin, bMin);
+    return [overlap, overlap];
   },
 
   // Split every floor into runs of connected built tiles ("segments"), so
@@ -96,8 +124,8 @@ const Routing = {
   // Returns { start, goal, legs, cost } or null if there's no way through.
   plan(starts, goals, { staff = false } = {}) {
     const nodes = [];
-    for (const s of starts) nodes.push({ floor: s.floor, x: s.x, isStart: true });
-    for (const g of goals) nodes.push({ floor: g.floor, x: g.x, isGoal: true });
+    for (const s of starts) nodes.push({ floor: s.floor, x: s.x, xMin: s.xMin, xMax: s.xMax, isStart: true });
+    for (const g of goals) nodes.push({ floor: g.floor, x: g.x, xMin: g.xMin, xMax: g.xMax, isGoal: true });
     for (const t of World.transit) {
       if (TRANSIT_TYPES[t.kind].staffOnly && !staff) continue;
       for (let floor = t.floorBottom; floor <= t.floorTop; floor++) {
@@ -137,8 +165,8 @@ const Routing = {
       // Walking to other stops on the same floor.
       for (const next of byFloor.get(node.floor)) {
         if (next === current) continue;
-        const other = nodes[next];
-        if (this.canWalk(node.floor, node.x, other.x)) relax(next, Math.abs(node.x - other.x));
+        const [from, to] = this.nearestSpots(node, nodes[next]);
+        if (this.canWalk(node.floor, from, to)) relax(next, Math.abs(from - to));
       }
 
       // Riding or climbing to the same transit's stops on other floors.
@@ -184,10 +212,20 @@ const Routing = {
       firstLoad * ELEVATOR_AHEAD_COST + others * ELEVATOR_STOP_COST;
   },
 
-  // Walk the `prev` links back from the goal and turn them into legs.
+  // Walk the `prev` links back from the goal and turn them into legs. A
+  // start or goal that's a stretch (a lobby) becomes the spot on it nearest
+  // the stop after (or before) it.
   _legsTo(goalIndex, nodes, prev) {
     const path = [];
     for (let i = goalIndex; i !== -1; i = prev[i]) path.unshift(nodes[i]);
+    for (let i = 0; i < path.length; i++) {
+      const node = path[i];
+      if (node.xMin === undefined) continue;
+      const x = i === 0
+        ? (path.length > 1 ? this.nearestSpots(node, path[1])[0] : node.x)
+        : this.nearestSpots(path[i - 1], node)[1];
+      path[i] = { floor: node.floor, x, isStart: node.isStart, isGoal: node.isGoal };
+    }
     const legs = [];
     for (let i = 1; i < path.length; i++) {
       const a = path[i - 1];

@@ -71,6 +71,13 @@
 // apart, as a gap does), and stairs and elevators can go through them, as
 // through the lobby. A Planter Strip is dragged along a floor, any width,
 // at `costPerTile`; the rest are clicked, like rooms.
+//
+// The lobby is dragged along the ground floor too, tile by tile, as wide as
+// you like (free, as it always was). Its `width` of 20 is what a lobby was
+// before then, which a lobby in an older save still is. Lobbies `join`: one
+// drawn touching another becomes part of it (see World.placeRoom), so a
+// lobby drawn a bit at a time ends up as one long hall. It's demolished a
+// tile at a time, too (World.removeRoomTile).
 
 const STARTING_MONEY = 200000;
 const FLOOR_COST_PER_TILE = 200;
@@ -79,7 +86,7 @@ const BASEMENT_FLOORS = 10; // B1 to B10
 const BASEMENTS_AT_STARS = 3;
 
 const ROOM_TYPES = {
-  lobby: { name: "Lobby", width: 20, cost: 0, color: "#d8c9a3", groundOnly: true, allowsTransit: true, tenants: 0, noise: 0 },
+  lobby: { name: "Lobby", width: 20, cost: 0, sized: true, joins: true, color: "#d8c9a3", groundOnly: true, allowsTransit: true, tenants: 0, noise: 0 },
   sewing: { name: "Sewing Studio", width: 8, cost: 9000, color: "#c9a0dc", underground: false, tenants: 2, role: "maker", noise: 1, rentPerWeek: 11200 },
   pottery: { name: "Pottery Studio", width: 10, cost: 11000, color: "#d2965a", underground: false, tenants: 2, role: "maker", noise: 2, rentPerWeek: 12600 },
   woodwork: { name: "Woodwork Studio", width: 12, cost: 10000, color: "#8b5e34", underground: false, tenants: 3, role: "maker", noise: 3, rentPerWeek: 9100 },

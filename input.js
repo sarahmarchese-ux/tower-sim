@@ -7,11 +7,11 @@
 // scrolls the tower when you meant to lay a floor, or vice versa.
 //
 // On a touch screen a tap is a click, and dragging a finger builds with
-// Floor or Elevator in hand (as a left-drag does) and scrolls otherwise.
+// a drag tool in hand (as a left-drag does) and scrolls otherwise.
 // Two fingers always scroll.
 //
-// Some tools use a drag. Floor, the Planter Strip and Parking drag
-// sideways along one level (Parking in whole bays of 4 tiles), and
+// Some tools use a drag. Floor, the Lobby, the Planter Strip and Parking
+// drag sideways along one level (Parking in whole bays of 4 tiles), and
 // Elevator and Staff Lift drag up or down along one column (from an
 // existing shaft's end, that extends it). Everything else is a single
 // click.
@@ -26,7 +26,7 @@ const Tool = {
 };
 
 // The tools built by dragging: along a floor, or up and down a column.
-const DRAG_ALONG_TOOLS = ["floor", "planterStrip", "parking"];
+const DRAG_ALONG_TOOLS = ["floor", "lobby", "planterStrip", "parking"];
 const LIFT_TOOLS = ["elevator", "staffLift"];
 function isDragTool(tool) {
   return DRAG_ALONG_TOOLS.includes(tool) || LIFT_TOOLS.includes(tool);
@@ -95,7 +95,7 @@ function elevatorPlanCheck(plan) {
     : World.canPlaceTransit(plan.kind, plan.tile, plan.bottom, plan.top);
 }
 
-// What a Planter Strip or Parking drag (or click) would build right now:
+// What a Lobby, Planter Strip or Parking drag (or click) would build now:
 // the tiles from where it started to the mouse, along the floor it started
 // on. A car park grows a whole bay at a time, away from where the drag
 // started, so a click builds one bay.

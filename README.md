@@ -21,16 +21,16 @@ Then visit `http://localhost:8000`.
 ## Controls
 
 Pick something from the toolbar along the bottom, then click to build (drag
-for Floor and Elevator). Esc, a right-click, or clicking its button again
-puts it down. Scroll around with a right-drag, the mouse wheel (or a
-trackpad), or the arrow keys / WASD. Hover a room or an elevator shaft for
-details. With nothing picked, click a studio, condo or hotel room to set its
-rent level. Space pauses, and 1 and 3 set the speed.
+for Floor, the Lobby and Elevator). Esc, a right-click, or clicking its
+button again puts it down. Scroll around with a right-drag, the mouse wheel
+(or a trackpad), or the arrow keys / WASD. Hover a room or an elevator shaft
+for details. With nothing picked, click a studio, condo or hotel room to set
+its rent level. Space pauses, and 1 and 3 set the speed.
 
-On a touch screen, tap to build, and drag a finger to scroll (or, with Floor
-or Elevator picked, to build along the drag; two fingers still scroll). Tap
-a room for its details (and, for a studio, condo or hotel room, its rent
-level).
+On a touch screen, tap to build, and drag a finger to scroll (or, with
+Floor, Lobby or Elevator picked, to build along the drag; two fingers still
+scroll). Tap a room for its details (and, for a studio, condo or hotel room,
+its rent level).
 
 ## Tests
 
@@ -190,6 +190,20 @@ tower to spend on, and new levers against stress.
   would sit empty.
 - The day-85 save, and any save from before, loads and saves back
   unchanged; its four car parks keep 20 spaces each.
+- **The lobby is drawn tile by tile.** Drag along the ground floor to
+  build it, as wide as you like, from a single tile (still free). Lobby
+  drawn touching lobby joins it, so a lobby built a bit at a time, or
+  between two others, is one long hall. Demolish takes it down a tile at
+  a time too: a tile off either end shortens it, and one from the middle
+  splits it in two. Lobbies in an older save stay 20 tiles wide.
+- **People come and go anywhere along a lobby**, at the spot nearest
+  where they're going, rather than at its middle: right by their stairs
+  or elevator if it's in the lobby, or else the lobby's nearer end. So a
+  long lobby spreads people across every shaft in it, and they pick
+  between them by the queues. Separate lobbies are still separate doors.
+  Leaving is shorter now, so makers allow a café or Snack Bar up to 20
+  tiles further than the way out (it was 10), which keeps lunch about as
+  it was beside a 20-tile lobby.
 
 <details>
 <summary>Milestone 14: the Snack Bar</summary>
