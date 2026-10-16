@@ -196,6 +196,14 @@ tower to spend on, and new levers against stress.
   between two others, is one long hall. Demolish takes it down a tile at
   a time too: a tile off either end shortens it, and one from the middle
   splits it in two. Lobbies in an older save stay 20 tiles wide.
+- **People come and go anywhere along a lobby**, at the spot nearest
+  where they're going, rather than at its middle: right by their stairs
+  or elevator if it's in the lobby, or else the lobby's nearer end. So a
+  long lobby spreads people across every shaft in it, and they pick
+  between them by the queues. Separate lobbies are still separate doors.
+  Leaving is shorter now, so makers allow a café or Snack Bar up to 20
+  tiles further than the way out (it was 10), which keeps lunch about as
+  it was beside a 20-tile lobby.
 
 <details>
 <summary>Milestone 14: the Snack Bar</summary>

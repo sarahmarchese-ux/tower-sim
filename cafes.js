@@ -23,7 +23,10 @@
 // and noisy: it gives off its `noise` to the rooms around it, as a studio
 // does while its makers work (stress.js).
 
-const LUNCH_DETOUR_COST = 10; // a café this much further than the way out is still worth it
+// A café this much further than the way out is still worth it. It was 10
+// when people left by a lobby's middle; leaving by its nearest end saves
+// half an old 20-tile lobby, so it's 20 to keep lunch as it was.
+const LUNCH_DETOUR_COST = 20;
 const CAFE_SEATS = 24; // makers and diners from outside at once
 
 const Cafes = {
