@@ -86,17 +86,22 @@ const Economy = {
   // The viewing is due. Movers only come in their hours (see
   // MOVE_IN_HOURS), and only if they can actually get to the room;
   // otherwise the viewing is put off.
+  // (A bad name wears off once its wait is over, and from then on the
+  // room is only waiting for hours, which no rent level changes:
+  // `hoursWait`.)
   tryMoveIn(room) {
+    delete room.hardToLet;
     const opensAt = this.nextMoveInOpening(ROOM_TYPES[room.type].role);
     if (opensAt > Clock.totalMinutes) {
       room.moveInAt = opensAt + randomBetween([0, 120]);
+      room.hoursWait = true;
       return;
     }
+    delete room.hoursWait;
     if (!Routing.isReachable(room)) {
       room.moveInAt = Clock.totalMinutes + randomBetween(MOVE_IN_RETRY_MINUTES);
       return;
     }
-    delete room.hardToLet;
     World.setRoomStatus(room, "movingIn");
     People.moveIn(room);
   },
@@ -154,7 +159,7 @@ const Economy = {
     else room.rentLevel = level;
     const after = RENT_LEVELS[level].letSpeed;
     const now = Clock.totalMinutes;
-    if (room.status === "vacant" && !isHotel(room) && room.moveInAt > now) {
+    if (room.status === "vacant" && !isHotel(room) && !room.hoursWait && room.moveInAt > now) {
       room.moveInAt = now + ((room.moveInAt - now) * before) / after;
     }
   },
@@ -218,6 +223,7 @@ const Economy = {
     World.setRoomStatus(room, "vacant");
     const hardToLet = stressed && hasRentLevel(room) && !isHotel(room);
     if (hardToLet) room.hardToLet = true;
+    delete room.hoursWait;
     room.moveInAt = Clock.totalMinutes + this.reletMinutes(room, hardToLet);
     People.moveOut(room);
     if (isStorefront(room)) Shops.onMovedOut(room);

@@ -108,6 +108,7 @@ const Hotels = {
       const party = this.whoBooks(room);
       if (party) {
         room.nextParty = party;
+        room.nextLevel = rentLevel(room); // the stay's terms are fixed when it's booked
         const lastArrival = Clock.day * MINUTES_PER_DAY + CHECK_IN_HOURS[1] * 60;
         room.nextGuestsAt = randomBetween([now, lastArrival]);
       }
@@ -162,7 +163,8 @@ const Hotels = {
     room.nights = nights;
     room.checkInDay = Clock.day;
     room.checkoutAt = (Clock.day + nights) * MINUTES_PER_DAY + randomBetween(CHECK_OUT_HOURS.map((h) => h * 60));
-    room.stayLevel = rentLevel(room);
+    room.stayLevel = RENT_LEVELS[room.nextLevel] ? room.nextLevel : rentLevel(room);
+    delete room.nextLevel;
     World.setRoomStatus(room, "checkingIn");
 
     const size = tourists ? 2 : 1;

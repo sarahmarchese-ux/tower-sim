@@ -246,7 +246,7 @@ function drawRooms(w, h) {
 
     // A small tag on a studio, condo or hotel room whose rent isn't Normal:
     // "-20%", "+25%".
-    const level = hasRentLevel(room) ? rentLevel(room) : "normal";
+    const level = heldRentLevel(room);
     if (level !== "normal") drawRentTag(box, RENT_LEVELS[level].factor);
 
     // A red "!" on rooms nobody can get to from a lobby.
@@ -260,6 +260,17 @@ function drawRooms(w, h) {
       ctx.fillText("!", box.right - 9, box.top + 9.5);
     }
   }
+}
+
+// The rent level a room's tag shows: the terms its people hold (a condo's
+// owners, the level they bought at; a hotel room's guests, the level they
+// booked at), or else the room's own level for its next tenants.
+function heldRentLevel(room) {
+  if (!hasRentLevel(room)) return "normal";
+  const holding = room.type === "condo" ? room.status === "occupied" : isHotel(room) && room.status !== "vacant";
+  if (!holding) return rentLevel(room);
+  const kept = room.type === "condo" ? room.soldAtLevel : room.stayLevel;
+  return RENT_LEVELS[kept] ? kept : "normal";
 }
 
 // "-20%" in the bottom corner of a room let at Low rent, and so on.

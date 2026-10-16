@@ -23,8 +23,10 @@
 // Milestone 14b's additions live on the rooms and shafts themselves, so they
 // save with them: a car park's or planter strip's `width` and `paid`, a
 // room's `rentLevel` (and a condo's `soldFor`/`soldAtLevel`, a hotel
-// stay's `stayLevel`, and `hardToLet`), and a staff lift's `usedToday`. A
-// save from before has none of them, and loads (and saves back) as it was.
+// booking's `nextLevel` and stay's `stayLevel`, and `hardToLet` and
+// `hoursWait`), and a staff lift's `usedToday`. A save from before has none
+// of them, and loads (and saves back) as it was. Each is checked on load,
+// like everything else.
 //
 // Hotel rooms used to come in one size, 8 tiles wide (type "hotel"). They
 // now come as Singles and Twins, so a save from before that has its old
@@ -294,15 +296,24 @@ const SaveGame = {
         uniqueId(room.id, "a room");
         check(known(ROOM_TYPES, room.type), "a room is of an unknown kind");
         check(isInt(room.floor) && isInt(room.tileStart), "a room's place is damaged");
-        check(room.width === undefined || (isInt(room.width) && room.width >= 1), "a room's width is damaged");
-        check(room.paid === undefined || Number.isFinite(room.paid), "what a room cost is damaged");
-        check(room.rentLevel === undefined || known(RENT_LEVELS, room.rentLevel), "a room's rent level is unknown");
+        const type = ROOM_TYPES[room.type];
+        // Only a room that can be any size keeps a width and a price, a car
+        // park in whole bays.
+        check(room.width === undefined || (type.sized && isInt(room.width) && room.width >= 1 &&
+          (!type.bayWidth || room.width % type.bayWidth === 0)), "a room's width is damaged");
+        check(room.paid === undefined || (type.sized && Number.isFinite(room.paid) && room.paid >= 0), "what a room cost is damaged");
+        const level = (key) => key === undefined || known(RENT_LEVELS, key);
+        check(level(room.rentLevel) && level(room.soldAtLevel) && level(room.stayLevel) && level(room.nextLevel), "a room's rent level is unknown");
+        check(room.soldFor === undefined || (Number.isFinite(room.soldFor) && room.soldFor >= 0), "what a condo sold for is damaged");
       }
       for (const transit of data.world.transit) {
         uniqueId(transit.id, "a shaft or stairway");
         check(known(TRANSIT_TYPES, transit.kind), "a shaft or stairway is of an unknown kind");
         check(isInt(transit.tileStart) && isInt(transit.floorBottom) && isInt(transit.floorTop) &&
           transit.floorBottom <= transit.floorTop, "a shaft's or stairway's place is damaged");
+        const used = transit.usedToday;
+        check(used === undefined || (used && isInt(used.day) && Array.isArray(used.housekeeper) && Array.isArray(used.guard)),
+          "a staff lift's note of who used it is damaged");
       }
       const roomsById = new Map(rooms.map((room) => [room.id, room]));
       const transitById = new Map(data.world.transit.map((t) => [t.id, t]));
@@ -327,6 +338,7 @@ const SaveGame = {
         if (person.role === "shopper") {
           person.parking = (parkingId != null && roomsById.get(parkingId)) || null;
           if (!person.parking) person.space = null;
+          else check(person.parking.type === "parking" && isInt(person.space) && person.space >= 0 && person.space < parkingSpaces(person.parking), "a driver's parking space is damaged");
         }
         // A maker's lunch café, if they're eating at or heading for one.
         // Makers from before lunch breaks get their times now.

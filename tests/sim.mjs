@@ -984,6 +984,13 @@ test("a condo sells and refunds at its level, and keeps its owners' line", () =>
   money = G.World.money;
   G.Economy.onArrived(condo);
   check(G.World.money - money === 37500, `the next sale, at High, paid ${G.World.money - money}, expected $37,500`);
+
+  // A condo sold before rent levels refunds its full $30,000.
+  delete condo.soldFor;
+  delete condo.soldAtLevel;
+  money = G.World.money;
+  G.Economy.moveOut(condo);
+  check(money - G.World.money === 30000, `a condo sold before rent levels refunded ${money - G.World.money}, expected $30,000`);
 });
 
 test("a hotel room at Very low books more often, earns less a night and keeps its guests longer", () => {
@@ -1018,6 +1025,31 @@ test("a hotel room at Very low books more often, earns less a night and keeps it
   check(cheap.status === "occupied", "guests at stress 70 left a room booked at Very low (their line is 85)");
   check(normal.status === "vacant", "guests at stress 70 stayed in a Normal room");
   check(Math.abs(G.Hotels.reviewFor(70, 20) - 0.3) < 1e-9 && G.Hotels.reviewFor(70) === 0, "a cheap room's review bands didn't move 20 points");
+
+  // A stay keeps the level it was booked at, even if it changes before the
+  // guests arrive; at High, they leave early at 55.
+  G.People.list = G.People.list.filter((p) => p.room !== normal);
+  G.World.setRoomStatus(normal, "vacant");
+  normal.needsCleaning = false;
+  normal.bookingDay = null;
+  G.Economy.setRentLevel(normal, "high");
+  G.Clock.totalMinutes = 9 * G.MINUTES_PER_DAY + 14 * 60;
+  for (let i = 0; i < 50 && normal.nextGuestsAt == null; i++) {
+    normal.bookingDay = null;
+    G.Hotels.updateBooking(normal, G.Clock.totalMinutes);
+  }
+  check(normal.nextGuestsAt != null, "the High room was never booked");
+  G.Economy.setRentLevel(normal, "low");
+  G.Hotels.checkIn(normal, "buyer");
+  check(normal.stayLevel === "high" && G.Hotels.rateFor(normal) === 2500, `a stay booked at High checked in at ${normal.stayLevel} for ${G.Hotels.rateFor(normal)}`);
+  for (const p of G.People.list.filter((p) => p.room === normal)) {
+    p.arrived = true;
+    p.state = "inRoom";
+    p.stress = 60;
+  }
+  G.World.setRoomStatus(normal, "occupied");
+  G.Hotels.update();
+  check(normal.status === "vacant", "guests at stress 60 stayed in a room booked at High (their line is 55)");
 });
 
 test("a studio whose makers left stressed sits empty for days; a rebuilt one re-lets in hours", () => {
@@ -1033,6 +1065,18 @@ test("a studio whose makers left stressed sits empty for days; a rebuilt one re-
   check(days(A) >= 0.25 && days(A) <= 0.75, `cutting the rent to Very low didn't bring the new tenants sooner (${days(A).toFixed(2)} days)`);
   G.run(6 * 60);
   check(A.status === "vacant", "a hard-to-let studio filled within 6 hours");
+
+  // Once its wait is over, it's no longer hard to let, even if new makers
+  // can't come until Monday; and a rent level doesn't stretch a wait for
+  // business hours.
+  G.Clock.totalMinutes = 12 * G.MINUTES_PER_DAY + 12 * 60; // a Saturday noon
+  A.moveInAt = G.Clock.totalMinutes;
+  G.Economy.update();
+  check(!A.hardToLet && A.status === "vacant", "a studio was still hard to let after its wait, or let on a Saturday");
+  const monday = A.moveInAt;
+  check(monday >= 14 * G.MINUTES_PER_DAY + 8 * 60 && monday <= 14 * G.MINUTES_PER_DAY + 10 * 60, "a studio free on a Saturday wasn't put off to Monday morning");
+  G.Economy.setRentLevel(A, "high");
+  check(A.moveInAt === monday, "raising the rent put off new makers past Monday morning");
 
   // Knocked down and built again, it's a new room: hours, not days.
   G.World.demolishAt(0, A.tileStart);
@@ -1066,6 +1110,33 @@ test("a save reloads to exactly the same game, which plays on the same", () => {
   G.run(90);
   H.run(90);
   check(strip(H.SaveGame.exportText()) === strip(G.SaveGame.exportText()), "after 90 more minutes the reloaded game had drifted from the original");
+});
+
+test("a save with damaged rent, size or staff-lift notes won't load", () => {
+  const { G, A, condo } = rentTower();
+  G.Ratings.stars = 3;
+  G.World.buildFloorRun(-1, 0, 99);
+  build(G, G.World.placeTransit("stairs", 30, -1, 0), "stairs");
+  build(G, G.World.placeRoom("parking", -1, 0, 8), "2 bays of parking");
+  build(G, G.World.placeTransit("staffLift", 96, -1, 0), "a staff lift");
+  G.World.transit.at(-1).usedToday = { day: G.Clock.day, housekeeper: [], guard: [] };
+  G.Economy.setRentLevel(A, "low");
+  const good = JSON.parse(G.SaveGame.exportText());
+  check(newGame().SaveGame.load(JSON.stringify(good)), "a good save with 14b's additions didn't load");
+  const damaged = {
+    "a condo sold for a word": (d) => (d.world.rooms.find((r) => r.id === condo.id).soldFor = "lots"),
+    "an unknown stay level": (d) => (d.world.rooms.find((r) => r.type === "single").stayLevel = "toString"),
+    "an unknown rent level": (d) => (d.world.rooms.find((r) => r.id === A.id).rentLevel = "free"),
+    "a car park a bay and a quarter wide": (d) => (d.world.rooms.find((r) => r.type === "parking").width = 5),
+    "a negative price": (d) => (d.world.rooms.find((r) => r.type === "parking").paid = -5000),
+    "a width on a studio": (d) => (d.world.rooms.find((r) => r.id === A.id).width = 1000),
+    "a staff lift's note without its lists": (d) => (d.world.transit.at(-1).usedToday = { day: 3 }),
+  };
+  for (const [what, damage] of Object.entries(damaged)) {
+    const d = structuredClone(good);
+    damage(d);
+    check(!newGame().SaveGame.parse(JSON.stringify(d), true), `a save with ${what} loaded`);
+  }
 });
 
 test("a save that won't load is kept, and tabs can tell their saves apart", () => {
@@ -1144,6 +1215,16 @@ test("the day-85 tower with a staff lift, decorations and rent levels plays on",
   check(strip(H.SaveGame.exportText()) === strip(saved), "the day-85 tower with 14b's additions saves differently once loaded");
   G.runTo(day + 1, 1);
   check(G.World.money > money - 150000, `the day-85 tower lost ${money - G.World.money} in a day`);
+
+  // Through a weekly review: its stressed studios move out and are hard to
+  // let for 1–3 days (half that at Low), and the tower plays on.
+  const now = G.Clock.totalMinutes;
+  G.Stress.weeklyReview();
+  const left = G.World.rooms.filter((r) => r.hardToLet);
+  const days = left.map((r) => (r.moveInAt - now) / G.MINUTES_PER_DAY);
+  check(left.length > 0 && days.every((d) => d >= 0.5 && d <= 3), `after a review, ${left.length} rooms are hard to let, for ${Math.min(...days).toFixed(1)}–${Math.max(...days).toFixed(1)} days`);
+  G.run(12 * 60);
+  check(G.People.population() > 200, `the day-85 tower dropped to ${G.People.population()} people after a review`);
   check(G.People.population() > 250, `the day-85 tower dropped to ${G.People.population()} people in a day`);
   check(G.Ratings.stars === 3, "the day-85 tower lost its third star");
 });

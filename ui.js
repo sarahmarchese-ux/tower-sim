@@ -551,6 +551,7 @@ const UI = {
 
   openRoomPanel(room) {
     this.panelRoom = room;
+    document.getElementById("decorbar").classList.remove("shown");
     const panel = document.getElementById("roompanel");
     // Just above the toolbar, whose height depends on the window's width.
     const toolbarTop = document.getElementById("toolbar").getBoundingClientRect().top;
@@ -671,16 +672,23 @@ const UI = {
     // Decor opens (or closes) the row of decorations above the toolbar.
     // Picking one closes it again, and the Decor button stays lit while
     // one's in hand.
+    const bar = document.getElementById("decorbar");
+    const place = () => {
+      const toolbarTop = document.getElementById("toolbar").getBoundingClientRect().top;
+      bar.style.bottom = `${window.innerHeight - toolbarTop + 6}px`;
+    };
     document.getElementById("decor-btn").addEventListener("click", () => {
-      const bar = document.getElementById("decorbar");
       if (bar.classList.contains("shown")) {
         bar.classList.remove("shown");
         return;
       }
       this.closeRoomPanel();
-      const toolbarTop = document.getElementById("toolbar").getBoundingClientRect().top;
-      bar.style.bottom = `${window.innerHeight - toolbarTop + 6}px`;
+      place();
       bar.classList.add("shown");
+    });
+    // The toolbar re-wraps when the window changes size.
+    window.addEventListener("resize", () => {
+      if (bar.classList.contains("shown")) place();
     });
   },
 
