@@ -53,23 +53,23 @@ const Parking = {
 
   // A driver for this storefront: the car park with a free space that's
   // the easiest trip from, and the space they'll take there; null if none.
+  // One plan from every car park with a space at once finds it: a plan
+  // per car park was most of the game's time in a tower with twenty.
   pickFor(room) {
     const goal = [{ floor: room.floor, x: room.tileStart + roomWidth(room) / 2 }];
-    let best = null;
-    let bestCost = Infinity;
+    const free = [];
     for (const carPark of World.rooms) {
       if (carPark.type !== "parking") continue;
       const taken = new Set(this.drivers(carPark).map((p) => p.space));
-      if (taken.size >= parkingSpaces(carPark)) continue;
-      const route = Routing.plan([this.middle(carPark)], goal);
-      if (route && route.cost < bestCost) {
-        let space = 0;
-        while (taken.has(space)) space++;
-        best = { carPark, space };
-        bestCost = route.cost;
-      }
+      if (taken.size < parkingSpaces(carPark)) free.push({ carPark, taken, start: this.middle(carPark) });
     }
-    return best;
+    if (!free.length) return null;
+    const route = Routing.plan(free.map((f) => f.start), goal);
+    if (!route) return null;
+    const { carPark, taken } = free.find((f) => f.start.floor === route.start.floor && f.start.x === route.start.x);
+    let space = 0;
+    while (taken.has(space)) space++;
+    return { carPark, space };
   },
 
   // Called by people.js when a driver arrives at their shop, café,

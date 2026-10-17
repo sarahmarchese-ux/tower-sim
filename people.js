@@ -84,7 +84,7 @@ const SWITCH_MARGIN = 30; // ...and switch only if it saves this much (in routin
 const RETRY_MINUTES = 30; // how long to wait before trying again if there's no route
 const MOVER_GAP_MINUTES = [3, 8]; // movers arrive a few minutes apart
 const UNPACK_MINUTES = [20, 40]; // a new arrival stays put this long
-const LUNCH_START_HOURS = [11.5, 13.5]; // makers' lunch breaks start 11:30am–1:30pm...
+const LUNCH_START_HOURS = [10.5, 15]; // makers' lunch breaks start 10:30am–3pm (a new time each day)...
 const LUNCH_MINUTES = [30, 45]; // ...and last this long
 const DINNER_START_HOURS = [19, 21]; // residents and guests go for dinner 7–9pm...
 const DINNER_MINUTES = [60, 90]; // ...and take this long over it
@@ -152,20 +152,37 @@ const People = {
     };
   },
 
-  // When a maker takes their lunch break, and for how long, in minutes.
-  // `lunchDay` / `lunchCafe` are today's plan, made when the break starts
-  // (cafes.js): the game day it was made for, and the café (or Snack Bar),
-  // or null to go out. `lunchDoneAt` is when they've finished at a Snack
-  // Bar and head back to their studio.
-  lunchTimes() {
+  // A maker's lunch break: when it starts and how long it lasts, in
+  // minutes. Each maker picks a new one every midnight (newDay), so the
+  // tower's lunches spread across the whole window rather than everyone
+  // keeping the time they first had.
+  lunchBreak() {
     return {
       lunchAt: randomBetween(LUNCH_START_HOURS.map((h) => h * 60)),
       lunchMinutes: randomBetween(LUNCH_MINUTES),
+    };
+  },
+
+  // A new maker's lunch break, and today's plan for it. `lunchDay` /
+  // `lunchCafe` are the plan, made when the break starts (cafes.js): the
+  // game day it was made for, and the café (or Snack Bar), or null to go
+  // out. `lunchDoneAt` is when they've finished at a Snack Bar (or given
+  // up on a queue) and head back to their studio.
+  lunchTimes() {
+    return {
+      ...this.lunchBreak(),
       lunchDay: null,
       lunchCafe: null,
       lunchDoneAt: null,
       seatX: 0,
     };
+  },
+
+  // Midnight (economy.js): every maker picks tomorrow's lunch break.
+  newDay() {
+    for (const person of this.list) {
+      if (person.role === "maker") Object.assign(person, this.lunchBreak());
+    }
   },
 
   // When a resident or guest has dinner, and for how long, in minutes.
@@ -350,9 +367,10 @@ const People = {
     if (person.role === "maker") {
       if (weekend || minute < person.arriveAt || minute >= person.leaveAt) return "offsite";
       if (minute >= person.lunchAt && minute < person.lunchAt + person.lunchMinutes) {
-        if (person.lunchDay !== day || !person.lunchCafe) return "offsite";
-        // After a quick bite at a Snack Bar, back to the studio.
-        return person.lunchDoneAt != null && t >= person.lunchDoneAt ? "room" : "cafe";
+        // After a quick bite at a Snack Bar, or giving up on a queue
+        // (cafes.js), back to the studio.
+        if (person.lunchDay === day && person.lunchDoneAt != null && t >= person.lunchDoneAt) return "room";
+        return person.lunchDay === day && person.lunchCafe ? "cafe" : "offsite";
       }
       return "room";
     }
@@ -418,6 +436,11 @@ const People = {
         if (turnBack) {
           Shops.giveUp(person);
           person.target = "offsite";
+          this.reroute(person);
+        } else if (Cafes.shouldGiveUp(person, now)) {
+          // A maker queueing for lunch with half their break gone eats at
+          // their desk instead.
+          Cafes.giveUp(person);
           this.reroute(person);
         } else {
           if (person.state === "waitingForElevator") {

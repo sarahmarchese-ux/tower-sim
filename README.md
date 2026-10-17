@@ -37,7 +37,7 @@ its rent level).
 Two test files, both run by GitHub Actions on every pull request
 (`.github/workflows/smoke.yml`), and both with `npm test`.
 
-**`tests/sim.mjs`** checks the game's rules without a browser, in about 15
+**`tests/sim.mjs`** checks the game's rules without a browser, in about 30
 seconds, with nothing to install (`npm run sim`). It loads the game's logic
 into a sandbox with seeded dice, builds towers through the game's own
 functions, and checks: someone at the front of an elevator queue keeps their
@@ -55,10 +55,13 @@ warnings; the Snack Bar (3★, any storefront spot, basements included):
 shoppers stopping for a snack after a shop next door (about 1 in 3) but
 not after one three floors down, drivers coming too, makers eating there
 only when the café is full and heading back to work before their break
-is over, residents at weekends and guests any day coming down at
-lunchtime, its noise from 10am to 9pm, a quiet one closing, and a save
-reloading with someone mid-snack; decorations (a bench between a woodwork
-studio and a condo keeps the noise out, one above doesn't, shafts go
+is over, makers queueing for lunch with half their break gone (for a café
+or to go out) giving up and eating at their desks, makers taking lunch
+any time from 10:30am to 3pm, a new time each day, residents at weekends
+and guests any day coming down at lunchtime, its noise from 10am to 9pm,
+a quiet one closing, and a save reloading with someone mid-snack;
+decorations (a bench between a woodwork studio and a condo keeps the
+noise out, one above doesn't, shafts go
 through them, none in a basement, half back); staff lifts (housekeepers and
 guards ride one and nobody else does, staff still take a public elevator
 when it's quicker, at most 4 aboard, 2★, prices and upkeep, and the warning
@@ -204,6 +207,34 @@ tower to spend on, and new levers against stress.
   Leaving is shorter now, so makers allow a café or Snack Bar up to 20
   tiles further than the way out (it was 10), which keeps lunch about as
   it was beside a 20-tile lobby.
+- **A big tower runs faster.** A driver choosing a car park, and a maker,
+  resident or guest choosing a café, restaurant or Snack Bar, now plan one
+  route to all of them at once rather than one each. In a playtester's
+  day-61 tower (14 floors, 212 tiles wide, 340 people, 22 car parks and
+  13 cafés), that was most of the game's time: a game day now takes about
+  a third of the work it did. Who goes where is unchanged (it's the same
+  cheapest trip; between two equally near, either may be picked).
+- **Makers give up on a lunch queue.** A maker who has spent half their
+  lunch break queueing for an elevator on the way to lunch (a café, a
+  Snack Bar, or out of the building) gives up: they step out of the
+  queue, go back to their studio, and eat at their desk for the rest of
+  their break ("Lunch at the desk: the queue was too long"). The café
+  makes no sale, and the time they did queue still counts towards their
+  stress. Before, they waited however long it took (an hour and a half,
+  in the day-61 tower), only to sit down as their break ended and queue
+  again to get back. In that tower, about 1 lunch in 13 now ends at the
+  desk, lunch adds about half the stress it did, and 2–7 studios and
+  condos move out at a weekly review rather than 5–9.
+- **Lunch breaks are spread out.** A maker's lunch break now starts any
+  time from 10:30am to 3pm (it was 11:30am to 1:30pm), and every maker
+  picks a new time each midnight, so a tower saved before this spreads
+  out within a day. Breaks are still 30–45 minutes, and cafés stay open
+  for the late ones. Fewer makers are at lunch at once, so the lunchtime
+  rush on the elevators is thinner. In the day-61 tower, makers' lunch
+  trips added about 28% less stress again, 0–2 studios and condos moved
+  out at the second weekly review rather than 3–4, and the longest queue
+  for lunch was about 40–50 minutes rather than 45–55. Cafés' lunch crowd
+  from outside still comes 11:30am–2pm.
 
 <details>
 <summary>Milestone 14: the Snack Bar</summary>

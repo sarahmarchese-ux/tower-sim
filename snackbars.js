@@ -86,17 +86,8 @@ const SnackBars = {
   // The Snack Bar with a seat that's the cheapest trip from `from`, if
   // that's no more than `maxCost`; null if none.
   nearest(from, maxCost) {
-    let best = null;
-    let bestCost = maxCost;
-    for (const room of World.rooms) {
-      if (room.type !== "snackbar" || !this.hasSeat(room)) continue;
-      const route = Routing.plan([from], [this.point(room)]);
-      if (route && route.cost <= bestCost) {
-        best = room;
-        bestCost = route.cost;
-      }
-    }
-    return best;
+    const open = World.rooms.filter((room) => room.type === "snackbar" && this.hasSeat(room));
+    return open[Routing.cheapestOf(from, open.map((room) => this.point(room)), maxCost)] || null;
   },
 
   // --- Shoppers, after a shop ---
