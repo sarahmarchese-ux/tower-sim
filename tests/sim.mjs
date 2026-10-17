@@ -716,6 +716,41 @@ test("makers eat at a Snack Bar only when the café is full, then go back to wor
   check(leftEarly.size > 0, "no maker headed back to their studio before their break was over (as they'd stay at a café)");
 });
 
+test("a maker queueing for lunch with half their break gone eats at their desk", () => {
+  // Makers on 2F, with (or without) a café on 4F, and an elevator that
+  // stops at 11am: their queue for lunch never moves.
+  for (const withCafe of [true, false]) {
+    const what = withCafe ? "for the café" : "to go out";
+    const G = newGame();
+    G.money(1e8);
+    G.Ratings.stars = 2;
+    for (let f = 0; f <= 3; f++) G.World.buildFloorRun(f, 0, 59);
+    build(G, G.World.placeRoom("lobby", 0, 0), "a lobby");
+    build(G, G.World.placeTransit("elevator", 24, 0, 3), "an elevator");
+    if (withCafe) build(G, G.World.placeRoom("cafe", 3, 28), "a café");
+    build(G, G.World.placeRoom("sewing", 1, 28), "a studio");
+    build(G, G.World.placeRoom("sewing", 1, 36), "a second studio");
+    G.runTo(1, 11);
+    const makers = G.People.list.filter((p) => p.role === "maker");
+    check(makers.length === 4 && makers.every((p) => p.state === "inRoom"), `the makers aren't all at work by 11am on Tuesday`);
+    if (withCafe) check(G.Shops.isOpen(room(G, "cafe")), "the café isn't open by 11am");
+    G.Elevators.update = () => {};
+    const gaveUpAt = new Map();
+    for (let t = 0; t < 4 * 60; t++) {
+      G.run(1);
+      for (const p of makers) if (p.lunchDoneAt != null && !gaveUpAt.has(p)) gaveUpAt.set(p, G.Clock.minuteOfDay);
+    }
+    check(gaveUpAt.size === makers.length, `${gaveUpAt.size} of ${makers.length} makers queueing ${what} gave up`);
+    for (const [p, minute] of gaveUpAt) {
+      const half = p.lunchAt + p.lunchMinutes / 2;
+      check(minute >= half && minute <= half + 1, `a maker queueing ${what} gave up ${Math.round(minute - p.lunchAt)} minutes into a ${Math.round(p.lunchMinutes)}-minute break`);
+    }
+    check(makers.every((p) => p.state === "inRoom" && !p.route), `makers who gave up ${what} aren't back at work at 3pm`);
+    check(G.Elevators.cars.values().next().value.waiting.length === 0, `someone's still queueing ${what} at 3pm`);
+    check(G.popups.some((text) => /Lunch at the desk/.test(text)), "nothing says the makers ate at their desks");
+  }
+});
+
 test("residents at weekends and hotel guests any day come down for lunch", () => {
   const G = snackTower();
   const snackBar = room(G, "snackbar");

@@ -350,9 +350,10 @@ const People = {
     if (person.role === "maker") {
       if (weekend || minute < person.arriveAt || minute >= person.leaveAt) return "offsite";
       if (minute >= person.lunchAt && minute < person.lunchAt + person.lunchMinutes) {
-        if (person.lunchDay !== day || !person.lunchCafe) return "offsite";
-        // After a quick bite at a Snack Bar, back to the studio.
-        return person.lunchDoneAt != null && t >= person.lunchDoneAt ? "room" : "cafe";
+        // After a quick bite at a Snack Bar, or giving up on a queue
+        // (cafes.js), back to the studio.
+        if (person.lunchDay === day && person.lunchDoneAt != null && t >= person.lunchDoneAt) return "room";
+        return person.lunchDay === day && person.lunchCafe ? "cafe" : "offsite";
       }
       return "room";
     }
@@ -418,6 +419,11 @@ const People = {
         if (turnBack) {
           Shops.giveUp(person);
           person.target = "offsite";
+          this.reroute(person);
+        } else if (Cafes.shouldGiveUp(person, now)) {
+          // A maker queueing for lunch with half their break gone eats at
+          // their desk instead.
+          Cafes.giveUp(person);
           this.reroute(person);
         } else {
           if (person.state === "waitingForElevator") {

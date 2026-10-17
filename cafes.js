@@ -19,6 +19,13 @@
 // eat for 10–15 minutes (`lunchDoneAt`) and go back to their studio for
 // the rest of their break.
 //
+// A maker who has spent half their break queueing for an elevator on the
+// way to lunch (a café, a Snack Bar, or out) gives up: they step out of
+// the queue, go back to their studio and eat at their desk for the rest
+// of it (`lunchDoneAt`). Without that, a queue that never cleared kept
+// them waiting an hour or more, and the walk back after it as long again.
+// The time they did spend queueing still counts towards their stress.
+//
 // While it's serving lunch (weekdays, its `lunchHours`), a café is busy
 // and noisy: it gives off its `noise` to the rooms around it, as a studio
 // does while its makers work (stress.js).
@@ -28,6 +35,7 @@
 // half an old 20-tile lobby, so it's 20 to keep lunch as it was.
 const LUNCH_DETOUR_COST = 20;
 const CAFE_SEATS = 24; // makers and diners from outside at once
+const LUNCH_GIVE_UP_SHARE = 0.5; // queueing for lunch with this much of the break gone, makers give up
 
 const Cafes = {
   // Weekdays in its lunch hours, while it's open.
@@ -62,6 +70,26 @@ const Cafes = {
     const cafes = World.rooms.filter((room) => room.type === "cafe" && Shops.isOpen(room) && this.seated(room) < CAFE_SEATS);
     const seats = cafes.map((room) => ({ floor: room.floor, x: room.tileStart + ROOM_TYPES.cafe.width / 2 }));
     return cafes[Routing.cheapestOf(home, seats, limit)] || SnackBars.nearest(home, limit);
+  },
+
+  // Called by people.js for someone queueing for an elevator: is this a
+  // maker on their way to today's lunch with half their break gone? (Not
+  // one going home in the evening: lunch out is the only trip out before
+  // then.)
+  shouldGiveUp(person, now) {
+    if (person.role !== "maker" || person.state !== "waitingForElevator" || person.movingIn || person.movingOut) return false;
+    const day = Math.floor(now / MINUTES_PER_DAY);
+    const minute = now - day * MINUTES_PER_DAY;
+    if (person.lunchDay !== day || person.lunchDoneAt != null || minute >= person.leaveAt) return false;
+    const goingToLunch = person.target === "cafe" || (person.target === "offsite" && !person.lunchCafe);
+    return goingToLunch && minute >= person.lunchAt + person.lunchMinutes * LUNCH_GIVE_UP_SHARE;
+  },
+
+  // They give up and head back to their studio.
+  giveUp(person) {
+    person.lunchDoneAt = Clock.totalMinutes;
+    person.target = "room";
+    Economy.popupOverRoom(person.room, "Lunch at the desk: the queue was too long", "#d0d0d0");
   },
 
   // Called by people.js when a maker sits down: they pay for lunch. If
