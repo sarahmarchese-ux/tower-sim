@@ -59,18 +59,9 @@ const Cafes = {
     const home = { floor: person.room.floor, x: People.homeX(person) };
     const out = Routing.plan([home], Routing.lobbyPoints());
     const limit = out ? out.cost + LUNCH_DETOUR_COST : Infinity;
-    let best = null;
-    let bestCost = limit;
-    for (const room of World.rooms) {
-      if (room.type !== "cafe" || !Shops.isOpen(room) || this.seated(room) >= CAFE_SEATS) continue;
-      const seat = { floor: room.floor, x: room.tileStart + ROOM_TYPES.cafe.width / 2 };
-      const route = Routing.plan([home], [seat]);
-      if (route && route.cost <= bestCost) {
-        best = room;
-        bestCost = route.cost;
-      }
-    }
-    return best || SnackBars.nearest(home, limit);
+    const cafes = World.rooms.filter((room) => room.type === "cafe" && Shops.isOpen(room) && this.seated(room) < CAFE_SEATS);
+    const seats = cafes.map((room) => ({ floor: room.floor, x: room.tileStart + ROOM_TYPES.cafe.width / 2 }));
+    return cafes[Routing.cheapestOf(home, seats, limit)] || SnackBars.nearest(home, limit);
   },
 
   // Called by people.js when a maker sits down: they pay for lunch. If

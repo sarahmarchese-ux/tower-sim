@@ -55,18 +55,9 @@ const Restaurants = {
   // and isn't too far; null if none.
   pick(person) {
     const home = { floor: person.room.floor, x: People.homeX(person) };
-    let best = null;
-    let bestCost = MAX_DINNER_TRIP_COST;
-    for (const room of World.rooms) {
-      if (room.type !== "restaurant" || !Shops.isOpen(room) || this.seated(room) >= RESTAURANT_SEATS) continue;
-      const seat = { floor: room.floor, x: room.tileStart + ROOM_TYPES.restaurant.width / 2 };
-      const route = Routing.plan([home], [seat]);
-      if (route && route.cost <= bestCost) {
-        best = room;
-        bestCost = route.cost;
-      }
-    }
-    return best;
+    const open = World.rooms.filter((room) => room.type === "restaurant" && Shops.isOpen(room) && this.seated(room) < RESTAURANT_SEATS);
+    const seats = open.map((room) => ({ floor: room.floor, x: room.tileStart + ROOM_TYPES.restaurant.width / 2 }));
+    return open[Routing.cheapestOf(home, seats, MAX_DINNER_TRIP_COST)] || null;
   },
 
   // Called by people.js when a resident or guest sits down: they pay for

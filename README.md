@@ -37,7 +37,7 @@ its rent level).
 Two test files, both run by GitHub Actions on every pull request
 (`.github/workflows/smoke.yml`), and both with `npm test`.
 
-**`tests/sim.mjs`** checks the game's rules without a browser, in about 15
+**`tests/sim.mjs`** checks the game's rules without a browser, in about 30
 seconds, with nothing to install (`npm run sim`). It loads the game's logic
 into a sandbox with seeded dice, builds towers through the game's own
 functions, and checks: someone at the front of an elevator queue keeps their
@@ -204,6 +204,13 @@ tower to spend on, and new levers against stress.
   Leaving is shorter now, so makers allow a café or Snack Bar up to 20
   tiles further than the way out (it was 10), which keeps lunch about as
   it was beside a 20-tile lobby.
+- **A big tower runs faster.** A driver choosing a car park, and a maker,
+  resident or guest choosing a café, restaurant or Snack Bar, now plan one
+  route to all of them at once rather than one each. In a playtester's
+  day-61 tower (14 floors, 212 tiles wide, 340 people, 22 car parks and
+  13 cafés), that was most of the game's time: a game day now takes about
+  a third of the work it did. Who goes where is unchanged (it's the same
+  cheapest trip; between two equally near, either may be picked).
 
 <details>
 <summary>Milestone 14: the Snack Bar</summary>

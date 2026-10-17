@@ -188,6 +188,17 @@ const Routing = {
     }
   },
 
+  // Which of `places` ({ floor, x } each) is the cheapest trip from
+  // `from`, if it's no more than `maxCost`: its index, or -1 if none. One
+  // plan to all of them at once: a plan apiece, for every maker choosing
+  // among a dozen cafés, was a third of a big tower's time.
+  cheapestOf(from, places, maxCost = Infinity) {
+    if (!places.length) return -1;
+    const route = this.plan([from], places);
+    if (!route || route.cost > maxCost) return -1;
+    return places.findIndex((p) => p.floor === route.goal.floor && p.x === route.goal.x);
+  },
+
   // What getting on this elevator (or staff lift) at `floor`, going
   // `direction`, costs right now (see the costs at the top). A staff
   // lift's small car fills sooner.
