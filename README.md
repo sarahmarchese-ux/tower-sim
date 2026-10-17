@@ -56,7 +56,8 @@ shoppers stopping for a snack after a shop next door (about 1 in 3) but
 not after one three floors down, drivers coming too, makers eating there
 only when the café is full and heading back to work before their break
 is over, makers queueing for lunch with half their break gone (for a café
-or to go out) giving up and eating at their desks, residents at weekends
+or to go out) giving up and eating at their desks, makers taking lunch
+any time from 10:30am to 3pm, a new time each day, residents at weekends
 and guests any day coming down at lunchtime, its noise from 10am to 9pm,
 a quiet one closing, and a save reloading with someone mid-snack;
 decorations (a bench between a woodwork studio and a condo keeps the
@@ -224,6 +225,16 @@ tower to spend on, and new levers against stress.
   again to get back. In that tower, about 1 lunch in 13 now ends at the
   desk, lunch adds about half the stress it did, and 2–7 studios and
   condos move out at a weekly review rather than 5–9.
+- **Lunch breaks are spread out.** A maker's lunch break now starts any
+  time from 10:30am to 3pm (it was 11:30am to 1:30pm), and every maker
+  picks a new time each midnight, so a tower saved before this spreads
+  out within a day. Breaks are still 30–45 minutes, and cafés stay open
+  for the late ones. Fewer makers are at lunch at once, so the lunchtime
+  rush on the elevators is thinner. In the day-61 tower, makers' lunch
+  trips added about 28% less stress again, 0–2 studios and condos moved
+  out at the second weekly review rather than 3–4, and the longest queue
+  for lunch was about 40–50 minutes rather than 45–55. Cafés' lunch crowd
+  from outside still comes 11:30am–2pm.
 
 <details>
 <summary>Milestone 14: the Snack Bar</summary>

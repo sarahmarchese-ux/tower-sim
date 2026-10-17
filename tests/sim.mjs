@@ -671,18 +671,18 @@ test("shoppers stop for a snack after a shop next door (not one far away), and d
 });
 
 test("makers eat at a Snack Bar only when the café is full, then go back to work", () => {
-  // 44 makers on 2F–4F, and a café and a Snack Bar on 2F by the elevator.
+  // 92 makers on 2F–7F, and a café and a Snack Bar on 2F by the elevator.
   // The café seats 24, and its lunch crowd from outside takes some of those.
   const G = newGame();
   G.money(1e8);
   G.Ratings.stars = 3;
-  for (let f = 0; f <= 3; f++) G.World.buildFloorRun(f, 0, 95);
+  for (let f = 0; f <= 6; f++) G.World.buildFloorRun(f, 0, 95);
   build(G, G.World.placeRoom("lobby", 0, 0), "a lobby");
-  build(G, G.World.placeTransit("elevator", 24, 0, 3), "an elevator");
+  build(G, G.World.placeTransit("elevator", 24, 0, 6), "an elevator");
   build(G, G.World.placeRoom("cafe", 1, 28), "a café");
   build(G, G.World.placeRoom("snackbar", 1, 40), "a Snack Bar");
   for (let x = 48; x < 96; x += 8) build(G, G.World.placeRoom("sewing", 1, x), "a studio");
-  for (let f = 2; f <= 3; f++) {
+  for (let f = 2; f <= 6; f++) {
     for (let x = 28; x < 92; x += 8) build(G, G.World.placeRoom("sewing", f, x), "a studio");
   }
   const snackBar = room(G, "snackbar");
@@ -695,10 +695,10 @@ test("makers eat at a Snack Bar only when the café is full, then go back to wor
     picks.push({ chosen, full });
     return chosen;
   };
-  G.runTo(1, 11);
+  G.runTo(1, 10);
   const eating = new Map(); // maker -> minutes at the Snack Bar today
   const leftEarly = new Set(); // ...who headed back to work before their break was over
-  for (let t = 0; t < 4 * 60; t++) {
+  for (let t = 0; t < 6 * 60; t++) {
     G.run(1);
     for (const p of G.People.list) {
       if (p.role !== "maker" || p.lunchCafe !== snackBar) continue;
@@ -718,7 +718,7 @@ test("makers eat at a Snack Bar only when the café is full, then go back to wor
 
 test("a maker queueing for lunch with half their break gone eats at their desk", () => {
   // Makers on 2F, with (or without) a café on 4F, and an elevator that
-  // stops at 11am: their queue for lunch never moves.
+  // stops at 10am: their queue for lunch never moves.
   for (const withCafe of [true, false]) {
     const what = withCafe ? "for the café" : "to go out";
     const G = newGame();
@@ -730,13 +730,13 @@ test("a maker queueing for lunch with half their break gone eats at their desk",
     if (withCafe) build(G, G.World.placeRoom("cafe", 3, 28), "a café");
     build(G, G.World.placeRoom("sewing", 1, 28), "a studio");
     build(G, G.World.placeRoom("sewing", 1, 36), "a second studio");
-    G.runTo(1, 11);
+    G.runTo(1, 10);
     const makers = G.People.list.filter((p) => p.role === "maker");
-    check(makers.length === 4 && makers.every((p) => p.state === "inRoom"), `the makers aren't all at work by 11am on Tuesday`);
-    if (withCafe) check(G.Shops.isOpen(room(G, "cafe")), "the café isn't open by 11am");
+    check(makers.length === 4 && makers.every((p) => p.state === "inRoom"), `the makers aren't all at work by 10am on Tuesday`);
+    if (withCafe) check(G.Shops.isOpen(room(G, "cafe")), "the café isn't open by 10am");
     G.Elevators.update = () => {};
     const gaveUpAt = new Map();
-    for (let t = 0; t < 4 * 60; t++) {
+    for (let t = 0; t < 6 * 60; t++) {
       G.run(1);
       for (const p of makers) if (p.lunchDoneAt != null && !gaveUpAt.has(p)) gaveUpAt.set(p, G.Clock.minuteOfDay);
     }
@@ -745,10 +745,44 @@ test("a maker queueing for lunch with half their break gone eats at their desk",
       const half = p.lunchAt + p.lunchMinutes / 2;
       check(minute >= half && minute <= half + 1, `a maker queueing ${what} gave up ${Math.round(minute - p.lunchAt)} minutes into a ${Math.round(p.lunchMinutes)}-minute break`);
     }
-    check(makers.every((p) => p.state === "inRoom" && !p.route), `makers who gave up ${what} aren't back at work at 3pm`);
-    check(G.Elevators.cars.values().next().value.waiting.length === 0, `someone's still queueing ${what} at 3pm`);
+    check(makers.every((p) => p.state === "inRoom" && !p.route), `makers who gave up ${what} aren't back at work at 4pm`);
+    check(G.Elevators.cars.values().next().value.waiting.length === 0, `someone's still queueing ${what} at 4pm`);
     check(G.popups.some((text) => /Lunch at the desk/.test(text)), "nothing says the makers ate at their desks");
   }
+});
+
+test("makers take lunch any time from 10:30am to 3pm, a new time each day", () => {
+  // 34 makers on 2F, with a café beside them.
+  const G = newGame();
+  G.money(1e8);
+  for (let f = 0; f <= 1; f++) G.World.buildFloorRun(f, 0, 179);
+  build(G, G.World.placeRoom("lobby", 0, 0), "a lobby");
+  build(G, G.World.placeTransit("stairs", 24, 0, 1), "stairs");
+  build(G, G.World.placeRoom("cafe", 1, 28), "a café");
+  for (let x = 40; x < 176; x += 8) build(G, G.World.placeRoom("sewing", 1, x), "a studio");
+  G.runTo(1, 1);
+  const makers = G.People.list.filter((p) => p.role === "maker");
+  const starts = (p) => p.lunchAt / 60;
+  const monday = new Map(makers.map((p) => [p, p.lunchAt]));
+  G.runTo(2, 1);
+  const changed = makers.filter((p) => p.lunchAt !== monday.get(p)).length;
+  check(changed === makers.length, `${makers.length - changed} of ${makers.length} makers kept the same lunch time from one day to the next`);
+  const all = [];
+  for (let day = 2; day < 7; day++) {
+    G.runTo(day, 1);
+    all.push(...makers.map(starts));
+  }
+  check(all.every((h) => h >= 10.5 && h <= 15), `a lunch break started at ${Math.min(...all).toFixed(2)}–${Math.max(...all).toFixed(2)}h, outside 10:30am–3pm`);
+  check(all.filter((h) => h < 11.5).length > all.length / 6 && all.filter((h) => h > 13.5).length > all.length / 6,
+    "lunch breaks don't spread across the whole window, before 11:30am and after 1:30pm included");
+  // Lunch still happens: makers sit down at the café on Tuesday, early and late.
+  G.runTo(8, 9);
+  const ate = new Set();
+  for (let t = 0; t < 7 * 60; t++) {
+    G.run(1);
+    for (const p of makers) if (p.state === "eating") ate.add(p);
+  }
+  check(ate.size >= makers.length / 2, `only ${ate.size} of ${makers.length} makers ate at the café on Tuesday`);
 });
 
 test("residents at weekends and hotel guests any day come down for lunch", () => {

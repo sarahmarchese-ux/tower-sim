@@ -208,6 +208,8 @@ const Economy = {
       this.popupOverRoom(room, `Wages -${World.formatMoney(wages)}`, "#ff9d9d");
     }
 
+    People.newDay(); // makers pick tomorrow's lunch times
+
     if (this.lastTallyDay % 7 === 0) {
       Stress.weeklyReview();
       Shops.weeklyReview();
