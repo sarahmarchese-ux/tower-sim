@@ -1369,6 +1369,53 @@ test("the day-85 tower with a staff lift, decorations and rent levels plays on",
   check(G.Ratings.stars === 3, "the day-85 tower lost its third star");
 });
 
+// Another real tower, Sarah's day-61 save (3★ on a Friday morning: 14
+// floors and 4 basements, 212 tiles wide, about 340 people, 13 elevators
+// and a staff lift, 22 car parks, 13 cafés). It loads and saves back the
+// same, and plays to Saturday: its drivers come, its staff ride their lift,
+// it makes money, and no maker who sits down to lunch queued for more
+// than half their break (some once queued an hour and a half).
+test("a wide 3★ tower (the day-61 save) loads and plays a day", () => {
+  const text = fs.readFileSync(path.join(ROOT, "tests", "saves", "day-61.json"), "utf8");
+  const G = newGame();
+  check(G.SaveGame.load(text), "the day-61 save didn't load");
+  const strip = (saved) => {
+    const data = JSON.parse(saved);
+    delete data.savedAt;
+    return JSON.stringify(data);
+  };
+  check(strip(G.SaveGame.exportText()) === strip(text), "the day-61 save saves differently once loaded");
+  check(G.Ratings.stars === 3, `the day-61 tower is ${G.Ratings.stars}★, not 3★`);
+  const carParks = G.World.rooms.filter((r) => r.type === "parking");
+  check(carParks.length === 22, `the day-61 tower has ${carParks.length} car parks, not 22`);
+  const staffLift = G.World.transit.find((t) => t.kind === "staffLift");
+  check(staffLift, "the day-61 tower has no staff lift");
+  let lunches = 0;
+  const queuedTooLong = [];
+  const finished = G.Stress.onTripFinished.bind(G.Stress);
+  G.Stress.onTripFinished = (p, tripMinutes, stairs, wait) => {
+    if (p.role === "maker" && p.target === "cafe") {
+      lunches++;
+      if (wait > p.lunchMinutes / 2 + 0.5) queuedTooLong.push(`${Math.round(wait)} of ${Math.round(p.lunchMinutes)}`);
+    }
+    return finished(p, tripMinutes, stairs, wait);
+  };
+  const money = G.World.money;
+  const day = G.Clock.day;
+  G.runTo(day, 22); // Friday: lunch, the evening rush and dinner
+  const drivers = carParks.reduce((sum, r) => sum + G.Parking.driversToday(r), 0);
+  check(drivers > 0, "no drivers came to the day-61 tower's car parks");
+  const staff = G.Elevators.staffToday(staffLift);
+  check(staff.housekeepers + staff.guards > 0, "no housekeeper or guard rode the day-61 tower's staff lift");
+  check(lunches > 100, `only ${lunches} makers sat down to lunch in the day-61 tower`);
+  check(queuedTooLong.length === 0, `makers in the day-61 tower queued for lunch for more than half their break (minutes of their break): ${queuedTooLong.join(", ")}`);
+  G.runTo(day + 1, 1); // past the midnight tally
+  check(G.Economy.lastSales > 0, "the day-61 tower's shops sold nothing");
+  check(G.World.money > money, `the day-61 tower lost money in a day (${money} -> ${G.World.money})`);
+  check(G.People.population() > 300, `the day-61 tower dropped to ${G.People.population()} people in a day`);
+  check(G.Ratings.stars === 3, "the day-61 tower lost its third star");
+});
+
 // --- Run --------------------------------------------------------------------
 
 const started = Date.now();
